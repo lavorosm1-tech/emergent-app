@@ -62,6 +62,7 @@ export default function Home() {
   const [dayPickerOpen, setDayPickerOpen] = useState(false);
   const [leaguePickerOpen, setLeaguePickerOpen] = useState(false);
   const [didInitDay, setDidInitDay] = useState(false);
+  const [tierFilter, setTierFilter] = useState<"top" | "sec" | null>(null);
 
   const load = useCallback(async (day: string | null) => {
     try {
@@ -114,13 +115,20 @@ export default function Home() {
     const q = query.trim().toLowerCase();
     return matches.filter((m) => {
       if (selectedLeague && m.manifestazione !== selectedLeague) return false;
+      if (tierFilter) {
+        const code = m.manifestazione.trim().toUpperCase();
+        const matchTop = /1\b|1$/.test(code) || /^[A-Z]+1/.test(code);
+        const matchSec = /2\b|2$/.test(code) || /^[A-Z]+2/.test(code);
+        if (tierFilter === "top" && !matchTop) return false;
+        if (tierFilter === "sec" && !matchSec) return false;
+      }
       if (q) {
         const hay = `${m.squadra1} ${m.squadra2} ${m.manifestazione}`.toLowerCase();
         if (!hay.includes(q)) return false;
       }
       return true;
     });
-  }, [matches, selectedLeague, query]);
+  }, [matches, selectedLeague, query, tierFilter]);
 
   const grouped = useMemo(() => {
     const map = new Map<string, Match[]>();
@@ -158,6 +166,7 @@ export default function Home() {
     setSelectedDay(d);
     setSelectedLeague(null);
     setQuery("");
+    setTierFilter(null);
   };
 
   return (
@@ -260,6 +269,30 @@ export default function Home() {
               </TouchableOpacity>
             )}
           </View>
+        </View>
+
+        {/* Quick filters: campionati TOP / SECONDARI */}
+        <View style={styles.tierRow}>
+          <TouchableOpacity
+            testID="tier-top"
+            onPress={() => setTierFilter(tierFilter === "top" ? null : "top")}
+            style={[styles.tierBtn, tierFilter === "top" && styles.tierBtnActive]}
+          >
+            <Ionicons name="star" size={12} color={tierFilter === "top" ? "#FFF" : colors.primary} />
+            <Text style={[styles.tierBtnTxt, tierFilter === "top" && { color: "#FFF" }]}>
+              CAMPIONATI TOP (1)
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            testID="tier-sec"
+            onPress={() => setTierFilter(tierFilter === "sec" ? null : "sec")}
+            style={[styles.tierBtn, tierFilter === "sec" && styles.tierBtnActive]}
+          >
+            <Ionicons name="star-half" size={12} color={tierFilter === "sec" ? "#FFF" : colors.primary} />
+            <Text style={[styles.tierBtnTxt, tierFilter === "sec" && { color: "#FFF" }]}>
+              SECONDARI (2)
+            </Text>
+          </TouchableOpacity>
         </View>
       </View>
 
@@ -506,6 +539,14 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center",
   },
   searchInput: { color: colors.text, fontSize: 13, flex: 1, paddingVertical: 0 },
+  tierRow: { flexDirection: "row", gap: 8, marginTop: 4, paddingLeft: 26 },
+  tierBtn: {
+    flexDirection: "row", alignItems: "center", gap: 6,
+    backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.primary,
+    paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999,
+  },
+  tierBtnActive: { backgroundColor: colors.primary, borderColor: colors.primary },
+  tierBtnTxt: { color: colors.primary, fontSize: 10, fontWeight: "900", letterSpacing: 0.5 },
   countRow: {
     flexDirection: "row", justifyContent: "space-between", alignItems: "center",
     paddingHorizontal: 16, paddingBottom: 8,

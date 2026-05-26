@@ -9,6 +9,7 @@ import { useRouter, useFocusEffect } from "expo-router";
 
 import { api, Match } from "@/src/api";
 import { colors } from "@/src/theme";
+import { ScoreInput } from "@/src/components/ScoreInput";
 
 export default function Selected() {
   const router = useRouter();
@@ -104,13 +105,11 @@ export default function Selected() {
                   )}
                 </TouchableOpacity>
                 <View style={styles.cardRight}>
-                  <TextInput
-                    testID={`sel-res-${m.id}`}
+                  <ScoreInput
                     value={results[m.id] || ""}
-                    onChangeText={(v) => setResults({ ...results, [m.id]: v })}
-                    placeholder="2-1"
-                    placeholderTextColor={colors.textDim}
-                    style={styles.resInput}
+                    onChange={(v) => setResults({ ...results, [m.id]: v })}
+                    size="sm"
+                    testIDPrefix={`sel-res-${m.id}`}
                   />
                   <TouchableOpacity
                     testID={`sel-remove-${m.id}`}

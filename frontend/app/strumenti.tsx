@@ -9,6 +9,7 @@ import * as DocumentPicker from "expo-document-picker";
 import * as Sharing from "expo-sharing";
 import * as FileSystem from "expo-file-system/legacy";
 import * as Linking from "expo-linking";
+import * as Clipboard from "expo-clipboard";
 
 import { api } from "@/src/api";
 import { colors } from "@/src/theme";
@@ -105,14 +106,17 @@ export default function Strumenti() {
     try {
       const { csv, count } = await api.aiStudioPrompt();
       const filled = AISTUDIO_FRAMEWORK.replace("{{CSV}}", csv);
-      if (Platform.OS === "web") {
-        try {
-          await (navigator as any).clipboard.writeText(filled);
-        } catch {}
+      // Copy to clipboard on both web and native
+      try {
+        await Clipboard.setStringAsync(filled);
+      } catch (e) {
+        if (Platform.OS === "web") {
+          try { await (navigator as any).clipboard.writeText(filled); } catch {}
+        }
       }
       Alert.alert(
-        "Framework AI Studio",
-        `${count} partite incluse nel CSV.\nIl prompt è stato preparato. Apri Google AI Studio e incolla.`,
+        "Prompt Copiato ✓",
+        `${count} partite incluse.\n\nIl prompt è stato copiato negli appunti. Sarà sufficiente incollarlo (Ctrl+V o Cmd+V) nella chat di AI Studio.`,
         [
           { text: "Annulla", style: "cancel" },
           {
@@ -126,6 +130,14 @@ export default function Strumenti() {
     } finally {
       setBusy(null);
     }
+  };
+
+  const downloadQuotePdf = () => {
+    Linking.openURL("https://landing.sisal.it/volantini/Scommesse_Sport/Quote/calcio%20base%20per%20data.pdf");
+  };
+
+  const convertPdfToExcel = () => {
+    Linking.openURL("https://www.ilovepdf.com/it/pdf_in_excel");
   };
 
   const deleteAll = () => {
@@ -165,6 +177,20 @@ export default function Strumenti() {
 
       <ScrollView contentContainerStyle={styles.list}>
         <Text style={styles.section}>IMPORT DATI</Text>
+        <Tool
+          testID="tool-download-pdf"
+          icon="cloud-download-outline"
+          title="Scarica Quote PDF"
+          desc="Apre il sito Sisal per scaricare il PDF aggiornato con le quote base."
+          onPress={downloadQuotePdf}
+        />
+        <Tool
+          testID="tool-pdf-to-excel"
+          icon="swap-horizontal-outline"
+          title="Converti PDF in Excel"
+          desc="Apre iLovePDF per trasformare il PDF Sisal in file .xlsx."
+          onPress={convertPdfToExcel}
+        />
         <Tool
           testID="tool-upload"
           icon="cloud-upload-outline"

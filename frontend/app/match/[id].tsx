@@ -10,6 +10,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 
 import { api, Match, Prediction, MARKET_FAMILIES, ODD_LABELS, OddsKey } from "@/src/api";
 import { colors } from "@/src/theme";
+import { ScoreInput } from "@/src/components/ScoreInput";
 
 export default function MatchDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -124,7 +125,8 @@ export default function MatchDetail() {
           )}
         </View>
 
-        {/* AI prediction block */}
+        {/* AI prediction block - hidden when result already set */}
+        {!match.result && (
         <View style={styles.aiBlock}>
           <View style={styles.aiHeader}>
             <Ionicons name="sparkles" size={16} color={colors.aiText} />
@@ -212,6 +214,7 @@ export default function MatchDetail() {
             </TouchableOpacity>
           )}
         </View>
+        )}
 
         {/* Market families */}
         <Text style={styles.sectionTitle}>QUOTE PER FAMIGLIA DI MERCATO</Text>
@@ -241,20 +244,12 @@ export default function MatchDetail() {
 
         {/* Result input */}
         <View style={styles.resultBlock}>
-          <Text style={styles.sectionTitle}>RISULTATO</Text>
-          <View style={styles.resultRow}>
-            <TextInput
-              testID="result-input"
-              value={result}
-              onChangeText={setResult}
-              placeholder="es. 2-1"
-              placeholderTextColor={colors.textDim}
-              style={styles.resultInput}
-            />
-            <TouchableOpacity testID="save-result" onPress={saveResult} style={styles.saveBtn}>
-              <Text style={styles.saveBtnTxt}>Salva</Text>
-            </TouchableOpacity>
-          </View>
+          <Text style={styles.sectionTitle}>RISULTATO {match.result ? "(MODIFICABILE)" : ""}</Text>
+          <ScoreInput value={result} onChange={setResult} size="md" testIDPrefix="result" />
+          <TouchableOpacity testID="save-result" onPress={saveResult} style={styles.saveResultBtn}>
+            <Ionicons name="save" size={16} color="#FFF" />
+            <Text style={styles.saveResultTxt}>Salva Risultato</Text>
+          </TouchableOpacity>
         </View>
         <View style={{ height: 40 }} />
       </ScrollView>
@@ -321,11 +316,9 @@ const styles = StyleSheet.create({
   famEst: { color: colors.textDim, fontSize: 8, fontWeight: "700", marginTop: 2 },
   topMark: { position: "absolute", top: 4, right: 4 },
   resultBlock: { gap: 8 },
-  resultRow: { flexDirection: "row", gap: 8 },
-  resultInput: {
-    flex: 1, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border,
-    borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, color: colors.text, fontSize: 15,
+  saveResultBtn: {
+    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,
+    backgroundColor: colors.primary, paddingVertical: 14, borderRadius: 12, marginTop: 8,
   },
-  saveBtn: { backgroundColor: colors.primary, paddingHorizontal: 20, justifyContent: "center", borderRadius: 10 },
-  saveBtnTxt: { color: "#FFF", fontWeight: "800" },
+  saveResultTxt: { color: "#FFF", fontWeight: "900", fontSize: 14, letterSpacing: 0.5 },
 });
