@@ -154,8 +154,15 @@ export default function Home() {
         text: "Svuota",
         style: "destructive",
         onPress: async () => {
-          await api.clearSelection();
+          // Optimistic update
           setMatches((arr) => arr.map((x) => ({ ...x, selected: false })));
+          try {
+            await api.clearSelection();
+          } catch (e) {
+            console.warn("clear sel err", e);
+          }
+          // Re-fetch to ensure consistency
+          await load(selectedDay);
         },
       },
     ]);
@@ -179,6 +186,18 @@ export default function Home() {
           {isDesktop && <Text style={styles.titleHint}>Desktop View</Text>}
         </View>
         <View style={{ flexDirection: "row", gap: 8 }}>
+          <TouchableOpacity
+            testID="btn-reset"
+            onPress={() => {
+              setSelectedLeague(null);
+              setQuery("");
+              setTierFilter(null);
+            }}
+            style={styles.resetTopBtn}
+          >
+            <Ionicons name="refresh" size={14} color={colors.textMuted} />
+            <Text style={styles.resetTopTxt}>RESET</Text>
+          </TouchableOpacity>
           <TouchableOpacity
             testID="btn-today"
             onPress={goToToday}
@@ -515,6 +534,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10, paddingVertical: 8, borderRadius: 999,
   },
   todayBtnTxt: { color: colors.primary, fontSize: 11, fontWeight: "900", letterSpacing: 0.5 },
+  resetTopBtn: {
+    flexDirection: "row", alignItems: "center", gap: 4,
+    backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border,
+    paddingHorizontal: 10, paddingVertical: 8, borderRadius: 999,
+  },
+  resetTopTxt: { color: colors.textMuted, fontSize: 11, fontWeight: "900", letterSpacing: 0.5 },
   menuBtn: {
     flexDirection: "row", alignItems: "center", gap: 4,
     backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border,

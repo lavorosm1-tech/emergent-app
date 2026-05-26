@@ -532,7 +532,60 @@ OUTPUT (SOLO JSON, niente markdown)
 Mercati ammessi: 1, X, 2, 1X, X2, 12, O1.5, U1.5, O2.5, U2.5, O3.5, U3.5, GG, NG, MG 2-4 totali, MG 2-4 casa, MG 2-4 ospite, DC 1X + U3.5, DC X2 + U3.5, DC 12 + U3.5, DC 1X + O1.5, DC X2 + O1.5, DC 12 + O1.5, GG + O2.5, GG + O1.5."""
 
 
-def build_match_prompt(match: dict) -> str:
+LEAGUE_DNA = {
+    # Codes ending with key match - based on manifestazione code
+    "BUNDES": "Bundesliga (Germania) — DNA Over molto alto (media 3+ gol), difese aperte, ritmi alti",
+    "GER1": "Bundesliga — DNA Over alto (3+ gol)",
+    "GER2": "2.Bundesliga — DNA Over medio-alto (2.7 gol)",
+    "EREDIVISIE": "Eredivisie (Olanda) — DNA Over alto (3+ gol), tante reti",
+    "NED1": "Eredivisie — DNA Over alto",
+    "MLS": "MLS (USA) — DNA Over alto (2.9 gol)",
+    "USA1": "MLS — DNA Over alto",
+    "BRA1": "Serie A Brasile — DNA equilibrato (2.5 gol), GG frequente",
+    "BRA2": "Serie B Brasile — DNA conservativo (2.2 gol), molti pareggi 0-0/1-1",
+    "ARG1": "Liga Argentina — DNA molto conservativa (2.1 gol), tante U2.5",
+    "ITA1": "Serie A — DNA medio (2.5 gol), tattiche, U3.5 frequente",
+    "ITA2": "Serie B — DNA conservativo (2.3 gol), molti pareggi e under",
+    "SPA1": "La Liga — DNA medio-alto (2.6 gol)",
+    "SPA2": "Liga 2 — DNA equilibrato (2.4 gol)",
+    "ING1": "Premier League — DNA Over alto (2.8 gol), ritmi alti",
+    "ING2": "Championship — DNA equilibrato, ritmi alti ma difese deboli",
+    "FRA1": "Ligue 1 — DNA medio (2.5 gol)",
+    "POR1": "Liga Portuguesa — DNA equilibrato",
+    "TUR1": "Süper Lig — DNA Over alto, difese sgangherate",
+    "SCO1": "Scottish Premiership — DNA medio-alto",
+    "NOR": "Eliteserien (Norvegia) — DNA Over alto",
+    "SWE": "Allsvenskan (Svezia) — DNA Over alto",
+    "AUS": "A-League — DNA Over",
+    "JAP": "J-League — DNA medio (2.5 gol)",
+    "KOR": "K-League — DNA equilibrato",
+}
+
+CUP_KEYWORDS = ["COPPA", "CUP", "CHAMP", "EUROPA", "CONFERENCE", "LIBERTADORES",
+                "SUDAMERICANA", "ASIAN", "CAF", "CONCACAF", "TROPHY", "POKAL",
+                "FA ", "EFL", "DFB", "COPPA ITALIA"]
+
+
+def detect_league_context(manifestazione: str) -> str:
+    """Return contextual hints about championship DNA and cup status."""
+    if not manifestazione:
+        return ""
+    code = manifestazione.upper().strip()
+    parts = []
+    # League DNA
+    for key, desc in LEAGUE_DNA.items():
+        if key in code:
+            parts.append(f"CAMPIONATO: {desc}")
+            break
+    # Cup detection
+    if any(kw in code for kw in CUP_KEYWORDS):
+        parts.append("TIPO: PARTITA DI COPPA — tendenza a tatticismi, gestione conservativa nelle fasi a eliminazione, attenzione a supplementari (escludere O3.5 se eliminazione)")
+    elif code.endswith("1") or "1" in code[-2:]:
+        parts.append("TIPO: Campionato di prima divisione")
+    elif code.endswith("2"):
+        parts.append("TIPO: Campionato di seconda divisione — solitamente più conservativo, meno gol")
+    return " | ".join(parts) if parts else ""
+    context = detect_league_context(match.get('manifestazione', ''))
     o = match['odds']
     def fmt(k, label):
         v = o.get(k)
@@ -548,10 +601,13 @@ def build_match_prompt(match: dict) -> str:
         fmt('odd_U35', 'U3.5'), fmt('odd_O35', 'O3.5'),
         fmt('odd_GG', 'GG'), fmt('odd_NG', 'NG'),
     ]
+    ctx_block = f"\nCONTESTO CAMPIONATO: {context}\n" if context else ""
     return (
         f"PARTITA: {match['manifestazione']} · {match['time']} "
         f"{match['squadra1']} vs {match['squadra2']}\n"
-        f"Quote: {' | '.join(parts)}\n"
+        f"Quote: {' | '.join(parts)}"
+        f"{ctx_block}"
+        f"\nUsa il contesto del campionato (DNA gol, partita di coppa) come modulatore: se DNA Over alto privilegia O2.5/O1.5; se DNA conservativo o partita di coppa privilegia U3.5/MG 2-4 e tatticismi.\n"
         f"Analizza e restituisci SOLO JSON."
     )
 
