@@ -1,0 +1,84 @@
+{
+  "theme": "DARK",
+  "archetype": "2 (Performance Pro) / Premium Fintech Betting",
+  "colors": {
+    "background": "#0A0A0A",
+    "surface": "#1A1A1A",
+    "surfaceHighlight": "#242424",
+    "primary": "#FF5722",
+    "primaryGradient": "bg-gradient-to-r from-orange-500 to-red-600",
+    "textPrimary": "#FFFFFF",
+    "textSecondary": "#A1A1AA",
+    "border": "#27272A",
+    "success": "#10B981",
+    "warning": "#F59E0B",
+    "danger": "#EF4444",
+    "aiBadgeBg": "rgba(59, 130, 246, 0.1)",
+    "aiBadgeText": "#60A5FA",
+    "clusterBadgeBg": "rgba(168, 85, 247, 0.1)",
+    "clusterBadgeText": "#C084FC"
+  },
+  "typography": {
+    "fontFamily": {
+      "heading": "Oswald, 'Barlow Condensed', ui-sans-serif, system-ui, sans-serif",
+      "body": "'DM Sans', Inter, ui-sans-serif, system-ui, sans-serif"
+    },
+    "hierarchy": {
+      "h1": "text-2xl font-black uppercase tracking-tight text-white",
+      "leagueHeader": "text-sm font-black uppercase text-orange-500 tracking-wider mb-2 mt-4",
+      "body": "text-base text-gray-200",
+      "teamText": "text-sm font-bold text-white uppercase",
+      "small": "text-xs text-gray-400 font-medium",
+      "badgeText": "text-[10px] font-bold uppercase tracking-wider"
+    }
+  },
+  "spacing": {
+    "screenPadding": "p-4",
+    "cardPadding": "p-3",
+    "gapSmall": "gap-2",
+    "gapMedium": "gap-3",
+    "gapLarge": "gap-6",
+    "borderRadius": "rounded-xl"
+  },
+  "components": {
+    "matchCard": "bg-[#1A1A1A] rounded-xl border border-zinc-800 p-3 flex flex-col gap-2 relative overflow-hidden transition-colors hover:bg-[#242424]",
+    "gradientBadge": "bg-gradient-to-r from-orange-500 to-red-600 rounded px-2 py-1 flex items-center justify-center text-white font-black shadow-[0_0_10px_rgba(249,115,22,0.3)] min-w-[40px]",
+    "pillFilter": "bg-zinc-800 text-white rounded-full px-4 py-1.5 text-xs font-bold uppercase tracking-wide whitespace-nowrap",
+    "activePillFilter": "bg-orange-500 text-white rounded-full px-4 py-1.5 text-xs font-bold uppercase tracking-wide whitespace-nowrap",
+    "bottomNav": "fixed bottom-0 w-full max-w-md mx-auto bg-[#0A0A0A]/90 backdrop-blur-lg border-t border-zinc-800 flex justify-around py-3 px-2 pb-safe z-50",
+    "fab": "fixed bottom-20 right-4 h-12 px-4 bg-gradient-to-r from-orange-500 to-red-600 rounded-full shadow-lg shadow-orange-500/30 flex items-center justify-center gap-2 text-white font-bold z-40",
+    "detailOddCard": "bg-zinc-800/50 border border-zinc-700 rounded-lg p-3 flex flex-col items-center justify-center gap-1",
+    "menuDropdown": "bg-[#1A1A1A] border border-zinc-800 rounded-xl shadow-2xl overflow-hidden"
+  },
+  "layouts": {
+    "appContainer": "min-h-screen bg-[#0A0A0A] text-white w-full max-w-md mx-auto relative shadow-2xl flex flex-col font-body",
+    "header": "flex items-center justify-between p-4 sticky top-0 bg-[#0A0A0A]/95 backdrop-blur z-30 border-b border-zinc-900",
+    "filterScroll": "flex overflow-x-auto no-scrollbar gap-2 px-4 py-3 border-b border-zinc-900 w-full",
+    "contentScroll": "flex-1 overflow-y-auto pb-24 px-4",
+    "matchList": "flex flex-col gap-2"
+  },
+  "icons_and_assets": {
+    "library": "lucide-react",
+    "instructions": "Use lucide-react. BrainCircuit (AI), Network (Cluster), Calendar (Date), Filter (Filtri), Globe (Europa), Settings/Wrench (Strumenti), BookOpen (Linee Guida), Upload (Carica), Download (Export).",
+    "image_urls": []
+  },
+  "instructions_to_main_agent": [
+    "Develop a mobile-first UI tailored for a max-w-md container. The design should look like a premium native mobile app running in the browser.",
+    "Use deep obsidian black (#0A0A0A) for the main background. Use #1A1A1A for cards with subtle #27272A borders.",
+    "Typography: Use a condensed bold font for headers/leagues (e.g., 'text-orange-500 font-black uppercase text-sm tracking-wider') to mimic the reference.",
+    "Top Navigation: Title 'ScoreBlast' or 'Menu Analisi' dropdown. Include a date pill, filter pill, and region pill in a horizontally scrollable bar below the header.",
+    "Home Screen: Group matches by 'Manifestazione' (League). Iterate over leagues and display the uppercase orange header. Then list the match cards.",
+    "Match Card Layout: Display teams vertically on the left. In the center, show the time. On the right, show the 1X2 gradient odds badge. Bottom row for AI and Cluster badges. Support long-press or a checkbox for multi-selection.",
+    "Match Detail: When opening a match, show all odds grouped by market family (1X2, Doppia Chance, U/O, GG/NG). Highlight the most probable prediction. Show '(stima)' for calculated odds and an AI reasoning block.",
+    "Multi-select & FAB: Show a floating action button with a counter when matches are selected. Tapping it opens a bottom sheet with the list of selected matches.",
+    "Strumenti Screen: Create cards for 'Carica Excel', 'Import Backup', 'Export Backup', 'Book Linee Guida', and 'AI Studio Framework'.",
+    "Book Screen: Implement an accordion listing betting rules.",
+    "Bottom Tab Navigation: Create a bottom nav bar linking to Home, Strumenti, and Book.",
+    "Ensure 'data-testid' is added to all interactive elements, e.g., 'data-testid=\"match-card-juve-milan\"', 'data-testid=\"filter-pill-europa\"'."
+  ],
+  "accessibility": {
+    "contrast": "Ensure sufficient contrast, especially for text within the gradient badges.",
+    "touchTargets": "Use generous padding for tap targets (min 44px equivalent).",
+    "testIds": "Mandatory 'data-testid' on interactive elements."
+  }
+}
