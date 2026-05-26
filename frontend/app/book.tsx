@@ -8,6 +8,7 @@ import BottomNav from "@/src/components/BottomNav";
 import { colors } from "@/src/theme";
 import { BOOK_RULES, AISTUDIO_FRAMEWORK } from "@/src/book-content";
 import { api } from "@/src/api";
+import { openExternalUrl } from "@/src/utils/platform";
 
 export default function Book() {
   const router = useRouter();
@@ -23,19 +24,17 @@ export default function Book() {
 
   const openAIStudio = async () => {
     try {
-      const { csv } = await api.aiStudioPrompt();
+      const { csv, count } = await api.aiStudioPrompt();
       const filled = AISTUDIO_FRAMEWORK.replace("{{CSV}}", csv);
-      if (Platform.OS === "web") {
-        try { await (navigator as any).clipboard.writeText(filled); } catch {}
-      }
-      Alert.alert(
-        "Apri AI Studio",
-        "Il prompt con CSV è pronto. Apri Google AI Studio e incolla.",
-        [
-          { text: "Annulla", style: "cancel" },
-          { text: "Apri", onPress: () => Linking.openURL("https://aistudio.google.com/prompts/new_chat") },
-        ],
-      );
+      // Copy to clipboard
+      try {
+        if (Platform.OS === "web" && typeof navigator !== "undefined") {
+          await (navigator as any).clipboard.writeText(filled);
+        }
+      } catch {}
+      // Open AI Studio in a new tab immediately
+      openExternalUrl("https://aistudio.google.com/prompts/new_chat");
+      Alert.alert("Prompt copiato ✓", `${count} partite incluse.\nIncolla con Ctrl+V (o Cmd+V) nella chat che si è appena aperta.`);
     } catch (e: any) {
       Alert.alert("Errore", e?.message);
     }

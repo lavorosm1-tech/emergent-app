@@ -15,6 +15,7 @@ import { api } from "@/src/api";
 import { colors } from "@/src/theme";
 import BottomNav from "@/src/components/BottomNav";
 import { AISTUDIO_FRAMEWORK } from "@/src/book-content";
+import { openExternalUrl, confirmAction } from "@/src/utils/platform";
 
 export default function Strumenti() {
   const router = useRouter();
@@ -106,24 +107,19 @@ export default function Strumenti() {
     try {
       const { csv, count } = await api.aiStudioPrompt();
       const filled = AISTUDIO_FRAMEWORK.replace("{{CSV}}", csv);
-      // Copy to clipboard on both web and native
+      // Copy to clipboard
       try {
         await Clipboard.setStringAsync(filled);
-      } catch (e) {
-        if (Platform.OS === "web") {
+      } catch {
+        if (Platform.OS === "web" && typeof navigator !== "undefined") {
           try { await (navigator as any).clipboard.writeText(filled); } catch {}
         }
       }
+      // Open AI Studio in a new tab immediately
+      openExternalUrl("https://aistudio.google.com/prompts/new_chat");
       Alert.alert(
         "Prompt Copiato ✓",
-        `${count} partite incluse.\n\nIl prompt è stato copiato negli appunti. Sarà sufficiente incollarlo (Ctrl+V o Cmd+V) nella chat di AI Studio.`,
-        [
-          { text: "Annulla", style: "cancel" },
-          {
-            text: "Apri AI Studio",
-            onPress: () => Linking.openURL("https://aistudio.google.com/prompts/new_chat"),
-          },
-        ],
+        `${count} partite incluse.\n\nIncolla con Ctrl+V (o Cmd+V) nella scheda di AI Studio che si è appena aperta.`,
       );
     } catch (e: any) {
       Alert.alert("Errore", e?.message);
@@ -133,25 +129,24 @@ export default function Strumenti() {
   };
 
   const downloadQuotePdf = () => {
-    Linking.openURL("https://landing.sisal.it/volantini/Scommesse_Sport/Quote/calcio%20base%20per%20data.pdf");
+    openExternalUrl("https://landing.sisal.it/volantini/Scommesse_Sport/Quote/calcio%20base%20per%20data.pdf");
   };
 
   const convertPdfToExcel = () => {
-    Linking.openURL("https://www.ilovepdf.com/it/pdf_in_excel");
+    openExternalUrl("https://www.ilovepdf.com/it/pdf_in_excel");
   };
 
   const deleteAll = () => {
-    Alert.alert("Cancellare tutto?", "Verranno eliminate tutte le partite e i pronostici.", [
-      { text: "Annulla", style: "cancel" },
-      {
-        text: "Conferma",
-        style: "destructive",
-        onPress: async () => {
-          await api.deleteAll();
-          Alert.alert("Fatto", "Database svuotato");
-        },
+    confirmAction({
+      title: "Cancellare tutto?",
+      message: "Verranno eliminate tutte le partite e i pronostici. Operazione irreversibile.",
+      confirmText: "Conferma",
+      destructive: true,
+      onConfirm: async () => {
+        await api.deleteAll();
+        Alert.alert("Fatto", "Database svuotato");
       },
-    ]);
+    });
   };
 
   type ToolProps = { icon: any; title: string; desc: string; onPress: () => void; testID: string; danger?: boolean };

@@ -12,6 +12,7 @@ import { api, Match } from "@/src/api";
 import { colors } from "@/src/theme";
 import BottomNav from "@/src/components/BottomNav";
 import { OddBadge } from "@/src/components/OddBadge";
+import { confirmAction } from "@/src/utils/platform";
 
 function bestSign(m: Match): { label: string; value?: number } {
   const candidates: [string, number | undefined][] = [
@@ -147,25 +148,19 @@ export default function Home() {
     try { await api.updateSelection([m.id], next); } catch {}
   };
 
-  const clearAllSelection = async () => {
-    Alert.alert("Svuotare selezione?", "Tutte le partite selezionate verranno deselezionate.", [
-      { text: "Annulla", style: "cancel" },
-      {
-        text: "Svuota",
-        style: "destructive",
-        onPress: async () => {
-          // Optimistic update
-          setMatches((arr) => arr.map((x) => ({ ...x, selected: false })));
-          try {
-            await api.clearSelection();
-          } catch (e) {
-            console.warn("clear sel err", e);
-          }
-          // Re-fetch to ensure consistency
-          await load(selectedDay);
-        },
+  const clearAllSelection = () => {
+    confirmAction({
+      title: "Svuotare selezione?",
+      message: "Tutte le partite selezionate verranno deselezionate.",
+      confirmText: "Svuota",
+      destructive: true,
+      onConfirm: async () => {
+        // Optimistic update
+        setMatches((arr) => arr.map((x) => ({ ...x, selected: false })));
+        try { await api.clearSelection(); } catch (e) { console.warn(e); }
+        await load(selectedDay);
       },
-    ]);
+    });
   };
 
   const goToToday = () => {

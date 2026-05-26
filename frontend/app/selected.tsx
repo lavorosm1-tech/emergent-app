@@ -10,6 +10,7 @@ import { useRouter, useFocusEffect } from "expo-router";
 import { api, Match } from "@/src/api";
 import { colors } from "@/src/theme";
 import { ScoreInput } from "@/src/components/ScoreInput";
+import { confirmAction } from "@/src/utils/platform";
 
 export default function Selected() {
   const router = useRouter();
@@ -37,17 +38,19 @@ export default function Selected() {
     try { await api.updateSelection([id], false); } catch {}
   };
 
-  const clearAll = async () => {
-    Alert.alert("Deseleziona tutto?", "", [
-      { text: "Annulla", style: "cancel" },
-      {
-        text: "OK",
-        onPress: async () => {
-          await api.clearSelection();
-          setItems([]);
-        },
+  const clearAll = () => {
+    confirmAction({
+      title: "Deseleziona tutte?",
+      message: "Tutte le partite selezionate verranno rimosse dalla selezione.",
+      confirmText: "Svuota",
+      destructive: true,
+      onConfirm: async () => {
+        // Optimistic UI
+        setItems([]);
+        try { await api.clearSelection(); } catch (e) { console.warn(e); }
+        await load();
       },
-    ]);
+    });
   };
 
   const saveAll = async () => {
