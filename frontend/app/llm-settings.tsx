@@ -74,7 +74,7 @@ export default function LlmSettings() {
                 <View style={styles.optMeta}>
                   <Text style={styles.tag}>{o.speed}</Text>
                   <Text style={styles.tag}>{o.quality}</Text>
-                  <Text style={styles.tagCost}>${o.cost_per_pred.toFixed(4)}/pred</Text>
+                  <Text style={styles.tagCost}>${o.cost_per_pred.toFixed(4)}/pred · ~€{(o.cost_per_pred * 40 * 30 * 0.93).toFixed(2)}/mese</Text>
                 </View>
               </View>
             </TouchableOpacity>

@@ -85,15 +85,41 @@ export default function Selected() {
             try {
               const { csv, count } = await api.aiStudioPrompt();
               const filled = AISTUDIO_FRAMEWORK.replace("{{CSV}}", csv);
+              // IMPORTANT: copy FIRST while document has focus, then open new tab
+              let copied = false;
+              if (Platform.OS === "web" && typeof navigator !== "undefined") {
+                try {
+                  await (navigator as any).clipboard.writeText(filled);
+                  copied = true;
+                } catch {
+                  // Fallback: use textarea
+                  try {
+                    const ta = document.createElement("textarea");
+                    ta.value = filled;
+                    ta.style.position = "fixed";
+                    ta.style.opacity = "0";
+                    document.body.appendChild(ta);
+                    ta.focus();
+                    ta.select();
+                    document.execCommand("copy");
+                    document.body.removeChild(ta);
+                    copied = true;
+                  } catch {}
+                }
+              }
+              // THEN open new tab
               let newWin: Window | null = null;
               if (Platform.OS === "web" && typeof window !== "undefined") {
                 newWin = window.open("https://aistudio.google.com/prompts/new_chat", "_blank", "noopener,noreferrer");
               }
-              try { if (Platform.OS === "web") await (navigator as any).clipboard.writeText(filled); } catch {}
-              Alert.alert("Prompt copiato ✓", `${count} partite. Incolla con Ctrl+V nella scheda AI Studio.`);
               if (Platform.OS === "web" && !newWin) {
                 Alert.alert("Popup bloccato", "Abilita i popup e riprova.");
+                return;
               }
+              Alert.alert(
+                copied ? "Prompt copiato ✓" : "Prompt pronto",
+                `${count} partite. ${copied ? "Incolla con Ctrl+V" : "Copia manuale richiesta"} nella scheda AI Studio.`,
+              );
             } catch (e: any) { Alert.alert("Errore", e?.message); }
           }}
           style={styles.aiStudioBtn}
