@@ -35,11 +35,11 @@ export default function MatchDetail() {
 
   useEffect(() => { load(); }, [load]);
 
-  const runPrediction = async () => {
+  const runPrediction = async (forceRegen: boolean = false) => {
     if (!id) return;
     setAiLoading(true);
     try {
-      const p = await api.predict(id);
+      const p = await api.predict(id, forceRegen);
       setPrediction(p);
       await load();
     } catch (e: any) {
@@ -52,8 +52,17 @@ export default function MatchDetail() {
   const saveResult = async () => {
     if (!id || !result.trim()) return;
     try {
-      await api.setResult(id, result.trim());
-      Alert.alert("Salvato", "Risultato salvato");
+      const out = await api.setResult(id, result.trim());
+      if (out.learning?.applied) {
+        const ok = out.learning.result_ok;
+        Alert.alert(
+          ok ? "✓ Pronostico VINTO" : "✗ Pronostico PERSO",
+          `Mercato: ${out.learning.main_prediction}\n\nIl sistema ha aggiornato i punteggi della famiglia di pronostico per migliorare le prossime previsioni.`,
+        );
+      } else {
+        Alert.alert("Salvato", "Risultato salvato");
+      }
+      await load();
     } catch (e: any) {
       Alert.alert("Errore", e?.message);
     }
@@ -162,11 +171,26 @@ export default function MatchDetail() {
                   ))}
                 </View>
               )}
+              <TouchableOpacity
+                testID="regen-ai"
+                onPress={() => runPrediction(true)}
+                disabled={aiLoading}
+                style={styles.regenBtn}
+              >
+                {aiLoading ? (
+                  <ActivityIndicator color={colors.primary} size="small" />
+                ) : (
+                  <>
+                    <Ionicons name="refresh" size={14} color={colors.primary} />
+                    <Text style={styles.regenBtnTxt}>Rigenera Pronostico</Text>
+                  </>
+                )}
+              </TouchableOpacity>
             </>
           ) : (
             <TouchableOpacity
               testID="gen-ai"
-              onPress={runPrediction}
+              onPress={() => runPrediction(false)}
               disabled={aiLoading}
               style={styles.aiBtn}
               activeOpacity={0.85}
@@ -276,6 +300,12 @@ const styles = StyleSheet.create({
   aiBtn: { borderRadius: 12, overflow: "hidden" },
   aiBtnInner: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, paddingVertical: 14 },
   aiBtnTxt: { color: "#FFF", fontSize: 14, fontWeight: "800" },
+  regenBtn: {
+    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6,
+    paddingVertical: 10, borderWidth: 1, borderColor: colors.primary,
+    borderStyle: "dashed", borderRadius: 10, marginTop: 4,
+  },
+  regenBtnTxt: { color: colors.primary, fontSize: 12, fontWeight: "800", letterSpacing: 0.5 },
   sectionTitle: { color: colors.primary, fontSize: 11, fontWeight: "900", letterSpacing: 1, marginTop: 4 },
   famBlock: { gap: 8 },
   famName: { color: colors.text, fontSize: 13, fontWeight: "800", textTransform: "uppercase", letterSpacing: 0.5 },

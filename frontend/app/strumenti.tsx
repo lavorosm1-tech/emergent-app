@@ -212,6 +212,14 @@ export default function Strumenti() {
           onPress={() => router.push("/selected")}
         />
 
+        <Tool
+          testID="tool-stats"
+          icon="analytics-outline"
+          title="Machine Learning Stats"
+          desc="Vedi cosa ha imparato il sistema dai tuoi risultati e azzera l'apprendimento."
+          onPress={() => router.push("/stats")}
+        />
+
         <Text style={styles.section}>PERICOLO</Text>
         <Tool
           testID="tool-delete-all"

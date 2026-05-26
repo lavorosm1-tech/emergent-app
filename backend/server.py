@@ -351,29 +351,185 @@ def parse_excel_bytes(content: bytes, filename: str) -> List[dict]:
 # AI PREDICTION
 # ============================================================
 
-PREDICTION_SYSTEM = """Sei un analista esperto di scommesse calcistiche. Analizzi le quote di una partita e fornisci pronostici basandoti SOLO sulla distribuzione delle quote (logaritmica vs lineare vs esponenziale).
+def evaluate_market(market: str, home: int, away: int) -> Optional[bool]:
+    """Return True if market won, False if lost, None if not evaluable."""
+    total = home + away
+    m = market.strip().upper().replace(" ", "")
+    # Combo (DC ... + U/O ...)
+    if "+" in m:
+        parts = [p.strip() for p in market.upper().split("+")]
+        results = [evaluate_market(p, home, away) for p in parts]
+        if any(r is None for r in results):
+            return None
+        return all(results)
+    # Sostituzioni
+    if m in ("1",): return home > away
+    if m in ("X",): return home == away
+    if m in ("2",): return away > home
+    if m in ("1X", "DC1X"): return home >= away
+    if m in ("X2", "DCX2"): return away >= home
+    if m in ("12", "DC12"): return home != away
+    if m.startswith("O") or m.startswith("OVER"):
+        try:
+            n = float(re.findall(r"[\d.]+", m)[0])
+            return total > n
+        except (IndexError, ValueError):
+            return None
+    if m.startswith("U") or m.startswith("UNDER"):
+        try:
+            n = float(re.findall(r"[\d.]+", m)[0])
+            return total < n
+        except (IndexError, ValueError):
+            return None
+    if m in ("GG", "BTTS"): return home > 0 and away > 0
+    if m in ("NG", "NOBTTS"): return home == 0 or away == 0
+    if "MG" in m and "2-4" in m:
+        if "CASA" in m: return 2 <= home <= 4
+        if "OSPITE" in m: return 2 <= away <= 4
+        return 2 <= total <= 4
+    return None
 
-REGOLE:
-- Quote 1X2 sotto 1.85 indicano forte preferenza del book; sopra 1.85 nessuna preferenza chiara.
-- Confronta U1.5 vs U2.5 vs U3.5: se la successione è lineare, gol distribuiti uniformemente. Se logaritmica inversa (gap U1.5→U2.5 enorme, U2.5→U3.5 piccolo), minimo 2 gol previsti.
-- Confronta O1.5 vs O2.5 vs O3.5: se gap O2.5→O3.5 enorme (esponenziale), tetto massimo 3-4 gol.
-- GG/NG: se quote vicine, distribuzione gol incerta, GG non giocabile.
-- Identifica pavimento minimo e tetto massimo gol.
-- Famiglie: OFFENSIVA_PULITA, OFFENSIVA_SPORCA, RANGE_CONTROLLATO, CHIUSA_PROTETTA, DOMINANZA_CON_TETTO, INSTABILE.
 
-OUTPUT IN JSON (solo JSON, niente markdown):
+def parse_result(result_str: str) -> Optional[tuple]:
+    """Parse '2-1' or '2:1' into (home, away)."""
+    if not result_str: return None
+    m = re.match(r"\s*(\d+)\s*[-:.]\s*(\d+)\s*", result_str)
+    if not m: return None
+    return int(m.group(1)), int(m.group(2))
+
+
+async def update_market_scores(match: dict, prediction: dict, home: int, away: int):
+    """Update per-family market scores based on actual result vs predicted markets."""
+    family = prediction.get("family", "INSTABILE")
+    playable = prediction.get("playable_markets") or []
+    markets_to_update = [m.get("market") for m in playable if m.get("market")]
+    if prediction.get("main_prediction") and prediction["main_prediction"] not in markets_to_update:
+        markets_to_update.insert(0, prediction["main_prediction"])
+
+    for market in markets_to_update:
+        outcome = evaluate_market(market, home, away)
+        if outcome is None:
+            continue
+        update_doc = {"$inc": {("wins" if outcome else "losses"): 1, "total": 1}}
+        await db.market_scores.update_one(
+            {"family": family, "market": market},
+            update_doc,
+            upsert=True,
+        )
+
+    # ALSO evaluate ALL standard markets (winners that weren't predicted) to discover good markets
+    standard_markets = [
+        "1", "X", "2", "1X", "X2", "12",
+        "O1.5", "U1.5", "O2.5", "U2.5", "O3.5", "U3.5",
+        "GG", "NG", "MG 2-4 totali", "MG 2-4 casa", "MG 2-4 ospite",
+        "DC 1X + U3.5", "DC X2 + U3.5", "DC 1X + O1.5", "DC X2 + O1.5",
+    ]
+    for market in standard_markets:
+        if market in markets_to_update:
+            continue
+        outcome = evaluate_market(market, home, away)
+        if outcome is None:
+            continue
+        # Award "missed opportunity" only when this market WON but wasn't predicted
+        if outcome:
+            await db.market_scores.update_one(
+                {"family": family, "market": market},
+                {"$inc": {"missed_wins": 1}},
+                upsert=True,
+            )
+
+
+async def get_family_stats(family: str) -> str:
+    """Build a feedback string from historical scores for this family."""
+    docs = await db.market_scores.find({"family": family}, {"_id": 0}).to_list(100)
+    if not docs:
+        return ""
+    lines = []
+    for d in docs:
+        total = d.get("total", 0)
+        wins = d.get("wins", 0)
+        missed = d.get("missed_wins", 0)
+        if total == 0 and missed == 0:
+            continue
+        rate = (wins / total * 100) if total > 0 else 0
+        lines.append(f"  - {d['market']}: {wins}/{total} ({rate:.0f}%)" + (f" | persi {missed} opportunità" if missed else ""))
+    if not lines:
+        return ""
+    return "STORICO FAMIGLIA " + family + ":\n" + "\n".join(lines)
+
+
+PREDICTION_SYSTEM = """Sei un analista esperto di scommesse calcistiche. Analizzi le quote di una partita e fornisci pronostici basati SOLO sulla distribuzione delle quote (gap logaritmico/lineare/esponenziale).
+
+═══════════════════════════════════════
+FASE 1 — IDENTIFICA LA FAMIGLIA (obbligatoria, prima di scegliere mercati)
+═══════════════════════════════════════
+Scegli UNA delle 6 famiglie usando le quote:
+
+• OFFENSIVA_PULITA: O2.5 < 1.65, O3.5 < 2.50, GG < 1.70, NG > 1.90, U1.5 > 4.50.
+  → Tante reti, attacchi netti, partita scoperta.
+
+• OFFENSIVA_SPORCA: O2.5 < 1.85, O3.5 < 3.00, GG vicino a NG (1.80-2.00 entrambe), 1X2 senza favorita chiara.
+  → Tanti gol probabili ma chi segna è incerto.
+
+• RANGE_CONTROLLATO: O1.5 < 1.40, O2.5 tra 1.70-2.10, O3.5 > 3.20, U3.5 < 1.30.
+  → Pavimento minimo 2 gol, tetto massimo 3-4 gol. Il classico 2-4 gol.
+
+• CHIUSA_PROTETTA: O2.5 > 2.10, U2.5 < 1.65, U3.5 < 1.15, NG < 1.85, GG > 1.95.
+  → Difese forti, pochi gol, partita tattica.
+
+• DOMINANZA_CON_TETTO: 1 < 1.55 OPPURE 2 < 1.55 (favorita netta), O3.5 > 3.50, U3.5 < 1.25.
+  → Favorita vince ma senza goleada. 1-0, 2-0, 2-1.
+
+• INSTABILE: Quote 1X2 tutte > 2.40, GG/NG entrambe 1.70-1.95, U/O quasi simmetrici.
+  → Nessun segnale, evitare.
+
+═══════════════════════════════════════
+FASE 2 — REGOLE DI SCELTA MERCATI (basate sulla famiglia)
+═══════════════════════════════════════
+
+PER FAMIGLIA, l'ordine di preferenza dei mercati è:
+
+• OFFENSIVA_PULITA → ordine: O2.5, GG, O1.5, MG 2-4 totali, Combo DC+O1.5
+• OFFENSIVA_SPORCA → ordine: O1.5, MG 2-4 totali, O2.5, Combo X+O1.5 se equilibrio
+• RANGE_CONTROLLATO → ordine: MG 2-4 totali, O1.5+U3.5 combo, U3.5, O1.5
+• CHIUSA_PROTETTA → ordine: U3.5, U2.5, NG, MG 2-4 casa o ospite (a seconda della favorita), Combo DC+U3.5
+• DOMINANZA_CON_TETTO → ordine: 1 secco (se quota 1 ≤ 1.50) oppure 2 secco (se quota 2 ≤ 1.50), 1X (se 1.50 < 1 ≤ 1.85), X2 (se 1.50 < 2 ≤ 1.85), MG 2-4 casa/ospite, U3.5, Combo DC+U3.5
+• INSTABILE → ordine: nessun mercato valutabile, eventualmente solo NG o U3.5 con fiducia Bassa
+
+REGOLE FORZANTI (devi rispettarle):
+- Se quota 1 ≤ 1.50 OPPURE quota 2 ≤ 1.50, INSERISCI "1" o "2" SECCO come primo o secondo mercato.
+- Se quota 1 tra 1.51 e 1.85, valuta "1X" come copertura.
+- Se quota 2 tra 1.51 e 1.85, valuta "X2" come copertura.
+- INSERISCI SEMPRE almeno una opzione MULTIGOAL tra: "MG 2-4 totali", "MG 2-4 casa", "MG 2-4 ospite" quando la famiglia è RANGE_CONTROLLATO, DOMINANZA_CON_TETTO o CHIUSA_PROTETTA.
+- INSERISCI SEMPRE almeno una opzione COMBO tra: "DC 1X + U3.5", "DC X2 + U3.5", "DC 1X + O1.5", "DC X2 + O1.5", "DC 12 + O1.5" quando applicabile.
+- Non bocciare 1 o 2 secco se la quota è bassa e il gap con X e l'altro segno è netto.
+- "MG 2-4 casa" si gioca quando 1 è favorita ma O3.5 > 3.50 (tetto): mette pavimento+tetto + scelta vincente.
+- "MG 2-4 ospite" stessa logica con 2 favorita.
+
+═══════════════════════════════════════
+FASE 3 — RANKING
+═══════════════════════════════════════
+Restituisci 3-5 mercati ordinati dal PIÙ PROBABILE al MENO PROBABILE.
+Il "main_prediction" è il primo (più probabile).
+
+═══════════════════════════════════════
+OUTPUT (SOLO JSON, niente markdown)
+═══════════════════════════════════════
 {
   "family": "RANGE_CONTROLLATO",
-  "analysis": "breve analisi 2-3 righe della distribuzione",
+  "analysis": "Breve analisi 2-3 righe: gap U/O, distribuzione 1X2, segnale GG/NG.",
   "playable_markets": [
-    {"market": "O1.5", "reasoning": "perché"},
-    {"market": "MG 2-4", "reasoning": "perché"}
+    {"market": "MG 2-4 totali", "reasoning": "spiegazione 1 riga"},
+    {"market": "O1.5", "reasoning": "spiegazione 1 riga"},
+    {"market": "DC 1X + U3.5", "reasoning": "spiegazione 1 riga"}
   ],
-  "main_prediction": "O1.5",
+  "main_prediction": "MG 2-4 totali",
   "confidence": "Media",
   "min_goals": 2,
   "max_goals": 4
-}"""
+}
+
+Mercati ammessi: 1, X, 2, 1X, X2, 12, O1.5, U1.5, O2.5, U2.5, O3.5, U3.5, GG, NG, MG 2-4 totali, MG 2-4 casa, MG 2-4 ospite, DC 1X + U3.5, DC X2 + U3.5, DC 12 + U3.5, DC 1X + O1.5, DC X2 + O1.5, DC 12 + O1.5, GG + O2.5, GG + O1.5."""
 
 
 def build_match_prompt(match: dict) -> str:
@@ -408,7 +564,12 @@ async def run_ai_prediction(match: dict) -> dict:
         session_id=f"pred-{match['id']}",
         system_message=PREDICTION_SYSTEM,
     ).with_model("anthropic", "claude-sonnet-4-5-20250929")
-    msg = UserMessage(text=build_match_prompt(match))
+    # Build prompt with feedback from market scores (machine learning loop)
+    feedback = await get_all_families_stats()
+    prompt = build_match_prompt(match)
+    if feedback:
+        prompt = feedback + "\n\nUSA QUESTO STORICO per aggiustare il ranking: dai priorità a mercati che hanno vinto più volte nella stessa famiglia, e considera anche i mercati con tanti 'persi opportunità' (avrebbero vinto ma non li avevi previsti).\n\n" + prompt
+    msg = UserMessage(text=prompt)
     response = await chat.send_message(msg)
     text = response if isinstance(response, str) else str(response)
     # Extract JSON
@@ -421,6 +582,28 @@ async def run_ai_prediction(match: dict) -> dict:
     except json.JSONDecodeError:
         return {"family": "INSTABILE", "analysis": text[:200], "playable_markets": [],
                 "main_prediction": None, "confidence": "Bassa"}
+
+
+async def get_all_families_stats() -> str:
+    """Build a feedback string from historical scores across all families."""
+    docs = await db.market_scores.find({}, {"_id": 0}).sort("total", -1).to_list(200)
+    if not docs:
+        return ""
+    by_family: Dict[str, list] = {}
+    for d in docs:
+        by_family.setdefault(d["family"], []).append(d)
+    blocks = []
+    for fam, items in by_family.items():
+        lines = [f"STORICO FAMIGLIA {fam}:"]
+        for d in items[:8]:
+            total = d.get("total", 0)
+            wins = d.get("wins", 0)
+            missed = d.get("missed_wins", 0)
+            rate = (wins / total * 100) if total > 0 else 0
+            extra = f" | persi opportunità {missed}" if missed else ""
+            lines.append(f"  - {d['market']}: {wins}W/{total} ({rate:.0f}%){extra}")
+        blocks.append("\n".join(lines))
+    return "\n\n".join(blocks)
 
 
 # ============================================================
@@ -520,13 +703,16 @@ async def get_match(match_id: str):
 
 
 @api_router.post("/matches/{match_id}/predict")
-async def predict_match(match_id: str):
+async def predict_match(match_id: str, force: bool = False):
     match = await db.matches.find_one({'id': match_id}, {'_id': 0})
     if not match:
         raise HTTPException(404, "Match not found")
-    existing = await db.predictions.find_one({'match_id': match_id}, {'_id': 0})
-    if existing:
-        return existing
+    if force:
+        await db.predictions.delete_many({'match_id': match_id})
+    else:
+        existing = await db.predictions.find_one({'match_id': match_id}, {'_id': 0})
+        if existing:
+            return existing
     try:
         result = await run_ai_prediction(match)
     except Exception as e:
@@ -552,26 +738,81 @@ async def predict_match(match_id: str):
 
 @api_router.post("/matches/{match_id}/result")
 async def set_result(match_id: str, body: ResultUpdate):
-    res = await db.matches.update_one(
+    match = await db.matches.find_one({'id': match_id}, {'_id': 0})
+    if not match:
+        raise HTTPException(404, "Match not found")
+    parsed = parse_result(body.result)
+    if not parsed:
+        raise HTTPException(400, "Formato risultato non valido (es. 2-1)")
+    home, away = parsed
+    await db.matches.update_one(
         {'id': match_id},
         {'$set': {'result': body.result, 'updated_at': datetime.now(timezone.utc).isoformat()}},
     )
-    if res.matched_count == 0:
-        raise HTTPException(404, "Match not found")
-    return {"ok": True}
+    prediction = await db.predictions.find_one({'match_id': match_id}, {'_id': 0})
+    learning = {"applied": False}
+    if prediction:
+        await update_market_scores(match, prediction, home, away)
+        # Compute hit/miss summary for response
+        main_pred = prediction.get("main_prediction")
+        if main_pred:
+            outcome = evaluate_market(main_pred, home, away)
+            learning = {
+                "applied": True,
+                "main_prediction": main_pred,
+                "result_ok": outcome,
+            }
+    return {"ok": True, "learning": learning}
 
 
 @api_router.post("/results/bulk")
 async def bulk_results(body: BulkResult):
     count = 0
+    learnings = []
     for item in body.items:
-        if 'id' in item and 'result' in item:
-            r = await db.matches.update_one(
-                {'id': item['id']},
-                {'$set': {'result': item['result'], 'updated_at': datetime.now(timezone.utc).isoformat()}},
-            )
-            count += r.matched_count
-    return {"updated": count}
+        if 'id' not in item or 'result' not in item:
+            continue
+        match = await db.matches.find_one({'id': item['id']}, {'_id': 0})
+        if not match:
+            continue
+        parsed = parse_result(item['result'])
+        if not parsed:
+            continue
+        home, away = parsed
+        await db.matches.update_one(
+            {'id': item['id']},
+            {'$set': {'result': item['result'], 'updated_at': datetime.now(timezone.utc).isoformat()}},
+        )
+        count += 1
+        prediction = await db.predictions.find_one({'match_id': item['id']}, {'_id': 0})
+        if prediction:
+            await update_market_scores(match, prediction, home, away)
+            main_pred = prediction.get("main_prediction")
+            if main_pred:
+                learnings.append({
+                    "match_id": item['id'],
+                    "main_prediction": main_pred,
+                    "result_ok": evaluate_market(main_pred, home, away),
+                })
+    return {"updated": count, "learnings": learnings}
+
+
+@api_router.get("/stats/scores")
+async def stats_scores():
+    docs = await db.market_scores.find({}, {'_id': 0}).to_list(500)
+    by_family: Dict[str, list] = {}
+    for d in docs:
+        d["win_rate"] = round((d.get("wins", 0) / d.get("total", 1)) * 100, 1) if d.get("total", 0) > 0 else 0
+        by_family.setdefault(d["family"], []).append(d)
+    for fam in by_family:
+        by_family[fam].sort(key=lambda x: (-x.get("win_rate", 0), -x.get("total", 0)))
+    return by_family
+
+
+@api_router.post("/stats/reset")
+async def stats_reset():
+    await db.market_scores.delete_many({})
+    return {"ok": True}
 
 
 @api_router.post("/matches/selection")
@@ -643,9 +884,23 @@ async def aistudio_prompt():
     selected = await db.matches.find({'selected': True}, {'_id': 0}).to_list(1000)
     if not selected:
         selected = await db.matches.find({}, {'_id': 0}).limit(20).to_list(20)
-    csv_lines = ["data,ora,lega,casa,ospite"]
+    csv_lines = ["Ora,Lega,Casa,Ospite,1,X,2,1X,X2,U1.5,O1.5,U2.5,O2.5,U3.5,O3.5,GG,NG"]
     for m in selected:
-        csv_lines.append(f"{m['day']},{m['time']},{m['manifestazione']},{m['squadra1']},{m['squadra2']}")
+        o = m.get('odds', {})
+        def v(k):
+            x = o.get(k)
+            return "" if x is None else str(x)
+        # Sanitize commas in team / league names
+        def s(x): return str(x).replace(',', ' ').strip()
+        csv_lines.append(",".join([
+            m['time'], s(m['manifestazione']), s(m['squadra1']), s(m['squadra2']),
+            v('odd_1'), v('odd_X'), v('odd_2'),
+            v('odd_1X'), v('odd_X2'),
+            v('odd_U15'), v('odd_O15'),
+            v('odd_U25'), v('odd_O25'),
+            v('odd_U35'), v('odd_O35'),
+            v('odd_GG'), v('odd_NG'),
+        ]))
     csv_text = "\n".join(csv_lines)
     return {"csv": csv_text, "count": len(selected)}
 

@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator,
-  TextInput, RefreshControl, Modal, FlatList, Alert,
+  TextInput, RefreshControl, Modal, FlatList, Alert, useWindowDimensions, Platform,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
@@ -31,8 +31,27 @@ function fmtDay(d: string) {
   return `${day} ${months[m - 1]} ${String(y).slice(2)}`;
 }
 
+function todayISO() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+function nearestDay(days: string[]): string | null {
+  if (!days.length) return null;
+  const today = todayISO();
+  if (days.includes(today)) return today;
+  // nearest future day, else most recent past day
+  const future = days.filter((d) => d >= today).sort();
+  if (future.length) return future[0];
+  return days.slice().sort().reverse()[0];
+}
+
 export default function Home() {
   const router = useRouter();
+  const { width } = useWindowDimensions();
+  const isDesktop = Platform.OS === "web" && width >= 900;
+  const numCols = isDesktop ? (width >= 1400 ? 3 : 2) : 1;
+
   const [matches, setMatches] = useState<Match[]>([]);
   const [days, setDays] = useState<string[]>([]);
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
@@ -42,6 +61,7 @@ export default function Home() {
   const [refreshing, setRefreshing] = useState(false);
   const [dayPickerOpen, setDayPickerOpen] = useState(false);
   const [leaguePickerOpen, setLeaguePickerOpen] = useState(false);
+  const [didInitDay, setDidInitDay] = useState(false);
 
   const load = useCallback(async (day: string | null) => {
     try {
@@ -51,18 +71,33 @@ export default function Home() {
       ]);
       setMatches(ms);
       setDays(ds);
+      return ds;
     } catch (e: any) {
       console.warn("load err", e?.message);
+      return [];
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
   }, []);
 
+  // On first load, default selectedDay to today (or nearest available)
+  useEffect(() => {
+    if (didInitDay) return;
+    (async () => {
+      setLoading(true);
+      const ds = await load(null);
+      const d = nearestDay(ds);
+      if (d) setSelectedDay(d);
+      setDidInitDay(true);
+    })();
+  }, [didInitDay, load]);
+
   useFocusEffect(useCallback(() => {
+    if (!didInitDay) return;
     setLoading(true);
     load(selectedDay);
-  }, [selectedDay, load]));
+  }, [selectedDay, load, didInitDay]));
 
   // When changing day, reset league filter (because available leagues change)
   useEffect(() => { setSelectedLeague(null); }, [selectedDay]);
@@ -104,6 +139,27 @@ export default function Home() {
     try { await api.updateSelection([m.id], next); } catch {}
   };
 
+  const clearAllSelection = async () => {
+    Alert.alert("Svuotare selezione?", "Tutte le partite selezionate verranno deselezionate.", [
+      { text: "Annulla", style: "cancel" },
+      {
+        text: "Svuota",
+        style: "destructive",
+        onPress: async () => {
+          await api.clearSelection();
+          setMatches((arr) => arr.map((x) => ({ ...x, selected: false })));
+        },
+      },
+    ]);
+  };
+
+  const goToToday = () => {
+    const d = nearestDay(days);
+    setSelectedDay(d);
+    setSelectedLeague(null);
+    setQuery("");
+  };
+
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
       {/* Header */}
@@ -111,16 +167,29 @@ export default function Home() {
         <View style={styles.titleRow}>
           <Ionicons name="trophy" size={22} color={colors.primary} />
           <Text style={styles.title} testID="app-title">ScoreBlast</Text>
+          {isDesktop && <Text style={styles.titleHint}>Desktop View</Text>}
         </View>
-        <TouchableOpacity
-          testID="open-strumenti"
-          onPress={() => router.push("/strumenti")}
-          style={styles.menuBtn}
-        >
-          <Text style={styles.menuBtnTxt}>Strumenti</Text>
-          <Ionicons name="chevron-down" size={14} color={colors.text} />
-        </TouchableOpacity>
+        <View style={{ flexDirection: "row", gap: 8 }}>
+          <TouchableOpacity
+            testID="btn-today"
+            onPress={goToToday}
+            style={styles.todayBtn}
+          >
+            <Ionicons name="today-outline" size={14} color={colors.primary} />
+            <Text style={styles.todayBtnTxt}>OGGI</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            testID="open-strumenti"
+            onPress={() => router.push("/strumenti")}
+            style={styles.menuBtn}
+          >
+            <Text style={styles.menuBtnTxt}>Strumenti</Text>
+            <Ionicons name="chevron-down" size={14} color={colors.text} />
+          </TouchableOpacity>
+        </View>
       </View>
+
+      <View style={isDesktop ? styles.desktopWrap : { flex: 1 }}>
 
       {/* Filter bar - ordered: 1) Day, 2) Championship, 3) Search */}
       <View style={styles.filtersWrap}>
@@ -202,7 +271,17 @@ export default function Home() {
           <Text style={styles.countNum}>{matches.length}</Text> totali
         </Text>
         {selectedCount > 0 && (
-          <Text style={styles.selCount}>{selectedCount} selezionate</Text>
+          <View style={styles.selRow}>
+            <Text style={styles.selCount}>{selectedCount} selezionate</Text>
+            <TouchableOpacity
+              testID="clear-selection"
+              onPress={clearAllSelection}
+              style={styles.clearBtn}
+            >
+              <Ionicons name="trash-outline" size={12} color={colors.danger} />
+              <Text style={styles.clearBtnTxt}>Svuota</Text>
+            </TouchableOpacity>
+          </View>
         )}
       </View>
 
@@ -240,6 +319,7 @@ export default function Home() {
                 <Text style={styles.leagueTxt}>{league}</Text>
                 <Text style={styles.leagueCount}>{items.length}</Text>
               </View>
+              <View style={isDesktop ? styles.cardsGrid : undefined}>
               {items.map((m) => {
                 const sign = bestSign(m);
                 return (
@@ -249,7 +329,11 @@ export default function Home() {
                     onPress={() => router.push(`/match/${m.id}`)}
                     onLongPress={() => toggleSelect(m)}
                     activeOpacity={0.8}
-                    style={[styles.card, m.selected && styles.cardSelected]}
+                    style={[
+                      styles.card,
+                      m.selected && styles.cardSelected,
+                      isDesktop && { width: `${100 / numCols - 1}%` },
+                    ]}
                   >
                     <TouchableOpacity
                       testID={`select-${m.id}`}
@@ -301,11 +385,13 @@ export default function Home() {
                   </TouchableOpacity>
                 );
               })}
+              </View>
             </View>
           ))}
           <View style={{ height: 100 }} />
         </ScrollView>
       )}
+      </View>
 
       {/* FAB */}
       {selectedCount > 0 && (
@@ -389,6 +475,13 @@ const styles = StyleSheet.create({
   },
   titleRow: { flexDirection: "row", alignItems: "center", gap: 8 },
   title: { color: colors.text, fontSize: 22, fontWeight: "900", letterSpacing: -0.5 },
+  titleHint: { color: colors.textDim, fontSize: 10, fontWeight: "700", letterSpacing: 1, marginLeft: 8 },
+  todayBtn: {
+    flexDirection: "row", alignItems: "center", gap: 4,
+    backgroundColor: "rgba(255,87,34,0.12)", borderWidth: 1, borderColor: colors.primary,
+    paddingHorizontal: 10, paddingVertical: 8, borderRadius: 999,
+  },
+  todayBtnTxt: { color: colors.primary, fontSize: 11, fontWeight: "900", letterSpacing: 0.5 },
   menuBtn: {
     flexDirection: "row", alignItems: "center", gap: 4,
     backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border,
@@ -420,7 +513,18 @@ const styles = StyleSheet.create({
   countTxt: { color: colors.textMuted, fontSize: 12, fontWeight: "500" },
   countNum: { color: colors.text, fontWeight: "800" },
   countSep: { color: colors.textDim },
+  selRow: { flexDirection: "row", alignItems: "center", gap: 8 },
   selCount: { color: colors.primary, fontSize: 12, fontWeight: "700" },
+  clearBtn: {
+    flexDirection: "row", alignItems: "center", gap: 4,
+    backgroundColor: "rgba(239,68,68,0.10)", paddingHorizontal: 8, paddingVertical: 4, borderRadius: 999,
+    borderWidth: 1, borderColor: "rgba(239,68,68,0.3)",
+  },
+  clearBtnTxt: { color: colors.danger, fontSize: 10, fontWeight: "800", letterSpacing: 0.5 },
+  desktopWrap: { flex: 1, maxWidth: 1400, width: "100%", alignSelf: "center" },
+  desktopSidebar: {},
+  listDesktop: { paddingHorizontal: 24, gap: 12 },
+  cardsGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   loader: { flex: 1, justifyContent: "center", alignItems: "center" },
   empty: { flex: 1, alignItems: "center", justifyContent: "center", gap: 16 },
   emptyTxt: { color: colors.textMuted, fontSize: 15 },

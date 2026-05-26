@@ -59,17 +59,20 @@ export const api = {
   },
   days: () => req<string[]>("/matches/days"),
   match: (id: string) => req<Match & { prediction?: Prediction }>(`/matches/${id}`),
-  predict: (id: string) => req<Prediction>(`/matches/${id}/predict`, { method: "POST" }),
+  predict: (id: string, force?: boolean) =>
+    req<Prediction>(`/matches/${id}/predict${force ? "?force=true" : ""}`, { method: "POST" }),
   setResult: (id: string, result: string) =>
-    req<{ ok: boolean }>(`/matches/${id}/result`, {
+    req<{ ok: boolean; learning?: { applied: boolean; main_prediction?: string; result_ok?: boolean } }>(`/matches/${id}/result`, {
       method: "POST",
       body: JSON.stringify({ result }),
     }),
   bulkResults: (items: { id: string; result: string }[]) =>
-    req<{ updated: number }>(`/results/bulk`, {
+    req<{ updated: number; learnings?: any[] }>(`/results/bulk`, {
       method: "POST",
       body: JSON.stringify({ items }),
     }),
+  statsScores: () => req<Record<string, any[]>>("/stats/scores"),
+  statsReset: () => req<{ ok: boolean }>("/stats/reset", { method: "POST" }),
   updateSelection: (ids: string[], selected: boolean) =>
     req<{ ok: boolean }>(`/matches/selection`, {
       method: "POST",
