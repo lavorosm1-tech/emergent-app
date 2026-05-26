@@ -585,6 +585,9 @@ def detect_league_context(manifestazione: str) -> str:
     elif code.endswith("2"):
         parts.append("TIPO: Campionato di seconda divisione — solitamente più conservativo, meno gol")
     return " | ".join(parts) if parts else ""
+
+
+def build_match_prompt(match: dict) -> str:
     context = detect_league_context(match.get('manifestazione', ''))
     o = match['odds']
     def fmt(k, label):

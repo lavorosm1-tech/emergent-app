@@ -183,23 +183,11 @@ export default function Home() {
         <View style={{ flexDirection: "row", gap: 8 }}>
           <TouchableOpacity
             testID="btn-reset"
-            onPress={() => {
-              setSelectedLeague(null);
-              setQuery("");
-              setTierFilter(null);
-            }}
-            style={styles.resetTopBtn}
-          >
-            <Ionicons name="refresh" size={14} color={colors.textMuted} />
-            <Text style={styles.resetTopTxt}>RESET</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            testID="btn-today"
             onPress={goToToday}
             style={styles.todayBtn}
           >
-            <Ionicons name="today-outline" size={14} color={colors.primary} />
-            <Text style={styles.todayBtnTxt}>OGGI</Text>
+            <Ionicons name="refresh" size={14} color={colors.primary} />
+            <Text style={styles.todayBtnTxt}>RESET</Text>
           </TouchableOpacity>
           <TouchableOpacity
             testID="open-strumenti"
