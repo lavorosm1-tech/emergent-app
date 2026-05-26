@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import {
-  View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Alert, Platform,
+  View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Alert, Platform, useWindowDimensions,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -19,6 +19,8 @@ import { openExternalUrl, confirmAction } from "@/src/utils/platform";
 
 export default function Strumenti() {
   const router = useRouter();
+  const { width } = useWindowDimensions();
+  const isGrid = width >= 600; // tablet/desktop → grid 2-col
   const [busy, setBusy] = useState<string | null>(null);
 
   const uploadExcel = async () => {
@@ -167,9 +169,8 @@ export default function Strumenti() {
       </View>
       <View style={{ flex: 1 }}>
         <Text style={[styles.toolTitle, danger && { color: colors.danger }]}>{title}</Text>
-        <Text style={styles.toolDesc}>{desc}</Text>
+        <Text style={styles.toolDesc} numberOfLines={2}>{desc}</Text>
       </View>
-      <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
     </TouchableOpacity>
   );
 
@@ -291,8 +292,10 @@ const styles = StyleSheet.create({
   title: { color: colors.text, fontSize: 26, fontWeight: "900", letterSpacing: -0.5 },
   subtitle: { color: colors.textMuted, fontSize: 12, marginTop: 4 },
   list: { padding: 16, gap: 10 },
+  grid: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
   section: { color: colors.primary, fontSize: 11, fontWeight: "900", letterSpacing: 1.5, marginTop: 12, marginBottom: 4 },
   tool: {
+    flex: 1, minWidth: 280,
     flexDirection: "row", alignItems: "center", gap: 12,
     backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border,
     borderRadius: 14, padding: 14,
