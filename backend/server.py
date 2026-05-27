@@ -579,7 +579,7 @@ LEAGUE_COUNTRY_CODES = {
     "CAN": "Canada", "CHI": "Cile", "CIN": "Cina", "COL": "Colombia",
     "COR": "Corea del Sud", "COS": "Costa Rica", "CRO": "Croazia", "DAN": "Danimarca",
     "ECU": "Ecuador", "EGI": "Egitto", "ESA": "El Salvador", "EST": "Estonia",
-    "FIN": "Finlandia", "FRA": "Francia", "GAL": "Galles", "GEO": "Georgia",
+    "FIL": "Filippine", "FIN": "Finlandia", "FRA": "Francia", "GAL": "Galles", "GEO": "Georgia",
     "GER": "Germania", "GHA": "Ghana", "GIA": "Giappone", "GIO": "Giordania",
     "GRE": "Grecia", "GUA": "Guatemala", "GUI": "Guinea", "HON": "Honduras",
     "IND": "India", "ING": "Inghilterra", "IRA": "Iran", "IRL": "Irlanda",
@@ -612,7 +612,8 @@ LEAGUE_SPECIAL = [
     (re.compile(r"^AMICLUB"), lambda m: "Amichevole Club"),
     (re.compile(r"^AMIF"), lambda m: "Amichevole Femminile"),
     (re.compile(r"^AMI"), lambda m: "Amichevole"),
-    (re.compile(r"^CPSUDAM"), lambda m: "Coppa Sudamericana"),
+    (re.compile(r"^EUCONFL"), lambda m: "Euro Conference League"),
+    (re.compile(r"^CPSUDAM"), lambda m: "Coppa Sudamerica"),
     (re.compile(r"^CPLIB"), lambda m: "Coppa Libertadores"),
     (re.compile(r"^CPCAR"), lambda m: "Coppa Caraibica"),
     (re.compile(r"^CONCAF"), lambda m: "Concacaf"),
@@ -624,7 +625,7 @@ LEAGUE_SPECIAL = [
 
 
 def parse_league_label(code: str) -> str:
-    """Return a human-readable competition label like 'Italia Prima Lega' or 'Ecuador Coppa'."""
+    """Return a human-readable competition label like 'Italia Prima Lega' or 'Australia Coppa'."""
     if not code:
         return ""
     c = code.strip().upper()
@@ -638,6 +639,15 @@ def parse_league_label(code: str) -> str:
         if c.startswith(prefix):
             parts = [name]
             rest = c[len(prefix):]
+            # Special case: if "CP" appears anywhere in the rest → Coppa
+            # Examples: AUSQCP → Australia Coppa, ECUCP → Ecuador Coppa
+            if "CP" in rest:
+                parts.append("Coppa")
+                if rest.endswith("F"):
+                    parts.append("Femminile")
+                if rest.endswith("RS"):
+                    parts.append("Riserve")
+                return " ".join(parts)
             # Letter category first (U19, F, CP, CUP, RS, CH, EU, CONF)
             cat_match = re.match(r"^(U\d{2}|F|CP|CUP|RS|CH|EU|CONF)", rest)
             if cat_match:

@@ -31,6 +31,7 @@ const COUNTRY: Record<string, string> = {
   EGI: "Egitto",
   ESA: "El Salvador",
   EST: "Estonia",
+  FIL: "Filippine",
   FIN: "Finlandia",
   FRA: "Francia",
   GAL: "Galles",
@@ -159,7 +160,8 @@ const SPECIAL: { match: RegExp; build: (m: RegExpMatchArray) => string; area: st
   { match: /^AMINAZ/, build: () => "Amichevole Nazionali", area: "Mondo" },
   { match: /^AMICLUB/, build: () => "Amichevole Club", area: "Mondo" },
   { match: /^AMI/, build: () => "Amichevole", area: "Mondo" },
-  { match: /^CPSUDAM/, build: () => "Coppa Sudamericana", area: "America" },
+  { match: /^EUCONFL/, build: () => "Euro Conference League", area: "Europa" },
+  { match: /^CPSUDAM/, build: () => "Coppa Sudamerica", area: "America" },
   { match: /^CPLIB/, build: () => "Coppa Libertadores", area: "America" },
   { match: /^CPCAR/, build: () => "Coppa Caraibica", area: "America" },
   { match: /^CONCAF/, build: () => "Concacaf", area: "America" },
@@ -207,6 +209,16 @@ export function parseLeagueCode(code: string): {
       parts.push(name);
       area = AREA_BY_COUNTRY[name] || "Mondo";
       const rest = c.slice(prefix.length);
+      // Special case: if "CP" appears anywhere in the rest → it's a Coppa
+      // Examples: AUSQCP → Australia Coppa, ECUCP → Ecuador Coppa
+      if (/CP/.test(rest)) {
+        category = "Coppa";
+        parts.push("Coppa");
+        // Also check for Femminile/Riserve suffix
+        if (rest.endsWith("F")) parts.push("Femminile");
+        if (rest.endsWith("RS")) parts.push("Riserve");
+        break;
+      }
       const catMatch = rest.match(/^(U\d{2}|F|CP|CUP|RS|CH|EU|CONF)/);
       if (catMatch) {
         category = CATEGORY[catMatch[1]] || catMatch[1];
