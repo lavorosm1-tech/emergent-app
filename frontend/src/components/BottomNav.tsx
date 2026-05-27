@@ -7,8 +7,10 @@ import { colors } from "@/src/theme";
 type IconName = React.ComponentProps<typeof Ionicons>["name"];
 
 const TABS: { route: string; label: string; icon: IconName; testID: string }[] = [
-  { route: "/", label: "Partite", icon: "trophy-outline", testID: "tab-home" },
+  { route: "/profilo", label: "Profilo", icon: "person-circle-outline", testID: "tab-profile" },
   { route: "/strumenti", label: "Strumenti", icon: "construct-outline", testID: "tab-tools" },
+  { route: "/", label: "Partite", icon: "trophy-outline", testID: "tab-home" },
+  { route: "/selected", label: "Schedina", icon: "ticket-outline", testID: "tab-schedina" },
   { route: "/book", label: "Book", icon: "book-outline", testID: "tab-book" },
 ];
 
@@ -44,8 +46,8 @@ const styles = StyleSheet.create({
     borderTopColor: colors.border,
     paddingTop: 8,
     paddingBottom: 22,
-    paddingHorizontal: 8,
+    paddingHorizontal: 4,
   },
   tab: { flex: 1, alignItems: "center", justifyContent: "center", gap: 4 },
-  label: { fontSize: 11, fontWeight: "700", letterSpacing: 0.5, textTransform: "uppercase" },
+  label: { fontSize: 10, fontWeight: "800", letterSpacing: 0.5, textTransform: "uppercase" },
 });
