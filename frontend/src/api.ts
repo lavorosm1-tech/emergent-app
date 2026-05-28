@@ -90,7 +90,9 @@ export const api = {
   setLlmSettings: (id: string) => req<{ ok: boolean; selected_id: string }>("/settings/llm", { method: "POST", body: JSON.stringify({ id }) }),
   getBudget: () => req<{ estimated_spent_usd: number; predictions_made: number; current_model: string; cost_per_prediction_usd: number; topup_url: string }>("/settings/budget"),
   resetBudget: () => req<{ ok: boolean }>("/settings/budget/reset", { method: "POST" }),
-  marketStats: () => req<{ family: string; market: string; wins: number; losses: number; total: number; missed: number; win_rate: number }[]>("/ml/stats"),
+  marketStats: () => req<{ markets: { family: string; market: string; wins: number; losses: number; total: number; missed: number; family_total: number; miss_rate: number; win_rate: number }[]; family_totals: Record<string, number> }>("/ml/stats"),
+  fetchResultsAuto: (ids: string[], apply = true, apply_threshold = 80) => req<{ results: any[]; applied: number; not_found: number; skipped: number }>("/results/fetch", { method: "POST", body: JSON.stringify({ ids, apply, apply_threshold }) }),
+  applyResultManual: (id: string, score: string) => req<{ ok: boolean; result: string }>("/results/apply", { method: "POST", body: JSON.stringify({ id, score }) }),
   uploadExcel: async (uri: string, name: string, mimeType?: string) => {
     const form = new FormData();
     if (typeof window !== "undefined" && window.fetch && uri.startsWith("blob:")) {

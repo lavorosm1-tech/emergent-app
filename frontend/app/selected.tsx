@@ -36,6 +36,44 @@ export default function Selected() {
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
+  const [fetchingResults, setFetchingResults] = useState(false);
+  const [reviewList, setReviewList] = useState<any[]>([]);
+
+  const autoFetchResults = async () => {
+    if (items.length === 0) {
+      Alert.alert("Vuoto", "Nessuna partita selezionata");
+      return;
+    }
+    setFetchingResults(true);
+    try {
+      const ids = items.map((m) => m.id);
+      const res = await api.fetchResultsAuto(ids, true, 80);
+      const summary = `Applicati ${res.applied} · Da verificare ${res.results.filter((r) => r.status === "review").length} · Non trovati ${res.not_found}`;
+      const reviews = res.results.filter((r: any) => r.status === "review");
+      setReviewList(reviews);
+      await load();
+      if (reviews.length > 0) {
+        Alert.alert("Auto-fetch completato", `${summary}\n\nAlcune partite hanno confidence bassa e richiedono conferma manuale.`);
+      } else {
+        Alert.alert("Auto-fetch completato", summary);
+      }
+    } catch (e: any) {
+      Alert.alert("Errore", e?.message || "Auto-fetch fallito");
+    } finally {
+      setFetchingResults(false);
+    }
+  };
+
+  const applyReview = async (item: any) => {
+    try {
+      await api.applyResultManual(item.id, item.score);
+      setReviewList(reviewList.filter((x) => x.id !== item.id));
+      await load();
+    } catch (e: any) {
+      Alert.alert("Errore", e?.message || "Errore");
+    }
+  };
+
   const removeFromSelection = async (id: string) => {
     setItems((arr) => arr.filter((x) => x.id !== id));
     try { await api.updateSelection([id], false); } catch {}
@@ -128,6 +166,21 @@ export default function Selected() {
           <Ionicons name="planet" size={14} color={colors.primary} />
           <Text style={styles.aiStudioBtnTxt}>AI STUDIO</Text>
         </TouchableOpacity>
+        <TouchableOpacity
+          testID="sel-autofetch"
+          onPress={autoFetchResults}
+          disabled={fetchingResults || items.length === 0}
+          style={[styles.aiStudioBtn, { borderColor: "#10B981", opacity: items.length === 0 ? 0.5 : 1 }]}
+        >
+          {fetchingResults ? (
+            <ActivityIndicator size="small" color="#10B981" />
+          ) : (
+            <>
+              <Ionicons name="refresh-circle" size={14} color="#10B981" />
+              <Text style={[styles.aiStudioBtnTxt, { color: "#10B981" }]}>RISULTATI</Text>
+            </>
+          )}
+        </TouchableOpacity>
         <TouchableOpacity testID="sel-clear" onPress={clearAll} style={styles.iconBtn}>
           <Ionicons name="trash-outline" size={20} color={colors.danger} />
         </TouchableOpacity>
@@ -142,6 +195,33 @@ export default function Selected() {
         </View>
       ) : (
         <>
+          {reviewList.length > 0 && (
+            <View style={styles.reviewBanner}>
+              <Ionicons name="warning" size={16} color="#F59E0B" />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.reviewTitle}>{reviewList.length} risultati da confermare</Text>
+                <Text style={styles.reviewHint}>Confidence sotto soglia (80%). Verifica e conferma manualmente.</Text>
+              </View>
+            </View>
+          )}
+          {reviewList.map((r, i) => {
+            const matched = items.find((m) => m.id === r.id);
+            return (
+              <View key={i} style={styles.reviewItem}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.reviewMatch}>{matched ? `${matched.squadra1} – ${matched.squadra2}` : r.id}</Text>
+                  <Text style={styles.reviewSub}>Sofascore: {r.matched} → {r.score} (conf {r.confidence}%)</Text>
+                </View>
+                <TouchableOpacity onPress={() => applyReview(r)} style={styles.reviewApply}>
+                  <Ionicons name="checkmark" size={14} color="#FFF" />
+                  <Text style={styles.reviewApplyTxt}>Conferma</Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => setReviewList(reviewList.filter((x) => x.id !== r.id))} style={styles.reviewSkip}>
+                  <Ionicons name="close" size={14} color={colors.textMuted} />
+                </TouchableOpacity>
+              </View>
+            );
+          })}
           <ScrollView contentContainerStyle={styles.list}>
             {items.map((m) => {
               const pre = quickPrediction(m.odds);
@@ -236,4 +316,13 @@ const styles = StyleSheet.create({
   footer: { padding: 16, borderTopWidth: 1, borderTopColor: colors.border, backgroundColor: colors.bg },
   saveAllBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: colors.primary, paddingVertical: 14, borderRadius: 12 },
   saveAllTxt: { color: "#FFF", fontWeight: "900", fontSize: 14, letterSpacing: 0.5 },
+  reviewBanner: { flexDirection: "row", alignItems: "center", gap: 8, padding: 12, marginHorizontal: 16, marginTop: 8, backgroundColor: "rgba(245,158,11,0.10)", borderWidth: 1, borderColor: "rgba(245,158,11,0.35)", borderRadius: 10 },
+  reviewTitle: { color: "#F59E0B", fontSize: 12, fontWeight: "900" },
+  reviewHint: { color: colors.textMuted, fontSize: 11, marginTop: 2 },
+  reviewItem: { flexDirection: "row", alignItems: "center", gap: 8, padding: 10, marginHorizontal: 16, marginTop: 6, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: 8 },
+  reviewMatch: { color: colors.text, fontSize: 12, fontWeight: "800" },
+  reviewSub: { color: colors.textMuted, fontSize: 10, marginTop: 2 },
+  reviewApply: { flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: "#10B981", paddingHorizontal: 10, paddingVertical: 6, borderRadius: 6 },
+  reviewApplyTxt: { color: "#FFF", fontWeight: "900", fontSize: 10 },
+  reviewSkip: { padding: 6 },
 });

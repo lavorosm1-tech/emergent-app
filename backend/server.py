@@ -10,10 +10,13 @@ import math
 import json
 import logging
 import uuid
+import asyncio
+from difflib import SequenceMatcher
 from pathlib import Path
 from datetime import datetime, date, timedelta, timezone
 from typing import List, Optional, Dict, Any
 
+import httpx
 import pandas as pd
 from pydantic import BaseModel, Field
 
@@ -400,23 +403,46 @@ def parse_result(result_str: str) -> Optional[tuple]:
 
 
 async def update_market_scores(match: dict, prediction: dict, home: int, away: int):
-    """Update per-family market scores based on actual result vs predicted markets."""
+    """Update per-family market scores based on actual result vs predicted markets.
+    Tracks GLOBAL aggregate + PER-LEAGUE breakdown + family match counter."""
     family = prediction.get("family", "INSTABILE")
+    manif = match.get("manifestazione", "")
     playable = prediction.get("playable_markets") or []
     markets_to_update = [m.get("market") for m in playable if m.get("market")]
     if prediction.get("main_prediction") and prediction["main_prediction"] not in markets_to_update:
         markets_to_update.insert(0, prediction["main_prediction"])
 
+    # Increment family match counter (used for miss_rate denominator)
+    await db.family_counters.update_one(
+        {"family": family},
+        {"$inc": {"matches": 1}},
+        upsert=True,
+    )
+    if manif:
+        await db.family_counters.update_one(
+            {"family": family, "league": manif},
+            {"$inc": {"matches": 1}},
+            upsert=True,
+        )
+
     for market in markets_to_update:
         outcome = evaluate_market(market, home, away)
         if outcome is None:
             continue
-        update_doc = {"$inc": {("wins" if outcome else "losses"): 1, "total": 1}}
+        inc = {("wins" if outcome else "losses"): 1, "total": 1}
+        # Global (no league key)
         await db.market_scores.update_one(
-            {"family": family, "market": market},
-            update_doc,
+            {"family": family, "market": market, "league": None},
+            {"$inc": inc},
             upsert=True,
         )
+        # Per-league
+        if manif:
+            await db.market_scores.update_one(
+                {"family": family, "market": market, "league": manif},
+                {"$inc": inc},
+                upsert=True,
+            )
 
     # ALSO evaluate ALL standard markets (winners that weren't predicted) to discover good markets
     standard_markets = [
@@ -434,29 +460,50 @@ async def update_market_scores(match: dict, prediction: dict, home: int, away: i
         # Award "missed opportunity" only when this market WON but wasn't predicted
         if outcome:
             await db.market_scores.update_one(
-                {"family": family, "market": market},
+                {"family": family, "market": market, "league": None},
                 {"$inc": {"missed_wins": 1}},
                 upsert=True,
             )
+            if manif:
+                await db.market_scores.update_one(
+                    {"family": family, "market": market, "league": manif},
+                    {"$inc": {"missed_wins": 1}},
+                    upsert=True,
+                )
 
 
-async def get_family_stats(family: str) -> str:
-    """Build a feedback string from historical scores for this family."""
-    docs = await db.market_scores.find({"family": family}, {"_id": 0}).to_list(100)
-    if not docs:
-        return ""
-    lines = []
-    for d in docs:
-        total = d.get("total", 0)
-        wins = d.get("wins", 0)
-        missed = d.get("missed_wins", 0)
-        if total == 0 and missed == 0:
-            continue
-        rate = (wins / total * 100) if total > 0 else 0
-        lines.append(f"  - {d['market']}: {wins}/{total} ({rate:.0f}%)" + (f" | persi {missed} opportunità" if missed else ""))
-    if not lines:
-        return ""
-    return "STORICO FAMIGLIA " + family + ":\n" + "\n".join(lines)
+async def get_family_stats(family: str, league: Optional[str] = None) -> str:
+    """Build a feedback string from historical scores for this family.
+    Includes BOTH global and per-league win rates so the AI knows context.
+    """
+    # Global (league=None)
+    global_docs = await db.market_scores.find({"family": family, "league": None}, {"_id": 0}).to_list(100)
+    league_docs = await db.market_scores.find({"family": family, "league": league}, {"_id": 0}).to_list(100) if league else []
+
+    def fmt_docs(docs, prefix=""):
+        lines = []
+        for d in docs:
+            total = d.get("total", 0)
+            wins = d.get("wins", 0)
+            missed = d.get("missed_wins", 0)
+            if total == 0 and missed == 0:
+                continue
+            rate = (wins / total * 100) if total > 0 else 0
+            extras = []
+            if missed:
+                extras.append(f"persi {missed}")
+            extra_txt = f" | {' '.join(extras)}" if extras else ""
+            lines.append(f"  - {d['market']}: {wins}/{total} ({rate:.0f}%){extra_txt}")
+        return lines
+
+    parts = []
+    glines = fmt_docs(global_docs)
+    if glines:
+        parts.append(f"STORICO GLOBALE FAMIGLIA {family}:\n" + "\n".join(glines))
+    llines = fmt_docs(league_docs)
+    if llines and league:
+        parts.append(f"\nSTORICO SPECIFICO {league}:\n" + "\n".join(llines))
+    return "\n".join(parts) if parts else ""
 
 
 PREDICTION_SYSTEM = """Sei un analista esperto di scommesse calcistiche. Analizzi le quote di una partita e fornisci pronostici basati SOLO sulla distribuzione delle quote (gap logaritmico/lineare/esponenziale).
@@ -799,7 +846,7 @@ async def run_ai_prediction(match: dict) -> dict:
         raise HTTPException(500, "Nessuna API key configurata")
     llm = await get_selected_llm()
     # Build prompt with feedback from market scores (machine learning loop)
-    feedback = await get_all_families_stats()
+    feedback = await get_all_families_stats(match.get('manifestazione'))
     prompt = build_match_prompt(match)
     if feedback:
         prompt = feedback + "\n\nUSA QUESTO STORICO per aggiustare il ranking: dai priorità a mercati che hanno vinto più volte nella stessa famiglia, e considera anche i mercati con tanti 'persi opportunità' (avrebbero vinto ma non li avevi previsti).\n\n" + prompt
@@ -883,25 +930,49 @@ def parse_ai_json(text: str) -> dict:
             "main_prediction": None, "confidence": "Bassa"}
 
 
-async def get_all_families_stats() -> str:
-    """Build a feedback string from historical scores across all families."""
-    docs = await db.market_scores.find({}, {"_id": 0}).sort("total", -1).to_list(200)
-    if not docs:
+async def get_all_families_stats(league: Optional[str] = None) -> str:
+    """Build a feedback string from historical scores across all families.
+    If league is given, include BOTH global aggregates and the league-specific section.
+    """
+    # Filter global docs (no league key)
+    docs = await db.market_scores.find({"league": None}, {"_id": 0}).sort("total", -1).to_list(200)
+    if not docs and not league:
         return ""
-    by_family: Dict[str, list] = {}
-    for d in docs:
-        by_family.setdefault(d["family"], []).append(d)
-    blocks = []
-    for fam, items in by_family.items():
-        lines = [f"STORICO FAMIGLIA {fam}:"]
+
+    def render_block(items, title):
+        lines = [title]
         for d in items[:8]:
             total = d.get("total", 0)
             wins = d.get("wins", 0)
             missed = d.get("missed_wins", 0)
+            if total == 0 and missed == 0:
+                continue
             rate = (wins / total * 100) if total > 0 else 0
-            extra = f" | persi opportunità {missed}" if missed else ""
+            extra = f" | persi {missed}" if missed else ""
             lines.append(f"  - {d['market']}: {wins}W/{total} ({rate:.0f}%){extra}")
-        blocks.append("\n".join(lines))
+        return "\n".join(lines) if len(lines) > 1 else ""
+
+    blocks = []
+    by_family: Dict[str, list] = {}
+    for d in docs:
+        by_family.setdefault(d["family"], []).append(d)
+    for fam, items in by_family.items():
+        b = render_block(items, f"STORICO GLOBALE {fam}:")
+        if b:
+            blocks.append(b)
+
+    # Per-league section
+    if league:
+        league_docs = await db.market_scores.find({"league": league}, {"_id": 0}).sort("total", -1).to_list(200)
+        if league_docs:
+            by_lf: Dict[str, list] = {}
+            for d in league_docs:
+                by_lf.setdefault(d["family"], []).append(d)
+            for fam, items in by_lf.items():
+                b = render_block(items, f"STORICO {league} {fam}:")
+                if b:
+                    blocks.append(b)
+
     return "\n\n".join(blocks)
 
 
@@ -1111,32 +1182,259 @@ async def stats_scores():
 
 @api_router.get("/ml/stats")
 async def ml_stats():
-    """Return flat list of market scores with win_rate and missed opportunities."""
-    docs = await db.market_scores.find({}, {'_id': 0}).to_list(500)
+    """Return flat list of GLOBAL market scores + family counters."""
+    # Match both legacy docs (no `league` field) and new docs with league=None
+    docs = await db.market_scores.find(
+        {"$or": [{"league": None}, {"league": {"$exists": False}}]},
+        {'_id': 0}
+    ).to_list(500)
+    counters = await db.family_counters.find(
+        {"$or": [{"league": None}, {"league": {"$exists": False}}]},
+        {'_id': 0}
+    ).to_list(50)
+    family_totals = {c.get("family"): c.get("matches", 0) for c in counters}
+
     out = []
     for d in docs:
         total = d.get("total", 0)
         missed = d.get("missed_wins", 0)
         wins = d.get("wins", 0)
+        family = d.get("family", "")
         if total == 0 and missed == 0:
             continue
+        ft = family_totals.get(family, 0)
         out.append({
-            "family": d.get("family", ""),
+            "family": family,
             "market": d.get("market", ""),
             "wins": wins,
             "losses": max(0, total - wins),
             "total": total,
             "missed": missed,
+            "family_total": ft,
+            "miss_rate": round((missed / ft) * 100, 1) if ft > 0 else 0.0,
             "win_rate": round((wins / total) * 100, 1) if total > 0 else 0.0,
         })
     out.sort(key=lambda x: (-x["total"], -x["win_rate"]))
-    return out
+    return {"markets": out, "family_totals": family_totals}
 
 
 @api_router.post("/stats/reset")
 async def stats_reset():
     await db.market_scores.delete_many({})
+    await db.family_counters.delete_many({})
     return {"ok": True}
+
+
+# ============================================================
+# SOFASCORE AUTO-FETCH RESULTS
+# ============================================================
+
+SOFASCORE_HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
+                  "(KHTML, like Gecko) Chrome/120.0 Safari/537.36",
+    "Accept": "application/json, text/plain, */*",
+    "Accept-Language": "it-IT,it;q=0.9,en;q=0.8",
+    "Referer": "https://www.sofascore.com/",
+    "Origin": "https://www.sofascore.com",
+    "sec-ch-ua": '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
+    "sec-ch-ua-mobile": "?0",
+    "sec-ch-ua-platform": '"macOS"',
+    "Sec-Fetch-Dest": "empty",
+    "Sec-Fetch-Mode": "cors",
+    "Sec-Fetch-Site": "same-site",
+}
+
+
+def _name_similarity(a: str, b: str) -> float:
+    """Return 0-1 similarity between two team names (case/diacritic insensitive)."""
+    if not a or not b:
+        return 0.0
+    def norm(s: str) -> str:
+        s = s.lower().strip()
+        # Strip common suffixes
+        for suf in [" fc", " sc", " cf", " rj", " sp", " mg", " ba", " ca", " ec", " ud", " ad", " club"]:
+            if s.endswith(suf):
+                s = s[: -len(suf)]
+        # Remove punctuation
+        s = re.sub(r"[^\w\s]", "", s)
+        s = re.sub(r"\s+", " ", s)
+        return s.strip()
+    return SequenceMatcher(None, norm(a), norm(b)).ratio()
+
+
+async def _fetch_sofascore_match(http: httpx.AsyncClient, home: str, away: str, day: str) -> dict:
+    """Search TheSportsDB (free public API) for a finished match.
+    Note: original name kept for compatibility; sources may evolve.
+    Returns score dict or {'found': False}.
+    """
+    target_date = day  # 'YYYY-MM-DD'
+
+    # Step 1: Try TheSportsDB direct event search
+    # API: https://www.thesportsdb.com/api/v1/json/3/searchevents.php?e=Home_vs_Away
+    def make_query(h: str, a: str) -> str:
+        # TheSportsDB expects "Home_vs_Away" with underscores
+        return f"{h.strip().replace(' ', '_')}_vs_{a.strip().replace(' ', '_')}"
+
+    try:
+        q = make_query(home, away)
+        url = f"https://www.thesportsdb.com/api/v1/json/3/searchevents.php?e={q}"
+        r = await http.get(url, timeout=15.0, headers={"User-Agent": "Mozilla/5.0"})
+        if r.status_code != 200:
+            return {"found": False, "reason": f"search http {r.status_code}"}
+        data = r.json()
+        events = data.get("event") or []
+    except Exception as e:
+        return {"found": False, "reason": f"search err: {e}"}
+
+    if not events:
+        return {"found": False, "reason": "no events"}
+
+    best = None
+    best_conf = 0.0
+    for ev in events:
+        ev_home = ev.get("strHomeTeam") or ""
+        ev_away = ev.get("strAwayTeam") or ""
+        ev_date = ev.get("dateEvent") or ""  # 'YYYY-MM-DD'
+        if not ev_date:
+            continue
+        try:
+            d_target = datetime.strptime(target_date, "%Y-%m-%d").date()
+            d_ev = datetime.strptime(ev_date, "%Y-%m-%d").date()
+            if abs((d_ev - d_target).days) > 1:
+                continue
+        except Exception:
+            continue
+        sh = _name_similarity(home, ev_home)
+        sa = _name_similarity(away, ev_away)
+        avg = (sh + sa) / 2
+        if avg < 0.55:
+            continue
+        hs = ev.get("intHomeScore")
+        as_ = ev.get("intAwayScore")
+        if hs is None or as_ is None or hs == "" or as_ == "":
+            continue
+        try:
+            hs_i = int(hs)
+            as_i = int(as_)
+        except (ValueError, TypeError):
+            continue
+        conf = round(avg * 100, 1)
+        if conf > best_conf:
+            best = {
+                "home_score": hs_i,
+                "away_score": as_i,
+                "confidence": conf,
+                "matched_home": ev_home,
+                "matched_away": ev_away,
+                "matched_date": ev_date,
+            }
+            best_conf = conf
+
+    if best:
+        return {"found": True, **best}
+    return {"found": False, "reason": "no match found in date range"}
+
+
+class ResultsFetchRequest(BaseModel):
+    ids: List[str] = []
+    apply: bool = True   # if True and confidence >= apply_threshold, auto-save result
+    apply_threshold: float = 80.0
+
+
+@api_router.post("/results/fetch")
+async def fetch_results(req: ResultsFetchRequest):
+    """Auto-fetch results from Sofascore for the given match IDs (typically the Schedina).
+    Returns per-match status with confidence. If apply=True, results with confidence above
+    the threshold are saved directly; lower-confidence matches are reported for manual review.
+    """
+    if not req.ids:
+        return {"results": [], "applied": 0, "skipped": 0, "not_found": 0}
+
+    matches = await db.matches.find({"id": {"$in": req.ids}}, {"_id": 0}).to_list(len(req.ids))
+    out = []
+    applied = 0
+    not_found = 0
+    skipped = 0
+
+    async with httpx.AsyncClient(http2=False) as http:
+        # Parallel fetch (limit concurrency to 4 to avoid rate-limits)
+        sem = asyncio.Semaphore(4)
+
+        async def do_one(m: dict):
+            async with sem:
+                if m.get("result"):
+                    return {"id": m["id"], "status": "already_set", "score": m["result"]}
+                info = await _fetch_sofascore_match(
+                    http,
+                    m.get("squadra1") or "",
+                    m.get("squadra2") or "",
+                    m.get("day") or "",
+                )
+                if not info.get("found"):
+                    return {"id": m["id"], "status": "not_found", "reason": info.get("reason", "")}
+                score_str = f"{info['home_score']}-{info['away_score']}"
+                conf = info.get("confidence", 0.0)
+                # Decide
+                if req.apply and conf >= req.apply_threshold:
+                    # Save result + recalculate ML stats
+                    update = {"result": score_str}
+                    await db.matches.update_one({"id": m["id"]}, {"$set": update})
+                    # Recompute scores
+                    pred = m.get("prediction") or {}
+                    if pred:
+                        try:
+                            await update_market_scores(m, pred, info["home_score"], info["away_score"])
+                        except Exception as e:
+                            logging.warning("update_market_scores err: %s", e)
+                    return {"id": m["id"], "status": "applied", "score": score_str,
+                            "confidence": conf, "matched": info.get("matched_home") + " vs " + info.get("matched_away")}
+                else:
+                    return {"id": m["id"], "status": "review", "score": score_str,
+                            "confidence": conf, "matched": info.get("matched_home", "") + " vs " + info.get("matched_away", "")}
+
+        results = await asyncio.gather(*[do_one(m) for m in matches], return_exceptions=True)
+
+    for r in results:
+        if isinstance(r, Exception):
+            out.append({"status": "error", "reason": str(r)})
+            continue
+        out.append(r)
+        st = r.get("status")
+        if st == "applied":
+            applied += 1
+        elif st == "not_found":
+            not_found += 1
+        elif st in ("review", "already_set"):
+            skipped += 1
+
+    return {"results": out, "applied": applied, "not_found": not_found, "skipped": skipped}
+
+
+@api_router.post("/results/apply")
+async def results_apply(body: dict):
+    """Manual apply of a reviewed Sofascore result (after user confirmation in UI)."""
+    match_id = body.get("id")
+    score = body.get("score")
+    if not match_id or not score:
+        raise HTTPException(400, "id and score required")
+    m = await db.matches.find_one({"id": match_id}, {"_id": 0})
+    if not m:
+        raise HTTPException(404, "match not found")
+    parts = score.split("-")
+    if len(parts) != 2:
+        raise HTTPException(400, "invalid score")
+    try:
+        hs, as_ = int(parts[0]), int(parts[1])
+    except ValueError:
+        raise HTTPException(400, "invalid score numbers")
+    await db.matches.update_one({"id": match_id}, {"$set": {"result": score}})
+    pred = m.get("prediction") or {}
+    if pred:
+        try:
+            await update_market_scores(m, pred, hs, as_)
+        except Exception as e:
+            logging.warning("update_market_scores err: %s", e)
+    return {"ok": True, "result": score}
 
 
 @api_router.post("/matches/selection")

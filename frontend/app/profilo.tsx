@@ -7,11 +7,12 @@ import BottomNav from "@/src/components/BottomNav";
 import { colors } from "@/src/theme";
 import { api } from "@/src/api";
 
-type Stat = { family: string; market: string; wins: number; losses: number; total: number; missed: number; win_rate: number };
+type Stat = { family: string; market: string; wins: number; losses: number; total: number; missed: number; family_total: number; miss_rate: number; win_rate: number };
 
 export default function Profilo() {
   const router = useRouter();
   const [stats, setStats] = useState<Stat[] | null>(null);
+  const [familyTotals, setFamilyTotals] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
 
   useFocusEffect(useCallback(() => {
@@ -19,8 +20,9 @@ export default function Profilo() {
       setLoading(true);
       try {
         const s = await api.marketStats();
-        setStats(s);
-      } catch { setStats([]); }
+        setStats(s.markets || []);
+        setFamilyTotals(s.family_totals || {});
+      } catch { setStats([]); setFamilyTotals({}); }
       finally { setLoading(false); }
     })();
   }, []));
@@ -29,7 +31,8 @@ export default function Profilo() {
   const totalWins = (stats || []).reduce((s, x) => s + x.wins, 0);
   const totalMissed = (stats || []).reduce((s, x) => s + x.missed, 0);
   const globalWR = totalEval > 0 ? Math.round((totalWins / totalEval) * 100) : 0;
-  const candidates = (stats || []).filter((s) => s.total === 0 && s.missed >= 5);
+  // Candidates: 0 W/L + ≥5 missed + miss_rate ≥ 50% (significant)
+  const candidates = (stats || []).filter((s) => s.total === 0 && s.missed >= 5 && s.miss_rate >= 50);
   const topMarkets = (stats || []).filter((s) => s.total >= 5).sort((a, b) => b.win_rate - a.win_rate).slice(0, 5);
 
   return (
@@ -111,9 +114,9 @@ export default function Profilo() {
                   <View key={i} style={[styles.row, styles.candRow]}>
                     <View style={{ flex: 1 }}>
                       <Text style={styles.market}>{s.market}</Text>
-                      <Text style={styles.detail}>{s.family}</Text>
+                      <Text style={styles.detail}>{s.family} · {s.missed}/{s.family_total} partite ({s.miss_rate}%)</Text>
                     </View>
-                    <Text style={styles.candVal}>{s.missed} opp. perse</Text>
+                    <Text style={styles.candVal}>{s.miss_rate.toFixed(0)}%</Text>
                   </View>
                 ))}
               </View>
