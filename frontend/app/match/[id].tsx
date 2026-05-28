@@ -25,11 +25,11 @@ export default function MatchDetail() {
 
   const load = useCallback(async () => {
     try {
-      const [m, stats] = await Promise.all([api.match(id!), api.marketStats().catch(() => [])]);
+      const [m, stats] = await Promise.all([api.match(id!), api.marketStats().catch(() => ({ markets: [], family_totals: {} }))]);
       setMatch(m);
       setPrediction(m.prediction ?? null);
       setResult(m.result || "");
-      setMarketStats(stats || []);
+      setMarketStats(stats?.markets || []);
     } catch (e: any) {
       Alert.alert("Errore", e?.message || "Caricamento");
     } finally {

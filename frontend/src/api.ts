@@ -318,7 +318,8 @@ export function rankPicks(
 ): RankedPick[] {
   const norm = (m: string) => normalizeMarket(m);
   const statsByMarket = new Map<string, { rate: number; total: number; missed: number }>();
-  for (const s of stats) {
+  const safeStats = Array.isArray(stats) ? stats : [];
+  for (const s of safeStats) {
     statsByMarket.set(norm(s.market), { rate: s.win_rate, total: s.total, missed: s.missed || 0 });
   }
   const llmSet = new Set(llmMarkets.map(norm));

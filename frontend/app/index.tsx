@@ -139,8 +139,8 @@ export default function Home() {
 
   const load = useCallback(async (day: string | null) => {
     try {
-      const [ms, ds, stats] = await Promise.all([api.matches(day || undefined), api.days(), api.marketStats().catch(() => [])]);
-      setMatches(ms); setDays(ds); setMarketStats(stats || []); return ds;
+      const [ms, ds, stats] = await Promise.all([api.matches(day || undefined), api.days(), api.marketStats().catch(() => ({ markets: [], family_totals: {} }))]);
+      setMatches(ms); setDays(ds); setMarketStats(stats?.markets || []); return ds;
     } catch { return []; } finally { setLoading(false); setRefreshing(false); }
   }, []);
 
