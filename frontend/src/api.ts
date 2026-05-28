@@ -93,6 +93,8 @@ export const api = {
   marketStats: () => req<{ markets: { family: string; market: string; wins: number; losses: number; total: number; missed: number; family_total: number; miss_rate: number; win_rate: number }[]; family_totals: Record<string, number> }>("/ml/stats"),
   fetchResultsAuto: (ids: string[], apply = true, apply_threshold = 80) => req<{ results: any[]; applied: number; not_found: number; skipped: number }>("/results/fetch", { method: "POST", body: JSON.stringify({ ids, apply, apply_threshold }) }),
   applyResultManual: (id: string, score: string) => req<{ ok: boolean; result: string }>("/results/apply", { method: "POST", body: JSON.stringify({ id, score }) }),
+  matchCandidates: (id: string) => req<{ candidates: { market: string; family: string; missed: number; family_total: number; miss_rate: number }[]; family: string | null; family_total: number }>(`/match/${id}/candidates`),
+  matchHistory: (id: string) => req<{ league: string; global: Record<string, any[]>; league_specific: Record<string, any[]> }>(`/match/${id}/history`),
   uploadExcel: async (uri: string, name: string, mimeType?: string) => {
     const form = new FormData();
     if (typeof window !== "undefined" && window.fetch && uri.startsWith("blob:")) {
@@ -195,8 +197,7 @@ export function quickPredictionFamily(odds: Odds): Candidate[] {
   if (oO15 <= 1.40 && oU35 <= 1.40) {
     push("MG 2-4 totali", Math.max(1.40, (oO15 + oU35) / 2), "RANGE_CONTROLLATO");
   }
-  // GG + O1.5 combo
-  if (oO25 <= 1.85 && oGG <= 1.85) push("GG + O1.5", Math.max(oGG, oO15), "OFFENSIVA_PULITA");
+  // NOTE: "GG + O1.5" rimosso perché ridondante: GG ⇒ O1.5 (entrambe segnano ≥1 → totale ≥2)
   // O2.5 secco
   if (oO25 <= 1.85) push("O2.5", oO25, "OFFENSIVA");
   // GG secco

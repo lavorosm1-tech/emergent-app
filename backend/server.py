@@ -1262,7 +1262,74 @@ def _name_similarity(a: str, b: str) -> float:
     return SequenceMatcher(None, norm(a), norm(b)).ratio()
 
 
-async def _fetch_sofascore_match(http: httpx.AsyncClient, home: str, away: str, day: str) -> dict:
+async def _fetch_fotmob_match(http: httpx.AsyncClient, home: str, away: str, day: str) -> dict:
+    """Fallback search via Fotmob's match-suggest API. Useful for exotic competitions
+    (Coppa Libertadores, Sudamericana, etc.) often missing from TheSportsDB.
+    """
+    try:
+        # Fotmob exposes a suggest endpoint that returns matches matching a free-text query.
+        # Note: requires browser-like headers and accepts most pairings.
+        url = f"https://www.fotmob.com/api/searchapi/suggest?term={home.replace(' ', '+')}"
+        r = await http.get(url, timeout=12.0, headers={
+            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
+            "Accept": "application/json",
+        })
+        if r.status_code != 200:
+            return {"found": False, "reason": f"fotmob {r.status_code}"}
+        # The API may return a single JSON object or several "result groups" — defensive parsing
+        data = r.json()
+    except Exception as e:
+        return {"found": False, "reason": f"fotmob err: {e}"}
+
+    # Walk through groups → matches; Fotmob returns suggest sections with teamSuggest / matchSuggest
+    candidates: list = []
+    if isinstance(data, dict):
+        for group in (data.get("suggests") or data.get("suggestions") or [data]):
+            options = group.get("options") if isinstance(group, dict) else None
+            if not options:
+                continue
+            for opt in options:
+                payload = opt.get("payload") or opt
+                # We want match-type results
+                if isinstance(payload, dict):
+                    candidates.append(payload)
+    if not candidates:
+        return {"found": False, "reason": "no fotmob candidates"}
+
+    best = None
+    best_conf = 0.0
+    for c in candidates:
+        # Fotmob payloads often have fields like home_team / away_team or h / a
+        h = c.get("home_team") or c.get("homeTeam") or c.get("h", {}).get("name") or ""
+        a = c.get("away_team") or c.get("awayTeam") or c.get("a", {}).get("name") or ""
+        score = c.get("status") or c.get("score") or c.get("aggregate")
+        if not h or not a:
+            continue
+        sh = _name_similarity(home, h)
+        sa = _name_similarity(away, a)
+        avg = (sh + sa) / 2
+        if avg < 0.55:
+            continue
+        # Try to find score
+        hs = c.get("home_score") if c.get("home_score") is not None else (
+            c.get("h", {}).get("score") if isinstance(c.get("h"), dict) else None)
+        as_ = c.get("away_score") if c.get("away_score") is not None else (
+            c.get("a", {}).get("score") if isinstance(c.get("a"), dict) else None)
+        if hs is None or as_ is None:
+            continue
+        try:
+            hs_i = int(hs); as_i = int(as_)
+        except (ValueError, TypeError):
+            continue
+        conf = round(avg * 100, 1)
+        if conf > best_conf:
+            best = {"home_score": hs_i, "away_score": as_i, "confidence": conf,
+                    "matched_home": h, "matched_away": a, "matched_date": day, "source": "fotmob"}
+            best_conf = conf
+
+    if best:
+        return {"found": True, **best}
+    return {"found": False, "reason": "no fotmob match"}
     """Search TheSportsDB (free public API) for a finished match.
     Note: original name kept for compatibility; sources may evolve.
     Returns score dict or {'found': False}.
@@ -1370,6 +1437,16 @@ async def fetch_results(req: ResultsFetchRequest):
                     m.get("squadra2") or "",
                     m.get("day") or "",
                 )
+                # Fallback to Fotmob if TheSportsDB didn't find the match
+                if not info.get("found"):
+                    info_fm = await _fetch_fotmob_match(
+                        http,
+                        m.get("squadra1") or "",
+                        m.get("squadra2") or "",
+                        m.get("day") or "",
+                    )
+                    if info_fm.get("found"):
+                        info = info_fm
                 if not info.get("found"):
                     return {"id": m["id"], "status": "not_found", "reason": info.get("reason", "")}
                 score_str = f"{info['home_score']}-{info['away_score']}"
@@ -1408,6 +1485,87 @@ async def fetch_results(req: ResultsFetchRequest):
             skipped += 1
 
     return {"results": out, "applied": applied, "not_found": not_found, "skipped": skipped}
+
+
+@api_router.get("/match/{match_id}/candidates")
+async def match_candidates(match_id: str):
+    """Return YELLOW candidate markets for a match (markets with high miss_rate in its family).
+    Used to surface 'opportunità non sfruttate' alongside the pre-pronostic pyramid.
+    """
+    m = await db.matches.find_one({"id": match_id}, {"_id": 0})
+    if not m:
+        raise HTTPException(404, "match not found")
+    # If we don't yet know the family of the match (no AI prediction), surface candidates from
+    # ALL families so the user sees potential opportunities. Otherwise restrict to its family.
+    family = (m.get("prediction") or {}).get("family") or m.get("family")
+    league = m.get("manifestazione")
+
+    # Family counter
+    counter = await db.family_counters.find_one(
+        {"family": family, "$or": [{"league": None}, {"league": {"$exists": False}}]}
+    ) if family else None
+    family_total = counter.get("matches", 0) if counter else 0
+
+    query = {"$or": [{"league": None}, {"league": {"$exists": False}}], "total": {"$lte": 0}}
+    if family:
+        query["family"] = family
+    docs = await db.market_scores.find(query, {"_id": 0}).to_list(100)
+    out = []
+    for d in docs:
+        missed = d.get("missed_wins", 0)
+        if missed < 5:
+            continue
+        ft = family_total or 0
+        miss_rate = (missed / ft * 100) if ft > 0 else 0
+        if miss_rate < 50:
+            continue
+        out.append({
+            "market": d.get("market"),
+            "family": d.get("family"),
+            "missed": missed,
+            "family_total": ft,
+            "miss_rate": round(miss_rate, 1),
+        })
+    out.sort(key=lambda x: -x["miss_rate"])
+    return {"candidates": out, "family": family, "family_total": family_total}
+
+
+@api_router.get("/match/{match_id}/history")
+async def match_history(match_id: str):
+    """Return global + per-league historical stats used by the AI prompt for this match."""
+    m = await db.matches.find_one({"id": match_id}, {"_id": 0})
+    if not m:
+        raise HTTPException(404, "match not found")
+    league = m.get("manifestazione")
+    global_docs = await db.market_scores.find(
+        {"$or": [{"league": None}, {"league": {"$exists": False}}]},
+        {"_id": 0}
+    ).sort("total", -1).to_list(100)
+    league_docs = await db.market_scores.find({"league": league}, {"_id": 0}).sort("total", -1).to_list(100) if league else []
+
+    def fmt(docs):
+        out: Dict[str, list] = {}
+        for d in docs:
+            total = d.get("total", 0)
+            missed = d.get("missed_wins", 0)
+            if total == 0 and missed == 0:
+                continue
+            wins = d.get("wins", 0)
+            rate = (wins / total * 100) if total > 0 else 0
+            fam = d.get("family", "")
+            out.setdefault(fam, []).append({
+                "market": d.get("market"),
+                "wins": wins,
+                "total": total,
+                "win_rate": round(rate, 1),
+                "missed": missed,
+            })
+        return out
+    return {
+        "league": league,
+        "global": fmt(global_docs),
+        "league_specific": fmt(league_docs),
+    }
 
 
 @api_router.post("/results/apply")

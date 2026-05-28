@@ -22,14 +22,21 @@ export default function MatchDetail() {
   const [aiPending, setAiPending] = useState(false);
   const [result, setResult] = useState("");
   const [marketStats, setMarketStats] = useState<{ market: string; win_rate: number; total: number; family: string }[]>([]);
+  const [yellowCandidates, setYellowCandidates] = useState<{ market: string; family: string; missed: number; family_total: number; miss_rate: number }[]>([]);
+  const [showAlternatives, setShowAlternatives] = useState(false);
 
   const load = useCallback(async () => {
     try {
-      const [m, stats] = await Promise.all([api.match(id!), api.marketStats().catch(() => ({ markets: [], family_totals: {} }))]);
+      const [m, stats, cands] = await Promise.all([
+        api.match(id!),
+        api.marketStats().catch(() => ({ markets: [], family_totals: {} })),
+        api.matchCandidates(id!).catch(() => ({ candidates: [], family: null, family_total: 0 })),
+      ]);
       setMatch(m);
       setPrediction(m.prediction ?? null);
       setResult(m.result || "");
       setMarketStats(stats?.markets || []);
+      setYellowCandidates(cands?.candidates || []);
     } catch (e: any) {
       Alert.alert("Errore", e?.message || "Caricamento");
     } finally {
@@ -171,11 +178,66 @@ export default function MatchDetail() {
                 <Ionicons name="flash" size={14} color={colors.primary} />
                 <Text style={styles.preTitle}>FAMIGLIA PRE-PRONOSTICO (locale)</Text>
               </View>
-              <Text style={styles.preHint}>Mercati validi dalle quote, ordinati per affidabilità (concordanza AI + win-rate storico). Solo quote ≥ 1.40 e nessun segno 1/2/X se la quota corrispondente è &gt; 1.85.</Text>
-              {ranked.map((p, i) => (
-                <View key={i} style={[styles.preItem, p.source === "pre+ai" && styles.preItemConcord]}>
-                  <View style={[styles.preRank, i === 0 && styles.preRankTop]}>
-                    <Text style={[styles.preRankTxt, i === 0 && { color: "#FFF" }]}>{i + 1}</Text>
+              <Text style={styles.preHint}>Mercati validi ordinati per affidabilità (concordanza AI + win-rate). Solo quote ≥ 1.40 e nessun segno 1/2/X se la quota corrispondente è &gt; 1.85.</Text>
+
+              {/* RANK #1 - HIGHLIGHTED PICK */}
+              {ranked[0] && (() => {
+                const p = ranked[0];
+                return (
+                  <View style={styles.pickHero}>
+                    <View style={styles.pickStar}><Ionicons name="star" size={18} color="#FFF" /></View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.pickLabel}>★ PICK CONSIGLIATO</Text>
+                      <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap", marginTop: 4 }}>
+                        <Text style={styles.pickMarket}>{p.market}</Text>
+                        {p.odd > 0 && <Text style={styles.pickOdd}>@ {p.odd.toFixed(2)}</Text>}
+                        <Text style={styles.pickFamily}>{p.family}</Text>
+                        {p.source === "pre+ai" && (
+                          <View style={styles.concordTag}>
+                            <Ionicons name="checkmark-done" size={10} color="#10B981" />
+                            <Text style={styles.concordTxt}>PRE+AI</Text>
+                          </View>
+                        )}
+                        {p.win_rate !== null && (
+                          <View style={[styles.wrTag, p.win_rate >= 60 ? { backgroundColor: "rgba(16,185,129,0.18)" } : { backgroundColor: "rgba(239,68,68,0.18)" }]}>
+                            <Text style={[styles.wrTxt, p.win_rate >= 60 ? { color: "#10B981" } : { color: "#EF4444" }]}>WR {p.win_rate.toFixed(0)}% ({p.total})</Text>
+                          </View>
+                        )}
+                      </View>
+                    </View>
+                  </View>
+                );
+              })()}
+
+              {/* YELLOW CANDIDATES - opportunità non sfruttate */}
+              {yellowCandidates.map((c, i) => (
+                <View key={`yc-${i}`} style={styles.yellowItem}>
+                  <View style={styles.yellowIcon}><Ionicons name="bulb" size={12} color="#F59E0B" /></View>
+                  <View style={{ flex: 1 }}>
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                      <Text style={styles.yellowMarket}>{c.market}</Text>
+                      <Text style={styles.yellowFamily}>{c.family}</Text>
+                      <Text style={styles.yellowDetail}>Opportunità non sfruttata: {c.missed}/{c.family_total} ({c.miss_rate}%)</Text>
+                    </View>
+                  </View>
+                </View>
+              ))}
+
+              {/* Alternatives toggle */}
+              {ranked.length > 1 && (
+                <TouchableOpacity testID="toggle-alt" onPress={() => setShowAlternatives(!showAlternatives)} style={styles.altToggle}>
+                  <Ionicons name={showAlternatives ? "chevron-up" : "chevron-down"} size={14} color={colors.primary} />
+                  <Text style={styles.altToggleTxt}>{showAlternatives ? "Nascondi" : "Mostra"} {ranked.length - 1} alternative</Text>
+                </TouchableOpacity>
+              )}
+
+              {/* Alternatives (rank 2..N) */}
+              {showAlternatives && ranked.slice(1).map((p, idx) => {
+                const i = idx + 1;
+                return (
+                <View key={i} style={[styles.preItem, { opacity: 0.7 }, p.source === "pre+ai" && styles.preItemConcord]}>
+                  <View style={styles.preRank}>
+                    <Text style={styles.preRankTxt}>{i + 1}</Text>
                   </View>
                   <View style={{ flex: 1 }}>
                     <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
@@ -202,7 +264,8 @@ export default function MatchDetail() {
                     </View>
                   </View>
                 </View>
-              ))}
+                );
+              })}
             </View>
           );
         })()}
@@ -408,6 +471,19 @@ const styles = StyleSheet.create({
   preTitle: { color: colors.primary, fontSize: 12, fontWeight: "900", letterSpacing: 1, flex: 1 },
   preHint: { color: colors.textMuted, fontSize: 11, lineHeight: 16, marginBottom: 4 },
   preItem: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 8, paddingHorizontal: 10, backgroundColor: colors.surfaceHi, borderRadius: 10 },
+  pickHero: { flexDirection: "row", alignItems: "center", gap: 12, padding: 14, backgroundColor: "rgba(255,140,0,0.15)", borderWidth: 2, borderColor: colors.primary, borderRadius: 14 },
+  pickStar: { width: 36, height: 36, borderRadius: 18, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" },
+  pickLabel: { color: colors.primary, fontSize: 10, fontWeight: "900", letterSpacing: 1.5 },
+  pickMarket: { color: colors.text, fontSize: 18, fontWeight: "900" },
+  pickOdd: { color: colors.primary, fontSize: 14, fontWeight: "900" },
+  pickFamily: { color: colors.textDim, fontSize: 9, fontWeight: "800", letterSpacing: 0.5, textTransform: "uppercase" },
+  yellowItem: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 8, paddingHorizontal: 10, backgroundColor: "rgba(245,158,11,0.12)", borderWidth: 1, borderColor: "rgba(245,158,11,0.40)", borderRadius: 10 },
+  yellowIcon: { width: 22, height: 22, borderRadius: 11, backgroundColor: "rgba(245,158,11,0.25)", alignItems: "center", justifyContent: "center" },
+  yellowMarket: { color: "#F59E0B", fontSize: 13, fontWeight: "900" },
+  yellowFamily: { color: colors.textDim, fontSize: 9, fontWeight: "800", letterSpacing: 0.5, textTransform: "uppercase" },
+  yellowDetail: { color: colors.textMuted, fontSize: 11 },
+  altToggle: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 4, paddingVertical: 8, marginTop: 4 },
+  altToggleTxt: { color: colors.primary, fontSize: 11, fontWeight: "800" },
   preItemConcord: { borderWidth: 1, borderColor: "rgba(16,185,129,0.45)", backgroundColor: "rgba(16,185,129,0.10)" },
   preRank: { width: 22, height: 22, borderRadius: 11, backgroundColor: colors.border, alignItems: "center", justifyContent: "center" },
   preRankTop: { backgroundColor: colors.primary },
