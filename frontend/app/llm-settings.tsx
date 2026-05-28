@@ -43,7 +43,7 @@ export default function LlmSettings() {
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.iconBtn}><Ionicons name="chevron-back" size={22} color={colors.text} /></TouchableOpacity>
+        <TouchableOpacity onPress={() => router.canGoBack() ? router.back() : router.replace("/strumenti")} style={styles.iconBtn}><Ionicons name="chevron-back" size={22} color={colors.text} /></TouchableOpacity>
         <Text style={styles.title}>LLM & Budget</Text>
         <TouchableOpacity onPress={resetBudget} style={styles.iconBtn}><Ionicons name="refresh-outline" size={20} color={colors.danger} /></TouchableOpacity>
       </View>
