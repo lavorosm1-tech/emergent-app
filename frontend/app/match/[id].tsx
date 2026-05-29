@@ -11,6 +11,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { api, Match, Prediction, MARKET_FAMILIES, ODD_LABELS, OddsKey, quickPredictionFamily, rankPicks } from "@/src/api";
 import { colors } from "@/src/theme";
 import { ScoreInput } from "@/src/components/ScoreInput";
+import { FamilyLegendModal } from "@/src/components/FamilyLegendModal";
 import { predictionQueue } from "@/src/utils/predictionQueue";
 
 export default function MatchDetail() {
@@ -24,6 +25,7 @@ export default function MatchDetail() {
   const [marketStats, setMarketStats] = useState<{ market: string; win_rate: number; total: number; family: string }[]>([]);
   const [yellowCandidates, setYellowCandidates] = useState<{ market: string; family: string; missed: number; family_total: number; miss_rate: number }[]>([]);
   const [showAlternatives, setShowAlternatives] = useState(false);
+  const [showLegend, setShowLegend] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -177,6 +179,9 @@ export default function MatchDetail() {
               <View style={styles.preHeader}>
                 <Ionicons name="flash" size={14} color={colors.primary} />
                 <Text style={styles.preTitle}>FAMIGLIA PRE-PRONOSTICO (locale)</Text>
+                <TouchableOpacity onPress={() => setShowLegend(true)} style={styles.helpBtn} testID="open-legend">
+                  <Ionicons name="help-circle-outline" size={18} color={colors.primary} />
+                </TouchableOpacity>
               </View>
               <Text style={styles.preHint}>Mercati validi ordinati per affidabilità (concordanza AI + win-rate). Solo quote ≥ 1.40 e nessun segno 1/2/X se la quota corrispondente è &gt; 1.85.</Text>
 

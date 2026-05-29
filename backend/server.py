@@ -555,21 +555,33 @@ REGOLE FORZANTI (devi rispettarle):
 - "MG 2-4 ospite" stessa logica con 2 favorita.
 
 ═══════════════════════════════════════
-FASE 3 — RANKING
+FASE 3 — RANKING + PAVIMENTO/TETTO ESPLICITI
 ═══════════════════════════════════════
 Restituisci 3-5 mercati ordinati dal PIÙ PROBABILE al MENO PROBABILE.
 Il "main_prediction" è il primo (più probabile).
+
+OBBLIGO: il campo "analysis" DEVE iniziare SEMPRE con la SINTESI A SISTEMA:
+  "PAVIMENTO: X gol | TETTO: Y gol | RANGE: X-Y gol"
+poi 2-3 righe di motivazione che leggono le quote come SISTEMA (non singole),
+indicando gap rilevanti e segnali strutturali.
+
+Come stabilire PAVIMENTO e TETTO:
+- PAVIMENTO = gol minimo probabili. Es. O1.5 ≤ 1.30 ⇒ pavimento 2. O1.5 1.31-1.60 ⇒ pavimento "0 (probabile 2)". O1.5 > 1.60 ⇒ pavimento 0.
+- TETTO = gol massimo probabili. Es. U3.5 ≤ 1.40 ⇒ tetto 3. U2.5 ≤ 1.40 ⇒ tetto 2. U3.5 > 1.85 ⇒ tetto "aperto".
+- Quando trovi gap forte O/U (es. U3.5 1.30 vs O3.5 3.20) usalo come segnale di tetto chiaro.
+- I mercati 1, 2, X, 1X, X2 NON DEVONO essere usati se la quota corrispondente è > 1.85 (regola assoluta).
+- Verifica COERENZA tra mercati scelti: NO mix discordante (GG con NG, O2.5 con U2.5, 1 con X2).
 
 ═══════════════════════════════════════
 OUTPUT (SOLO JSON, niente markdown)
 ═══════════════════════════════════════
 {
   "family": "RANGE_CONTROLLATO",
-  "analysis": "Breve analisi 2-3 righe: gap U/O, distribuzione 1X2, segnale GG/NG.",
+  "analysis": "PAVIMENTO: 2 gol | TETTO: 4 gol | RANGE: 2-4 gol. Quote O1.5 1.30 + U3.5 1.40 → range chiuso. Gap GG 1.85 vs NG 1.95 ⇒ partita simmetrica.",
   "playable_markets": [
-    {"market": "MG 2-4 totali", "reasoning": "spiegazione 1 riga"},
-    {"market": "O1.5", "reasoning": "spiegazione 1 riga"},
-    {"market": "DC 1X + U3.5", "reasoning": "spiegazione 1 riga"}
+    {"market": "MG 2-4 totali", "reasoning": "Pavimento 2, tetto 4: copertura range completo"},
+    {"market": "O1.5", "reasoning": "Pavimento 2 con quota convenientemente sicura"},
+    {"market": "DC 1X + U3.5", "reasoning": "Pavimento qualsiasi + tetto 3, copertura difensiva"}
   ],
   "main_prediction": "MG 2-4 totali",
   "confidence": "Media",
@@ -577,7 +589,7 @@ OUTPUT (SOLO JSON, niente markdown)
   "max_goals": 4
 }
 
-Mercati ammessi: 1, X, 2, 1X, X2, 12, O1.5, U1.5, O2.5, U2.5, O3.5, U3.5, GG, NG, MG 2-4 totali, MG 2-4 casa, MG 2-4 ospite, DC 1X + U3.5, DC X2 + U3.5, DC 12 + U3.5, DC 1X + O1.5, DC X2 + O1.5, DC 12 + O1.5, GG + O2.5, GG + O1.5."""
+Mercati ammessi: 1, X, 2, 1X, X2, 12, O1.5, U1.5, O2.5, U2.5, O3.5, U3.5, GG, NG, MG 2-4 totali, MG 2-4 casa, MG 2-4 ospite, DC 1X + U3.5, DC X2 + U3.5, DC 12 + U3.5, DC 1X + O1.5, DC X2 + O1.5, DC 12 + O1.5, GG + O2.5."""
 
 
 LEAGUE_DNA = {
