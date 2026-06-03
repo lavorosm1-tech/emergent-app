@@ -44,24 +44,32 @@ def derive_lambdas(odds: Dict) -> Tuple[float, float]:
     lam_total = 2.0 + (p_over25 - 0.30) * 3.5
     lam_total = max(1.5, min(4.5, lam_total))
 
-    # Split by 1X2 strength
+    # Split by 1X2 strength (include X with half-weight for both teams)
     o1 = odds.get("odd_1") or 0
     o2 = odds.get("odd_2") or 0
+    oX = odds.get("odd_X") or 0
     p1 = _implied_prob(o1)
     p2 = _implied_prob(o2)
-    s = (p1 + p2) or 1.0
-    home_share = p1 / s
-    away_share = p2 / s
+    pX = _implied_prob(oX)
+    # Win + half of draw probability = team strength
+    home_strength = p1 + pX * 0.5
+    away_strength = p2 + pX * 0.5
+    s = (home_strength + away_strength) or 1.0
+    home_share = home_strength / s
+    away_share = away_strength / s
 
-    # Reciprocity adjustment using GG/NG
+    # Reciprocity adjustment using GG/NG:
+    # If GG > NG, both teams likely score → compress shares slightly toward 50/50.
+    # NEVER swap roles (the favorite stays the favorite).
     p_gg = _implied_prob(odds.get("odd_GG") or 0)
     p_ng = _implied_prob(odds.get("odd_NG") or 0)
     if p_gg + p_ng > 0:
-        gg_factor = p_gg / (p_gg + p_ng)
-        # If GG strong → balance the shares (both score)
-        balance = 0.5 + (1 - gg_factor) * (home_share - 0.5)
-        home_share = balance if home_share > 0.5 else 1 - balance
-        away_share = 1 - home_share
+        gg_factor = p_gg / (p_gg + p_ng)  # 0..1
+        if gg_factor > 0.5:
+            # Max blend: 25% toward 50/50 when GG very strong
+            blend = (gg_factor - 0.5) * 0.5
+            home_share = home_share * (1 - blend) + 0.5 * blend
+            away_share = 1.0 - home_share
 
     lam_home = lam_total * home_share
     lam_away = lam_total * away_share
