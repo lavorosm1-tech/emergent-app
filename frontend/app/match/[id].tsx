@@ -8,7 +8,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 
-import { api, Match, Prediction, MARKET_FAMILIES, ODD_LABELS, OddsKey, quickPredictionFamily, rankPicks, StructuralAnalysis } from "@/src/api";
+import { api, Match, Prediction, MARKET_FAMILIES, ODD_LABELS, OddsKey, quickPredictionFamily, rankPicks, StructuralAnalysis, buildFinalVerdict, VerdictPick } from "@/src/api";
 import { colors } from "@/src/theme";
 import { ScoreInput } from "@/src/components/ScoreInput";
 import { FamilyLegendModal } from "@/src/components/FamilyLegendModal";
@@ -171,6 +171,143 @@ export default function MatchDetail() {
             </View>
           )}
         </View>
+
+        {/* ============ VERDETTO FINALE (fusione 3 sistemi) ============ */}
+        {(() => {
+          if (!structural) return null;
+          const fam = quickPredictionFamily(match.odds);
+          const llmMarkets = prediction?.playable_markets?.map((p) => p.market) || (prediction?.main_prediction ? [prediction.main_prediction] : []);
+          const preRanked = rankPicks(fam, llmMarkets, marketStats);
+          const verdict = buildFinalVerdict(structural, preRanked, prediction?.playable_markets);
+          if (verdict.length === 0) return null;
+          const top = verdict[0];
+          const alts = verdict.slice(1, 4);
+
+          const concColor = top.concordance === 3 ? colors.success
+            : top.concordance === 2 ? colors.primary : colors.textDim;
+          const concLabel = top.concordance === 3 ? "CONCORDANZA PIENA 3/3"
+            : top.concordance === 2 ? "CONCORDANZA FORTE 2/3" : "SEGNALE PARZIALE 1/3";
+
+          // Match concordance to result
+          let pickOutcome: "won" | "lost" | null = null;
+          if (match.result) {
+            const parts = match.result.split("-").map((n) => parseInt(n, 10));
+            if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
+              const m = top.market.toUpperCase().replace(/\s/g, "");
+              const home = parts[0], away = parts[1], total = home + away;
+              let ok: boolean | null = null;
+              if (m === "1") ok = home > away;
+              else if (m === "X") ok = home === away;
+              else if (m === "2") ok = away > home;
+              else if (m.startsWith("1X")) ok = home >= away;
+              else if (m.startsWith("X2")) ok = away >= home;
+              else if (m.startsWith("12")) ok = home !== away;
+              else if (m.startsWith("U")) { const n = parseFloat(m.match(/U(\d+(?:\.\d+)?)/)?.[1] || "0"); ok = total < n; }
+              else if (m.startsWith("O")) { const n = parseFloat(m.match(/O(\d+(?:\.\d+)?)/)?.[1] || "0"); ok = total > n; }
+              else if (m === "GG") ok = home > 0 && away > 0;
+              else if (m === "NG") ok = home === 0 || away === 0;
+              else if (m.includes("MG") && m.includes("2-4")) {
+                if (m.includes("CASA")) ok = home >= 2 && home <= 4;
+                else if (m.includes("OSPITE")) ok = away >= 2 && away <= 4;
+                else ok = total >= 2 && total <= 4;
+              }
+              if (ok === true) pickOutcome = "won";
+              else if (ok === false) pickOutcome = "lost";
+            }
+          }
+
+          const rankBadges = (p: VerdictPick) => (
+            <View style={{ flexDirection: "row", gap: 4, flexWrap: "wrap" }}>
+              {p.ranks.structural && (
+                <View style={[styles.vSrcBadge, { backgroundColor: colors.aiBg, borderColor: colors.aiText }]}>
+                  <Ionicons name="construct" size={9} color={colors.aiText} />
+                  <Text style={[styles.vSrcTxt, { color: colors.aiText }]}>STRUTT #{p.ranks.structural}</Text>
+                </View>
+              )}
+              {p.ranks.ai && (
+                <View style={[styles.vSrcBadge, { backgroundColor: "rgba(99,102,241,0.15)", borderColor: "#6366F1" }]}>
+                  <Ionicons name="sparkles" size={9} color="#6366F1" />
+                  <Text style={[styles.vSrcTxt, { color: "#6366F1" }]}>AI #{p.ranks.ai}</Text>
+                </View>
+              )}
+              {p.ranks.pre && (
+                <View style={[styles.vSrcBadge, { backgroundColor: "rgba(255,140,0,0.15)", borderColor: colors.primary }]}>
+                  <Ionicons name="flash" size={9} color={colors.primary} />
+                  <Text style={[styles.vSrcTxt, { color: colors.primary }]}>PRE #{p.ranks.pre}</Text>
+                </View>
+              )}
+            </View>
+          );
+
+          return (
+            <View style={[
+              styles.verdictBlock,
+              pickOutcome === "won" && { borderColor: colors.success, borderWidth: 2 },
+              pickOutcome === "lost" && { borderColor: colors.danger, borderWidth: 2 },
+            ]}>
+              <View style={styles.verdictHeader}>
+                <Ionicons name="trophy" size={16} color="#FFD700" />
+                <Text style={styles.verdictTitle}>VERDETTO FINALE</Text>
+                <View style={[styles.verdictConcTag, { borderColor: concColor }]}>
+                  <Text style={[styles.verdictConcTxt, { color: concColor }]}>{concLabel}</Text>
+                </View>
+              </View>
+              <Text style={styles.verdictHint}>Fusione pesata di Motore Strutturale (Poisson) + AI + Pre-pronostico locale</Text>
+
+              <View style={styles.verdictHero}>
+                <View style={styles.verdictMedal}>
+                  <Ionicons name="medal" size={22} color="#FFF" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.verdictLabel}>GIOCATA CONSIGLIATA</Text>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 10, flexWrap: "wrap", marginTop: 4 }}>
+                    <Text style={styles.verdictMarket}>{top.market}</Text>
+                    {top.odd && top.odd > 0 ? <Text style={styles.verdictOdd}>@ {top.odd.toFixed(2)}</Text> : null}
+                    {pickOutcome === "won" && (
+                      <View style={[styles.verdictOutcome, { backgroundColor: "rgba(16,185,129,0.20)", borderColor: colors.success }]}>
+                        <Ionicons name="checkmark-circle" size={11} color={colors.success} />
+                        <Text style={[styles.verdictOutcomeTxt, { color: colors.success }]}>VINTO</Text>
+                      </View>
+                    )}
+                    {pickOutcome === "lost" && (
+                      <View style={[styles.verdictOutcome, { backgroundColor: "rgba(239,68,68,0.20)", borderColor: colors.danger }]}>
+                        <Ionicons name="close-circle" size={11} color={colors.danger} />
+                        <Text style={[styles.verdictOutcomeTxt, { color: colors.danger }]}>PERSO</Text>
+                      </View>
+                    )}
+                  </View>
+                  <View style={{ marginTop: 6 }}>{rankBadges(top)}</View>
+                  {top.coverage !== undefined && (
+                    <Text style={styles.verdictMeta}>
+                      Coverage {Math.round(top.coverage * 100)}% · Fragility {Math.round((top.fragility || 0) * 100)}%
+                    </Text>
+                  )}
+                </View>
+              </View>
+
+              {alts.length > 0 && (
+                <View style={{ marginTop: 4 }}>
+                  <Text style={styles.verdictAltTitle}>ALTERNATIVE CONCORDI</Text>
+                  {alts.map((a, i) => (
+                    <View key={`v-${a.market}-${i}`} style={styles.verdictAltRow}>
+                      <View style={styles.verdictAltRank}>
+                        <Text style={styles.verdictAltRankTxt}>{i + 2}</Text>
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                          <Text style={styles.verdictAltMarket}>{a.market}</Text>
+                          {a.odd && a.odd > 0 ? <Text style={styles.verdictAltOdd}>@ {a.odd.toFixed(2)}</Text> : null}
+                          <Text style={[styles.verdictConcMini, { color: a.concordance === 3 ? colors.success : a.concordance === 2 ? colors.primary : colors.textDim }]}>{a.concordance}/3</Text>
+                        </View>
+                        <View style={{ marginTop: 4 }}>{rankBadges(a)}</View>
+                      </View>
+                    </View>
+                  ))}
+                </View>
+              )}
+            </View>
+          );
+        })()}
 
         {/* ============ STRUTTURA MATCH (Motore Strutturale) ============ */}
         {structural?.structure && (
@@ -730,4 +867,36 @@ const styles = StyleSheet.create({
   srTag: { borderWidth: 1, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 5 },
   srTagTxt: { fontSize: 9, fontWeight: "900", letterSpacing: 0.3 },
   srBroken: { color: colors.textDim, fontSize: 10, marginTop: 4, fontStyle: "italic" },
+
+  // ===== VERDETTO FINALE =====
+  verdictBlock: {
+    backgroundColor: colors.surface, borderRadius: 16, padding: 14,
+    borderWidth: 1, borderColor: "#FFD700", gap: 10,
+  },
+  verdictHeader: { flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap" },
+  verdictTitle: { color: "#FFD700", fontSize: 13, fontWeight: "900", letterSpacing: 1.2, flex: 1 },
+  verdictConcTag: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6, borderWidth: 1 },
+  verdictConcTxt: { fontSize: 9, fontWeight: "900", letterSpacing: 0.5 },
+  verdictHint: { color: colors.textMuted, fontSize: 10, lineHeight: 14, fontStyle: "italic" },
+  verdictHero: {
+    flexDirection: "row", gap: 12, alignItems: "center",
+    backgroundColor: "rgba(255,215,0,0.10)", borderWidth: 1, borderColor: "rgba(255,215,0,0.40)",
+    padding: 12, borderRadius: 12,
+  },
+  verdictMedal: { width: 40, height: 40, borderRadius: 20, backgroundColor: "#FFD700", alignItems: "center", justifyContent: "center" },
+  verdictLabel: { color: "#FFD700", fontSize: 10, fontWeight: "900", letterSpacing: 1.5 },
+  verdictMarket: { color: colors.text, fontSize: 20, fontWeight: "900" },
+  verdictOdd: { color: "#FFD700", fontSize: 15, fontWeight: "900" },
+  verdictOutcome: { flexDirection: "row", alignItems: "center", gap: 3, borderWidth: 1, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 5 },
+  verdictOutcomeTxt: { fontSize: 10, fontWeight: "900", letterSpacing: 0.5 },
+  verdictMeta: { color: colors.textMuted, fontSize: 10, marginTop: 4 },
+  vSrcBadge: { flexDirection: "row", alignItems: "center", gap: 3, borderWidth: 1, paddingHorizontal: 5, paddingVertical: 2, borderRadius: 4 },
+  vSrcTxt: { fontSize: 9, fontWeight: "900", letterSpacing: 0.3 },
+  verdictAltTitle: { color: colors.textMuted, fontSize: 9, fontWeight: "900", letterSpacing: 1, marginBottom: 6 },
+  verdictAltRow: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 8, paddingHorizontal: 10, backgroundColor: colors.surfaceHi, borderRadius: 10, marginBottom: 6 },
+  verdictAltRank: { width: 22, height: 22, borderRadius: 11, backgroundColor: colors.border, alignItems: "center", justifyContent: "center" },
+  verdictAltRankTxt: { color: colors.textMuted, fontSize: 11, fontWeight: "900" },
+  verdictAltMarket: { color: colors.text, fontSize: 13, fontWeight: "800" },
+  verdictAltOdd: { color: colors.primary, fontSize: 12, fontWeight: "800" },
+  verdictConcMini: { fontSize: 10, fontWeight: "900" },
 });

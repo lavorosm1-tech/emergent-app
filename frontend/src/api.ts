@@ -281,7 +281,7 @@ export function quickPrediction(odds: Odds): Candidate | null {
  * Normalize market labels so concordance matching is reliable.
  * "Ov2.5", "Over 2.5", "O2.5" all map to "O2.5"
  */
-function normalizeMarket(m: string): string {
+export function normalizeMarket(m: string): string {
   if (!m) return "";
   return m.trim()
     .replace(/Over\s*/i, "O")
@@ -454,3 +454,120 @@ export function pickFinal(ranked: RankedPick[], aiMarkets: string[] = []): {
   }
   return { pick: ranked[0], isNoBet: false };
 }
+
+// ============================================================
+// VERDETTO FINALE — fonde i 3 sistemi (Strutturale, AI, Pre)
+// ============================================================
+export type VerdictSource = "structural" | "ai" | "pre";
+
+export type VerdictPick = {
+  market: string;
+  score: number;
+  sources: VerdictSource[];     // sistemi in cui appare
+  ranks: Partial<Record<VerdictSource, number>>; // posizione nel rispettivo top-N
+  odd?: number;                  // se reperibile da pre-pronostico o quote
+  coverage?: number;             // dal motore strutturale
+  fragility?: number;            // dal motore strutturale
+  family?: string;
+  concordance: number;           // numero di sistemi in cui appare (1-3)
+  agreementLabel: "piena" | "forte" | "parziale" | "divergente";
+};
+
+const SRC_WEIGHTS: Record<VerdictSource, { top: number; decay: number; bonus: number }> = {
+  structural: { top: 10, decay: 1.6, bonus: 1.5 }, // motore matematico = priorità
+  ai:         { top: 8,  decay: 1.4, bonus: 1.2 }, // AI semantica = supporto
+  pre:        { top: 5,  decay: 0.7, bonus: 0.6 }, // euristica locale = filtro debole
+};
+
+export function buildFinalVerdict(
+  structural: StructuralAnalysis | null,
+  preRanked: RankedPick[],
+  aiMarkets: { market: string; reasoning?: string }[] | string[] | undefined,
+): VerdictPick[] {
+  const norm = normalizeMarket;
+  type Bucket = {
+    market: string;            // canonical display name (first seen)
+    score: number;
+    sources: Set<VerdictSource>;
+    ranks: Partial<Record<VerdictSource, number>>;
+    odd?: number;
+    coverage?: number;
+    fragility?: number;
+    family?: string;
+  };
+  const buckets = new Map<string, Bucket>();
+
+  const ensure = (raw: string): Bucket => {
+    const k = norm(raw);
+    let b = buckets.get(k);
+    if (!b) {
+      b = { market: raw, score: 0, sources: new Set(), ranks: {} };
+      buckets.set(k, b);
+    }
+    return b;
+  };
+
+  // === Source 1: Structural ranking (top 6) ===
+  if (structural?.ranking) {
+    structural.ranking.slice(0, 6).forEach((r, i) => {
+      const b = ensure(r.market);
+      const w = SRC_WEIGHTS.structural;
+      b.score += Math.max(w.top - i * w.decay, 0);
+      b.sources.add("structural");
+      b.ranks.structural = i + 1;
+      b.coverage = r.coverage;
+      b.fragility = r.fragility;
+    });
+  }
+
+  // === Source 2: AI playable markets (top 4) ===
+  const aiList: string[] = Array.isArray(aiMarkets)
+    ? (aiMarkets as any[]).map((x: any) => (typeof x === "string" ? x : x?.market)).filter(Boolean)
+    : [];
+  aiList.slice(0, 4).forEach((m, i) => {
+    const b = ensure(m);
+    const w = SRC_WEIGHTS.ai;
+    b.score += Math.max(w.top - i * w.decay, 0);
+    b.sources.add("ai");
+    b.ranks.ai = i + 1;
+  });
+
+  // === Source 3: Pre-pronostico rankPicks (top 6) ===
+  preRanked.slice(0, 6).forEach((p, i) => {
+    const b = ensure(p.market);
+    const w = SRC_WEIGHTS.pre;
+    b.score += Math.max(w.top - i * w.decay, 0);
+    b.sources.add("pre");
+    b.ranks.pre = i + 1;
+    if (p.odd > 0 && !b.odd) b.odd = p.odd;
+    if (!b.family) b.family = p.family;
+  });
+
+  // === Concordance bonus ===
+  for (const b of buckets.values()) {
+    if (b.sources.size === 3) b.score += 4;       // piena
+    else if (b.sources.size === 2) b.score += 1.5; // forte
+  }
+
+  // === Build output ===
+  const out: VerdictPick[] = Array.from(buckets.values()).map((b) => {
+    const c = b.sources.size;
+    const agreementLabel: VerdictPick["agreementLabel"] =
+      c === 3 ? "piena" : c === 2 ? "forte" : c === 1 ? "parziale" : "divergente";
+    return {
+      market: b.market,
+      score: Math.round(b.score * 100) / 100,
+      sources: Array.from(b.sources),
+      ranks: b.ranks,
+      odd: b.odd,
+      coverage: b.coverage,
+      fragility: b.fragility,
+      family: b.family,
+      concordance: c,
+      agreementLabel,
+    };
+  });
+  out.sort((a, b) => b.score - a.score);
+  return out;
+}
+
