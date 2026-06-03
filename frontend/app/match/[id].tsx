@@ -8,7 +8,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 
-import { api, Match, Prediction, MARKET_FAMILIES, ODD_LABELS, OddsKey, quickPredictionFamily, rankPicks } from "@/src/api";
+import { api, Match, Prediction, MARKET_FAMILIES, ODD_LABELS, OddsKey, quickPredictionFamily, rankPicks, StructuralAnalysis } from "@/src/api";
 import { colors } from "@/src/theme";
 import { ScoreInput } from "@/src/components/ScoreInput";
 import { FamilyLegendModal } from "@/src/components/FamilyLegendModal";
@@ -26,19 +26,23 @@ export default function MatchDetail() {
   const [yellowCandidates, setYellowCandidates] = useState<{ market: string; family: string; missed: number; family_total: number; miss_rate: number }[]>([]);
   const [showAlternatives, setShowAlternatives] = useState(false);
   const [showLegend, setShowLegend] = useState(false);
+  const [structural, setStructural] = useState<StructuralAnalysis | null>(null);
+  const [showClusterAll, setShowClusterAll] = useState(false);
 
   const load = useCallback(async () => {
     try {
-      const [m, stats, cands] = await Promise.all([
+      const [m, stats, cands, struct] = await Promise.all([
         api.match(id!),
         api.marketStats().catch(() => ({ markets: [], family_totals: {} })),
         api.matchCandidates(id!).catch(() => ({ candidates: [], family: null, family_total: 0 })),
+        api.matchStructural(id!).catch(() => null),
       ]);
       setMatch(m);
       setPrediction(m.prediction ?? null);
       setResult(m.result || "");
       setMarketStats(stats?.markets || []);
       setYellowCandidates(cands?.candidates || []);
+      setStructural(struct as StructuralAnalysis | null);
     } catch (e: any) {
       Alert.alert("Errore", e?.message || "Caricamento");
     } finally {
@@ -167,6 +171,134 @@ export default function MatchDetail() {
             </View>
           )}
         </View>
+
+        {/* ============ STRUTTURA MATCH (Motore Strutturale) ============ */}
+        {structural?.structure && (
+          <View style={styles.structBlock}>
+            <View style={styles.structHeader}>
+              <Ionicons name="construct" size={14} color={colors.aiText} />
+              <Text style={styles.structTitle}>STRUTTURA MATCH</Text>
+              <View style={styles.structFamilyTag}>
+                <Text style={styles.structFamilyTxt}>{structural.structure.family.replace(/_/g, " ")}</Text>
+              </View>
+            </View>
+            <View style={styles.structGrid}>
+              <View style={styles.structCell}>
+                <Text style={styles.structLbl}>DOMINANZA</Text>
+                <Text style={styles.structVal}>{structural.structure.dominance.replace(/_/g, " ")}</Text>
+              </View>
+              <View style={styles.structCell}>
+                <Text style={styles.structLbl}>PROFILO</Text>
+                <Text style={styles.structVal}>{structural.structure.offensive_profile.replace(/_/g, " ")}</Text>
+              </View>
+              <View style={styles.structCell}>
+                <Text style={styles.structLbl}>COMPRESSIONE</Text>
+                <Text style={styles.structVal}>{structural.structure.goal_compression}</Text>
+              </View>
+            </View>
+            <View style={styles.structGrid}>
+              <View style={styles.structCell}>
+                <Text style={styles.structLbl}>PAVIMENTO</Text>
+                <Text style={styles.structValBig}>{structural.structure.goal_floor}</Text>
+                <Text style={styles.structSub}>gol min attesi</Text>
+              </View>
+              <View style={styles.structCell}>
+                <Text style={styles.structLbl}>RANGE</Text>
+                <Text style={styles.structValBig}>{structural.structure.goal_range}</Text>
+                <Text style={styles.structSub}>gol totali</Text>
+              </View>
+              <View style={styles.structCell}>
+                <Text style={styles.structLbl}>TETTO</Text>
+                <Text style={styles.structValBig}>{structural.structure.goal_ceiling}</Text>
+                <Text style={styles.structSub}>gol max attesi</Text>
+              </View>
+            </View>
+            <View style={styles.structLambdaRow}>
+              <Text style={styles.structSub}>λ Poisson · Casa <Text style={styles.structLambda}>{structural.structure.lambda_home.toFixed(2)}</Text> · Ospite <Text style={styles.structLambda}>{structural.structure.lambda_away.toFixed(2)}</Text></Text>
+            </View>
+          </View>
+        )}
+
+        {/* ============ CLUSTER RISULTATI (Top probabili) ============ */}
+        {structural?.cluster && structural.cluster.length > 0 && (() => {
+          const list = showClusterAll ? structural.cluster : structural.cluster.slice(0, 8);
+          const maxP = Math.max(...structural.cluster.map((c) => c.p)) || 1;
+          const realScore = match.result || "";
+          return (
+            <View style={styles.clusterBlock}>
+              <View style={styles.structHeader}>
+                <Ionicons name="bar-chart" size={14} color={colors.aiText} />
+                <Text style={styles.structTitle}>CLUSTER RISULTATI</Text>
+                <Text style={styles.clusterHint}>Top {list.length} · cluster Poisson</Text>
+              </View>
+              {list.map((c, i) => {
+                const pct = (c.p / maxP) * 100;
+                const compColor = c.compatibility === "high" ? colors.success
+                  : c.compatibility === "medium" ? colors.primary : colors.textDim;
+                const isReal = realScore === c.score;
+                return (
+                  <View key={`cls-${c.score}-${i}`} style={[styles.clusterRow, isReal && styles.clusterRowReal]}>
+                    <View style={styles.clusterRank}>
+                      <Text style={styles.clusterRankTxt}>{i + 1}</Text>
+                    </View>
+                    <Text style={[styles.clusterScore, isReal && { color: colors.success }]}>{c.score}{isReal ? "  ✓" : ""}</Text>
+                    <View style={styles.clusterBarTrack}>
+                      <View style={[styles.clusterBarFill, { width: `${pct}%`, backgroundColor: compColor }]} />
+                    </View>
+                    <Text style={[styles.clusterPct, { color: compColor }]}>{(c.p * 100).toFixed(1)}%</Text>
+                  </View>
+                );
+              })}
+              {structural.cluster.length > 8 && (
+                <TouchableOpacity onPress={() => setShowClusterAll(!showClusterAll)} style={styles.altToggle}>
+                  <Ionicons name={showClusterAll ? "chevron-up" : "chevron-down"} size={14} color={colors.primary} />
+                  <Text style={styles.altToggleTxt}>{showClusterAll ? "Mostra solo top 8" : `Vedi tutti i ${structural.cluster.length} risultati`}</Text>
+                </TouchableOpacity>
+              )}
+              {structural.explanation && (
+                <Text style={styles.clusterExpl}>{structural.explanation}</Text>
+              )}
+            </View>
+          );
+        })()}
+
+        {/* ============ RANKING STRUTTURALE (Coverage + Fragility) ============ */}
+        {structural?.ranking && structural.ranking.length > 0 && (
+          <View style={styles.structRankBlock}>
+            <View style={styles.structHeader}>
+              <Ionicons name="ribbon" size={14} color={colors.aiText} />
+              <Text style={styles.structTitle}>RANKING STRUTTURALE</Text>
+              <Text style={styles.clusterHint}>Coverage × Fragility</Text>
+            </View>
+            {structural.ranking.map((r, i) => {
+              const cov = Math.round(r.coverage * 100);
+              const frag = Math.round(r.fragility * 100);
+              const fragColor = r.fragility_label === "bassa" ? colors.success
+                : r.fragility_label === "media" ? colors.primary : colors.danger;
+              return (
+                <View key={`sr-${r.market}-${i}`} style={[styles.srRow, i === 0 && styles.srRowTop]}>
+                  <View style={[styles.srRank, i === 0 && styles.srRankTop]}>
+                    <Text style={[styles.srRankTxt, i === 0 && { color: "#FFF" }]}>{i + 1}</Text>
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                      <Text style={[styles.srMarket, i === 0 && { color: colors.aiText }]}>{r.market}</Text>
+                      <View style={[styles.srTag, { backgroundColor: "rgba(16,185,129,0.15)", borderColor: colors.success }]}>
+                        <Text style={[styles.srTagTxt, { color: colors.success }]}>COV {cov}%</Text>
+                      </View>
+                      <View style={[styles.srTag, { backgroundColor: `${fragColor}22`, borderColor: fragColor }]}>
+                        <Text style={[styles.srTagTxt, { color: fragColor }]}>FRAG {frag}%</Text>
+                      </View>
+                    </View>
+                    {r.broken_by.length > 0 && (
+                      <Text style={styles.srBroken}>Rotto da: {r.broken_by.join(", ")}</Text>
+                    )}
+                  </View>
+                </View>
+              );
+            })}
+          </View>
+        )}
 
         {/* Pre-pronostic family — local heuristic */}
         {(() => {
@@ -529,4 +661,73 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary, paddingVertical: 14, borderRadius: 12, marginTop: 8,
   },
   saveResultTxt: { color: "#FFF", fontWeight: "900", fontSize: 14, letterSpacing: 0.5 },
+
+  // ===== STRUTTURA MATCH =====
+  structBlock: {
+    backgroundColor: colors.surface, borderRadius: 16, padding: 14,
+    borderWidth: 1, borderColor: "rgba(99,102,241,0.40)", gap: 10,
+  },
+  structHeader: { flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap" },
+  structTitle: { color: colors.aiText, fontSize: 12, fontWeight: "900", letterSpacing: 1, flex: 1 },
+  structFamilyTag: { backgroundColor: colors.aiBg, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
+  structFamilyTxt: { color: colors.aiText, fontSize: 10, fontWeight: "900", letterSpacing: 0.5 },
+  structGrid: { flexDirection: "row", gap: 8 },
+  structCell: {
+    flex: 1, backgroundColor: colors.surfaceHi, borderRadius: 10,
+    paddingVertical: 10, paddingHorizontal: 8, alignItems: "center",
+  },
+  structLbl: { color: colors.textMuted, fontSize: 9, fontWeight: "800", letterSpacing: 0.8 },
+  structVal: { color: colors.text, fontSize: 11, fontWeight: "800", marginTop: 4, textTransform: "uppercase" },
+  structValBig: { color: colors.aiText, fontSize: 22, fontWeight: "900", marginTop: 2 },
+  structSub: { color: colors.textDim, fontSize: 9, fontWeight: "600", marginTop: 2 },
+  structLambdaRow: { alignItems: "center", paddingTop: 4, borderTopWidth: 1, borderTopColor: colors.border },
+  structLambda: { color: colors.aiText, fontWeight: "900" },
+
+  // ===== CLUSTER RISULTATI =====
+  clusterBlock: {
+    backgroundColor: colors.surface, borderRadius: 16, padding: 14,
+    borderWidth: 1, borderColor: "rgba(99,102,241,0.40)", gap: 8,
+  },
+  clusterHint: { color: colors.textMuted, fontSize: 10, fontWeight: "700" },
+  clusterRow: {
+    flexDirection: "row", alignItems: "center", gap: 8,
+    paddingVertical: 6, paddingHorizontal: 8,
+    backgroundColor: colors.surfaceHi, borderRadius: 8,
+  },
+  clusterRowReal: { borderWidth: 1, borderColor: colors.success, backgroundColor: "rgba(16,185,129,0.10)" },
+  clusterRank: {
+    width: 20, height: 20, borderRadius: 10, backgroundColor: colors.border,
+    alignItems: "center", justifyContent: "center",
+  },
+  clusterRankTxt: { color: colors.textMuted, fontSize: 10, fontWeight: "900" },
+  clusterScore: { color: colors.text, fontSize: 13, fontWeight: "900", width: 50 },
+  clusterBarTrack: { flex: 1, height: 8, backgroundColor: colors.border, borderRadius: 4, overflow: "hidden" },
+  clusterBarFill: { height: "100%", borderRadius: 4 },
+  clusterPct: { fontSize: 11, fontWeight: "900", width: 50, textAlign: "right" },
+  clusterExpl: {
+    color: colors.textMuted, fontSize: 11, lineHeight: 16, marginTop: 6,
+    paddingTop: 8, borderTopWidth: 1, borderTopColor: colors.border, fontStyle: "italic",
+  },
+
+  // ===== RANKING STRUTTURALE =====
+  structRankBlock: {
+    backgroundColor: colors.surface, borderRadius: 16, padding: 14,
+    borderWidth: 1, borderColor: "rgba(99,102,241,0.40)", gap: 8,
+  },
+  srRow: {
+    flexDirection: "row", alignItems: "center", gap: 10,
+    paddingVertical: 8, paddingHorizontal: 10,
+    backgroundColor: colors.surfaceHi, borderRadius: 10,
+  },
+  srRowTop: { borderWidth: 2, borderColor: colors.aiText, backgroundColor: colors.aiBg },
+  srRank: {
+    width: 22, height: 22, borderRadius: 11, backgroundColor: colors.border,
+    alignItems: "center", justifyContent: "center",
+  },
+  srRankTop: { backgroundColor: colors.aiText },
+  srRankTxt: { color: colors.textMuted, fontSize: 11, fontWeight: "900" },
+  srMarket: { color: colors.text, fontSize: 13, fontWeight: "900" },
+  srTag: { borderWidth: 1, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 5 },
+  srTagTxt: { fontSize: 9, fontWeight: "900", letterSpacing: 0.3 },
+  srBroken: { color: colors.textDim, fontSize: 10, marginTop: 4, fontStyle: "italic" },
 });

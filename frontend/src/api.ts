@@ -37,6 +37,45 @@ export type Prediction = {
   max_goals?: number;
 };
 
+export type StructuralCluster = {
+  score: string;
+  home: number;
+  away: number;
+  p: number;
+  compatibility: "high" | "medium" | "low";
+};
+
+export type StructuralMarketRank = {
+  market: string;
+  coverage: number;
+  fragility: number;
+  fragility_label: "bassa" | "media" | "alta";
+  covered_scores: string[];
+  broken_by: string[];
+  score: number;
+};
+
+export type StructuralStructure = {
+  family: string;
+  dominance: string;
+  offensive_profile: string;
+  goal_compression: "high" | "medium" | "low";
+  goal_floor: number;
+  goal_ceiling: number;
+  goal_range: string;
+  lambda_home: number;
+  lambda_away: number;
+};
+
+export type StructuralAnalysis = {
+  structure: StructuralStructure;
+  cluster: StructuralCluster[];
+  central_cluster: StructuralCluster[];
+  ranking: StructuralMarketRank[];
+  pick: StructuralMarketRank | null;
+  explanation: string;
+};
+
 async function req<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${BASE}/api${path}`, {
     ...init,
@@ -95,6 +134,7 @@ export const api = {
   applyResultManual: (id: string, score: string) => req<{ ok: boolean; result: string }>("/results/apply", { method: "POST", body: JSON.stringify({ id, score }) }),
   matchCandidates: (id: string) => req<{ candidates: { market: string; family: string; missed: number; family_total: number; miss_rate: number }[]; family: string | null; family_total: number }>(`/match/${id}/candidates`),
   matchHistory: (id: string) => req<{ league: string; global: Record<string, any[]>; league_specific: Record<string, any[]> }>(`/match/${id}/history`),
+  matchStructural: (id: string) => req<StructuralAnalysis>(`/match/${id}/structural`),
   uploadExcel: async (uri: string, name: string, mimeType?: string) => {
     const form = new FormData();
     if (typeof window !== "undefined" && window.fetch && uri.startsWith("blob:")) {
