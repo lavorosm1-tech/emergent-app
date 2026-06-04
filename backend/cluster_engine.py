@@ -335,10 +335,14 @@ CANDIDATE_MARKETS = [
     "MG 1-2 ospite", "MG 1-3 ospite", "MG 2-3 ospite", "MG 2-4 ospite",
     # Direct-result + Over combos (offensiva pulita con dominante)
     "1 + O1.5", "2 + O1.5", "1 + O2.5", "2 + O2.5",
+    # GG + Over combos (entrambe segnano + over)
+    "GG + O2.5", "GG + O1.5",
     # Double-chance + Over/Under combos
     "DC 1X + O1.5", "DC X2 + O1.5", "DC 12 + O1.5",
     "DC 1X + O2.5", "DC X2 + O2.5", "DC 12 + O2.5",
     "DC 1X + U3.5", "DC X2 + U3.5", "DC 12 + U3.5",
+    # Double-chance + GG combos
+    "DC 1X + GG", "DC X2 + GG", "DC 12 + GG",
 ]
 
 
@@ -478,7 +482,31 @@ def structural_analysis(odds: Dict, min_odd: float = 1.40) -> Dict:
                     elif span >= 3 and cov >= 0.90:
                         score *= 0.70
 
-        # === DOMINANZA ESTREMA: bonus/malus per "monopolio offensivo" ===
+        # === MERCATI SECCHI: boost quando coerenti con la struttura ===
+        # Questi sono i pronostici più importanti per il bettor: O2.5 secco,
+        # GG secco, 1X/X2 secco. Vanno premiati quando combaciano con λ Poisson.
+        lam_tot = lam_h + lam_a
+        mu = m.upper().replace("  ", " ")
+        # O2.5 secco: boost se lam_tot >= 2.8 (over moderato calibrato)
+        if mu == "O2.5" and lam_tot >= 2.8:
+            score *= 1.30
+        # O1.5 secco: boost se entrambi i team segnano (alta reciprocity)
+        elif mu == "O1.5" and lam_h >= 0.9 and lam_a >= 0.9:
+            score *= 1.20
+        # GG secco: boost se entrambi i team hanno λ >= 1.2
+        elif mu == "GG" and lam_h >= 1.2 and lam_a >= 1.2:
+            score *= 1.25
+        # NG secco: boost se almeno uno dei due ha λ <= 0.75 (clean sheet vivo)
+        elif mu == "NG" and min(lam_h, lam_a) <= 0.75:
+            score *= 1.25
+        # 1X: boost se home favorita (λ_h >= λ_a + 0.3) o equilibrato
+        elif mu == "1X" and lam_h >= lam_a - 0.1:
+            score *= 1.15
+        # X2: boost se away favorita o equilibrato
+        elif mu == "X2" and lam_a >= lam_h - 0.1:
+            score *= 1.15
+
+
         # Quando una squadra ha λ ≥ 2.4 (forte) e l'altra λ ≤ 0.7 (debole),
         # i risultati 0-3/0-4/1-3 sono molto vivi → premia chi li copre.
         is_extreme = (lam_min <= 0.7 and lam_max >= 2.2)
@@ -529,7 +557,7 @@ def structural_analysis(odds: Dict, min_odd: float = 1.40) -> Dict:
         "structure": structure,
         "cluster": cluster,
         "central_cluster": central,
-        "ranking": coherent[:6],
+        "ranking": coherent[:10],
         "pick": ranked[0] if ranked else None,
         "explanation": _build_explanation(structure, coherent),
     }
