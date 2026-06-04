@@ -35,9 +35,10 @@ export default function BottomNav() {
     return () => { active = false; clearInterval(t); };
   }, [path]);
 
-  // Padding bottom dinamico: rispetta la gesture bar Android / home indicator iOS
-  // Pixel 10 ha gesture nav che richiede ~ 24-30px extra in fondo
-  const bottomPadding = Math.max(insets.bottom, 12) + 10;
+  // Padding bottom robusto: garantisce ≥ 40px anche se SafeAreaProvider
+  // non è disponibile. Su Pixel 10 con gesture nav: insets.bottom ≈ 28 → 48px totali.
+  // Su device classici (con tasti software): insets.bottom = 0 → 40px (sufficiente).
+  const bottomPadding = Math.max(insets.bottom + 14, 40);
 
   return (
     <View style={[styles.wrap, { paddingBottom: bottomPadding }]}>
