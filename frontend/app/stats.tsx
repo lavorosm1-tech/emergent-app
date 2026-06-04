@@ -137,7 +137,7 @@ const styles = StyleSheet.create({
   empty: { flex: 1, alignItems: "center", justifyContent: "center", gap: 12, paddingHorizontal: 32 },
   emptyTxt: { color: colors.textMuted, fontSize: 15, fontWeight: "700" },
   emptyHint: { color: colors.textDim, fontSize: 12, textAlign: "center" },
-  list: { padding: 16, gap: 14 },
+  list: { padding: 16, paddingBottom: 28, gap: 14 },
   kpi: { alignItems: "center", paddingVertical: 16, backgroundColor: colors.surface, borderRadius: 14, borderWidth: 1, borderColor: colors.border },
   kpiRow: { flexDirection: "row", gap: 10 },
   kpiBox: { flex: 1, alignItems: "center", paddingVertical: 16, backgroundColor: colors.surface, borderRadius: 14, borderWidth: 1, borderColor: colors.border },

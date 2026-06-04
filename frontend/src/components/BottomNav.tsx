@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter, usePathname } from "expo-router";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { colors } from "@/src/theme";
 import { api } from "@/src/api";
 
@@ -18,6 +19,7 @@ const TABS: { route: string; label: string; icon: IconName; testID: string }[] =
 export default function BottomNav() {
   const router = useRouter();
   const path = usePathname();
+  const insets = useSafeAreaInsets();
   const [selCount, setSelCount] = useState(0);
 
   useEffect(() => {
@@ -33,8 +35,12 @@ export default function BottomNav() {
     return () => { active = false; clearInterval(t); };
   }, [path]);
 
+  // Padding bottom dinamico: rispetta la gesture bar Android / home indicator iOS
+  // Pixel 10 ha gesture nav che richiede ~ 24-30px extra in fondo
+  const bottomPadding = Math.max(insets.bottom, 12) + 10;
+
   return (
-    <View style={styles.wrap}>
+    <View style={[styles.wrap, { paddingBottom: bottomPadding }]}>
       {TABS.map((t) => {
         const active = (t.route === "/" && path === "/") || (t.route !== "/" && path?.startsWith(t.route));
         const isSchedina = t.route === "/selected";
@@ -44,7 +50,8 @@ export default function BottomNav() {
             testID={t.testID}
             onPress={() => router.replace(t.route as any)}
             style={styles.tab}
-            activeOpacity={0.7}
+            activeOpacity={0.6}
+            hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
           >
             <View>
               <Ionicons name={t.icon} size={22} color={active ? colors.primary : colors.textMuted} />
@@ -71,7 +78,6 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: colors.border,
     paddingTop: 8,
-    paddingBottom: 22,
     paddingHorizontal: 4,
   },
   tab: { flex: 1, alignItems: "center", justifyContent: "center", gap: 4 },

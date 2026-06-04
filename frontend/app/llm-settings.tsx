@@ -92,7 +92,7 @@ const styles = StyleSheet.create({
   header: { flexDirection: "row", alignItems: "center", paddingHorizontal: 8, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: colors.border },
   iconBtn: { padding: 8 },
   title: { flex: 1, color: colors.text, fontSize: 18, fontWeight: "900", textAlign: "center" },
-  list: { padding: 16, gap: 10 },
+  list: { padding: 16, paddingBottom: 28, gap: 10 },
   budgetCard: { backgroundColor: colors.surface, borderRadius: 14, padding: 16, borderWidth: 1, borderColor: colors.border, alignItems: "center", gap: 6 },
   budgetLbl: { color: colors.textMuted, fontSize: 10, fontWeight: "800", letterSpacing: 1 },
   budgetVal: { color: colors.primary, fontSize: 36, fontWeight: "900" },

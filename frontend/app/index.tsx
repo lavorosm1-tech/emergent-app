@@ -340,7 +340,7 @@ export default function Home() {
           <TouchableOpacity onPress={() => router.push("/strumenti")} style={styles.emptyBtn}><Text style={styles.emptyBtnTxt}>Carica Excel</Text></TouchableOpacity>
         </View>
       ) : (
-        <ScrollView ref={scrollRef} onScroll={(e) => { savedScrollY = e.nativeEvent.contentOffset.y; }} scrollEventThrottle={250} contentContainerStyle={[styles.list, isDesktop && { paddingHorizontal: 24 }]} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { savedScrollY = 0; setRefreshing(true); load(selectedDay); }} tintColor={colors.primary} />}>
+        <ScrollView ref={scrollRef} onScroll={(e) => { savedScrollY = e.nativeEvent.contentOffset.y; }} scrollEventThrottle={16} decelerationRate="fast" keyboardShouldPersistTaps="handled" contentContainerStyle={[styles.list, isDesktop && { paddingHorizontal: 24 }]} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { savedScrollY = 0; setRefreshing(true); load(selectedDay); }} tintColor={colors.primary} />}>
           {grouped.map(([league, items]) => {
             const lc = parseLeagueCode(league);
             return (
@@ -517,7 +517,7 @@ const styles = StyleSheet.create({
   emptyTxt: { color: colors.textMuted, fontSize: 15 },
   emptyBtn: { backgroundColor: colors.primary, paddingHorizontal: 24, paddingVertical: 12, borderRadius: 999 },
   emptyBtnTxt: { color: "#FFF", fontWeight: "800" },
-  list: { padding: 16, gap: 8 },
+  list: { padding: 16, paddingBottom: 28, gap: 8 },
   leagueBlock: { marginBottom: 16 },
   leagueHeader: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 10 },
   leagueTxt: { color: colors.primary, fontSize: 14, fontWeight: "900", letterSpacing: 1, textTransform: "uppercase" },

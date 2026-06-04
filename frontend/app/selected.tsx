@@ -298,7 +298,7 @@ const styles = StyleSheet.create({
   aiStudioBtnTxt: { color: colors.primary, fontWeight: "900", fontSize: 10, letterSpacing: 0.5 },
   empty: { flex: 1, alignItems: "center", justifyContent: "center", gap: 12 },
   emptyTxt: { color: colors.textMuted, fontSize: 14 },
-  list: { padding: 16, gap: 10 },
+  list: { padding: 16, paddingBottom: 28, gap: 10 },
   card: { flexDirection: "row", backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: 12, padding: 12, gap: 10 },
   cardLeft: { flex: 1 },
   cardLeague: { color: colors.primary, fontSize: 10, fontWeight: "900", letterSpacing: 1, textTransform: "uppercase" },
