@@ -1239,12 +1239,64 @@ from cluster_engine import structural_analysis
 
 @api_router.get("/match/{match_id}/structural")
 async def match_structural(match_id: str):
-    """Full structural analysis: family, cluster, market ranking with coverage/fragility."""
+    """Full structural analysis: family, cluster, market ranking with coverage/fragility.
+    Applica ML BOOST CONSERVATIVO basato sullo storico empirico della famiglia
+    (≥10 valutazioni richieste, +/-10% massimo per mercato).
+    """
     m = await db.matches.find_one({"id": match_id}, {"_id": 0})
     if not m:
         raise HTTPException(404, "match not found")
     odds = m.get("odds") or {}
-    return structural_analysis(odds)
+
+    # ============================================================
+    # Carica ml_scores per la famiglia dalla AI-classification.
+    # Le famiglie del motore strutturale (DOMINANZA_CHIUSA, EQUILIBRATA_*, ecc.)
+    # NON sempre coincidono con quelle dell'AI prompt (OFFENSIVA_PULITA,
+    # RANGE_CONTROLLATO, ecc.). Per non disperdere lo storico, tentiamo PRIMA
+    # la famiglia AI già stabilita nel pronostico salvato; poi facciamo
+    # fallback alla famiglia del motore. Se entrambe sono vuote, ml=None.
+    # ============================================================
+    from cluster_engine import classify_family
+    cluster_family = classify_family(odds).get("family")
+    pred_family = (m.get("prediction") or {}).get("family") or m.get("family")
+    # Mapping euristico: famiglie del motore strutturale → famiglie AI prompt
+    # (per riusare lo storico anche se i nomi divergono leggermente)
+    cluster_to_ai = {
+        "EQUILIBRATA_OFFENSIVA": "OFFENSIVA_PULITA",
+        "EQUILIBRATA_CHIUSA": "CHIUSA_PROTETTA",
+        "DOMINANZA_CHIUSA": "DOMINANZA_CON_TETTO",
+        "DOMINANZA_OVER": "OFFENSIVA_PULITA",
+        "BLOCCATA": "RANGE_CONTROLLATO",
+    }
+    mapped_family = cluster_to_ai.get(cluster_family or "")
+    # Priorità: famiglia salvata > famiglia cluster_engine > mapping euristico
+    candidate_families = [pred_family, cluster_family, mapped_family]
+    ml_scores: Dict[str, Dict] = {}
+    matched_family: Optional[str] = None
+    for fam in candidate_families:
+        if not fam:
+            continue
+        docs = await db.market_scores.find(
+            {"family": fam, "$or": [{"league": None}, {"league": {"$exists": False}}]},
+            {"_id": 0}
+        ).to_list(100)
+        if docs:
+            for d in docs:
+                total = d.get("total", 0)
+                wins = d.get("wins", 0)
+                wr = (wins / total * 100.0) if total > 0 else 0.0
+                ml_scores[d["market"]] = {
+                    "win_rate": round(wr, 1),
+                    "total": total,
+                    "wins": wins,
+                    "losses": max(0, total - wins),
+                }
+            matched_family = fam
+            break  # use first family that has data
+    result = structural_analysis(odds, ml_scores=ml_scores or None)
+    # Espone meta-info per debug/UI: quale famiglia ha alimentato il ML boost
+    result["ml_source_family"] = matched_family
+    return result
 
 
 @api_router.post("/predict/structural")

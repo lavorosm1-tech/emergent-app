@@ -45,6 +45,13 @@ export type StructuralCluster = {
   compatibility: "high" | "medium" | "low";
 };
 
+export type MLAdjustment = {
+  type: "boost" | "malus" | "neutral";
+  win_rate: number;
+  total: number;
+  delta: string;  // e.g. "+10%", "-10%", "0%"
+};
+
 export type StructuralMarketRank = {
   market: string;
   coverage: number;
@@ -53,6 +60,7 @@ export type StructuralMarketRank = {
   covered_scores: string[];
   broken_by: string[];
   score: number;
+  ml_adjustment?: MLAdjustment;
 };
 
 export type StructuralStructure = {

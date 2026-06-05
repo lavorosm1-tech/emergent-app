@@ -367,10 +367,19 @@ def _combo_odd(market: str, odds: Dict) -> Optional[float]:
     return None
 
 
-def structural_analysis(odds: Dict, min_odd: float = 1.40) -> Dict:
+def structural_analysis(odds: Dict, min_odd: float = 1.40, ml_scores: Optional[Dict[str, Dict]] = None) -> Dict:
     """Full output: structure + cluster + ranked markets with coverage/fragility.
     
     `min_odd` filters out picks that don't provide betting value (default 1.40).
+    
+    `ml_scores` (optional): dict mapping market_name → {"win_rate": float (0-100),
+        "total": int, "wins": int, "losses": int}. When provided AND total >= 10:
+        - win_rate >= 70% → +10% boost on final score (mercato sale)
+        - win_rate <= 30% → -10% malus on final score (mercato scende)
+        - 30 < win_rate < 70 → neutral
+        - total < 10 → neutral (poca evidenza, no over-correction)
+        This is the ML feedback loop: storico empirico aggiusta la classifica
+        matematica del motore Poisson SENZA stravolgerla (boost conservativo).
     """
     structure = classify_family(odds)
     cluster = simulate_cluster(odds, top_k=12)
@@ -547,6 +556,36 @@ def structural_analysis(odds: Dict, min_odd: float = 1.40) -> Dict:
             "broken_by": broken[:5],
             "score": round(score, 4),
         })
+
+    # ============================================================
+    # ML BOOST CONSERVATIVO (≥10 valutazioni storiche)
+    # ============================================================
+    # Applichiamo aggiustamento empirico al punteggio strutturale basato sul
+    # win-rate storico nella stessa famiglia. Solo ≥10 valutazioni per evitare
+    # over-correction su pochi dati (consiglio statistico).
+    # - win_rate ≥ 70% → +10% boost  (mercato che storicamente vince → sale)
+    # - win_rate ≤ 30% → -10% malus  (mercato che storicamente perde → scende)
+    # - 30 < win_rate < 70 → neutro (zona grigia, no aggiustamento)
+    # - total < 10 → neutro (dati insufficienti)
+    if ml_scores:
+        for r in ranked:
+            sc = ml_scores.get(r["market"])
+            if not sc:
+                continue
+            total = sc.get("total", 0)
+            wr = sc.get("win_rate", 0)
+            if total < 10:
+                continue  # poca evidenza statistica
+            if wr >= 70:
+                r["score"] = round(r["score"] * 1.10, 4)
+                r["ml_adjustment"] = {"type": "boost", "win_rate": wr, "total": total, "delta": "+10%"}
+            elif wr <= 30:
+                r["score"] = round(r["score"] * 0.90, 4)
+                r["ml_adjustment"] = {"type": "malus", "win_rate": wr, "total": total, "delta": "-10%"}
+            else:
+                # Range 30-70: solo informativo, no aggiustamento
+                r["ml_adjustment"] = {"type": "neutral", "win_rate": wr, "total": total, "delta": "0%"}
+
     ranked.sort(key=lambda x: -x["score"])
 
     # Apply coherence filter: alternatives must be coherent with PICK
