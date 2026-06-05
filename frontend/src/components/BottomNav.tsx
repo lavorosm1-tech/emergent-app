@@ -59,10 +59,15 @@ export default function BottomNav() {
   const bottomPadding = Math.max(safeBottom, isAndroid ? 38 : 40);
   const navHeight = bottomPadding + 56; // 56 ≈ altezza contenuto tab + paddingTop
 
-  // Animazione translateY: 0 = visibile, navHeight = nascosta sotto schermo
+  // ============================================================
+  // BottomNav SEMPRE VISIBILE (no auto-hide su scroll)
+  // L'utente preferisce la nav fissa per evitare accavallamenti
+  // con i tasti di sistema Android. Il contenuto delle pagine
+  // ha padding-bottom dedicato per non sovrapporsi.
+  // ============================================================
   const animStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: interpolate(visible.value, [0, 1], [navHeight, 0]) }],
-    opacity: interpolate(visible.value, [0, 1], [0, 1]),
+    transform: [{ translateY: 0 }],
+    opacity: 1,
   }));
 
   return (
