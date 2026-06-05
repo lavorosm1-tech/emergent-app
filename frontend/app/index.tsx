@@ -12,6 +12,7 @@ import { api, Match, quickPrediction, quickPredictionFamily, rankPicks, pickFina
 import { colors } from "@/src/theme";
 import BottomNav from "@/src/components/BottomNav";
 import { useBottomNav } from "@/src/components/BottomNavContext";
+import { matchesCache, daysCache, marketStatsCache } from "@/src/utils/cache";
 import { confirmAction } from "@/src/utils/platform";
 import { parseLeagueCode } from "@/src/utils/leagues";
 import { predictionQueue } from "@/src/utils/predictionQueue";
@@ -107,11 +108,6 @@ export default function Home() {
   const isDesktop = Platform.OS === "web" && width >= 900;
   const numCols = 1; // forced single-column list also on desktop (user request)
   const bottomNav = useBottomNav();
-  // Cache snapshot per giorno: evita refetch quando torni da una partita
-  // Le voci scadono dopo 60 secondi.
-  const matchesCache = useRef<Map<string, { matches: Match[]; ts: number }>>(new Map());
-  const daysCache = useRef<{ days: string[]; ts: number } | null>(null);
-  const CACHE_TTL_MS = 60_000; // 60 secondi
 
   const [matches, setMatches] = useState<Match[]>([]);
   const [days, setDays] = useState<string[]>([]);
@@ -146,33 +142,48 @@ export default function Home() {
 
   const load = useCallback(async (day: string | null, force = false) => {
     try {
-      const now = Date.now();
-      // Cache hit per il day specifico → istantaneo, no fetch
-      if (!force && day) {
-        const cached = matchesCache.current.get(day);
-        if (cached && now - cached.ts < CACHE_TTL_MS) {
-          setMatches(cached.matches);
-          if (daysCache.current && now - daysCache.current.ts < CACHE_TTL_MS) {
-            setDays(daysCache.current.days);
+      // STALE-WHILE-REVALIDATE
+      // 1) Se cache esiste, mostro subito (snappy!) e poi rifaccio fetch in background.
+      // 2) Se cache fresca (<5 min) e !force, salto del tutto il fetch.
+      if (day) {
+        const cached = matchesCache.get(day);
+        if (cached) {
+          setMatches(cached);
+          setDays(daysCache.get() || []);
+          if (marketStatsCache.get()) setMarketStats(marketStatsCache.get() || []);
+          if (!force && !matchesCache.isStale(day)) {
+            setLoading(false); setRefreshing(false);
+            return daysCache.get() || [];
           }
-          return daysCache.current?.days || [];
+          // stale → continua fetch in background SENZA spinner
+          setLoading(false);
         }
       }
+
       if (day === null) {
+        const dsCached = daysCache.get();
+        if (dsCached && !daysCache.isStale()) {
+          setDays(dsCached);
+          setMarketStats(marketStatsCache.get() || []);
+          return dsCached;
+        }
         const [ds, stats] = await Promise.all([
           api.days(),
           api.marketStats().catch(() => ({ markets: [], family_totals: {} })),
         ]);
-        daysCache.current = { days: ds, ts: now };
+        daysCache.set(ds);
+        marketStatsCache.set(stats?.markets || []);
         setDays(ds); setMarketStats(stats?.markets || []); return ds;
       }
+
       const [ms, ds, stats] = await Promise.all([
         api.matches(day),
         api.days(),
         api.marketStats().catch(() => ({ markets: [], family_totals: {} })),
       ]);
-      matchesCache.current.set(day, { matches: ms, ts: now });
-      daysCache.current = { days: ds, ts: now };
+      matchesCache.set(day, ms);
+      daysCache.set(ds);
+      marketStatsCache.set(stats?.markets || []);
       setMatches(ms); setDays(ds); setMarketStats(stats?.markets || []); return ds;
     } catch { return []; } finally { setLoading(false); setRefreshing(false); }
   }, []);
@@ -208,14 +219,23 @@ export default function Home() {
 
   useFocusEffect(useCallback(() => {
     if (!didInit) return;
-    // Se abbiamo cache valida per il giorno corrente, NON mostriamo lo spinner
-    // (l'aggiornamento avviene istantaneo da cache, l'app sembra "snappy")
+    // Se cache globale fresca per il giorno corrente → no spinner, no fetch
     const day = selectedDay;
-    const cached = day ? matchesCache.current.get(day) : null;
-    const fresh = cached && Date.now() - cached.ts < CACHE_TTL_MS;
-    if (!fresh) setLoading(true);
+    const hasCache = day ? matchesCache.get(day) !== null : false;
+    const fresh = day ? !matchesCache.isStale(day) : false;
+    if (!hasCache) setLoading(true);
     // Forza show della BottomNav quando entri nella home
     bottomNav.show();
+    if (hasCache && fresh) {
+      // Mostra istantaneo dalla cache, niente fetch
+      setMatches(matchesCache.get(day!) || []);
+      setDays(daysCache.get() || []);
+      setMarketStats(marketStatsCache.get() || []);
+      setLoading(false);
+      // restore scroll
+      requestAnimationFrame(() => { if (savedScrollY > 0) scrollRef.current?.scrollTo({ y: savedScrollY, animated: false }); });
+      return;
+    }
     load(day).then(() => {
       // Restore scroll position after data is loaded
       if (savedScrollY > 0) {
