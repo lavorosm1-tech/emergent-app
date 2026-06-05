@@ -14,9 +14,11 @@ import { confirmAction } from "@/src/utils/platform";
 import { AISTUDIO_FRAMEWORK } from "@/src/book-content";
 import { Platform } from "react-native";
 import { parseLeagueCode } from "@/src/utils/leagues";
+import { useBottomNav } from "@/src/components/BottomNavContext";
 
 export default function Selected() {
   const router = useRouter();
+  const bottomNav = useBottomNav();
   const [items, setItems] = useState<Match[]>([]);
   const [results, setResults] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
@@ -222,7 +224,7 @@ export default function Selected() {
               </View>
             );
           })}
-          <ScrollView contentContainerStyle={styles.list}>
+          <ScrollView contentContainerStyle={styles.list} onScroll={(e) => bottomNav.handleScroll(e.nativeEvent.contentOffset.y)} scrollEventThrottle={16} decelerationRate="fast">
             {items.map((m) => {
               const pre = quickPrediction(m.odds);
               const lc = parseLeagueCode(m.manifestazione);

@@ -107,6 +107,11 @@ export default function Home() {
   const isDesktop = Platform.OS === "web" && width >= 900;
   const numCols = 1; // forced single-column list also on desktop (user request)
   const bottomNav = useBottomNav();
+  // Cache snapshot per giorno: evita refetch quando torni da una partita
+  // Le voci scadono dopo 60 secondi.
+  const matchesCache = useRef<Map<string, { matches: Match[]; ts: number }>>(new Map());
+  const daysCache = useRef<{ days: string[]; ts: number } | null>(null);
+  const CACHE_TTL_MS = 60_000; // 60 secondi
 
   const [matches, setMatches] = useState<Match[]>([]);
   const [days, setDays] = useState<string[]>([]);
@@ -139,16 +144,26 @@ export default function Home() {
     return () => { unsub(); clearInterval(interval); };
   }, []);
 
-  const load = useCallback(async (day: string | null) => {
+  const load = useCallback(async (day: string | null, force = false) => {
     try {
-      // Se day è null, NON caricare tutti i match (4000+ = 2.4 MB lento)
-      // Carica solo days + marketStats. Match verranno fetchati appena
-      // selectedDay viene impostato dall'effect successivo.
+      const now = Date.now();
+      // Cache hit per il day specifico → istantaneo, no fetch
+      if (!force && day) {
+        const cached = matchesCache.current.get(day);
+        if (cached && now - cached.ts < CACHE_TTL_MS) {
+          setMatches(cached.matches);
+          if (daysCache.current && now - daysCache.current.ts < CACHE_TTL_MS) {
+            setDays(daysCache.current.days);
+          }
+          return daysCache.current?.days || [];
+        }
+      }
       if (day === null) {
         const [ds, stats] = await Promise.all([
           api.days(),
           api.marketStats().catch(() => ({ markets: [], family_totals: {} })),
         ]);
+        daysCache.current = { days: ds, ts: now };
         setDays(ds); setMarketStats(stats?.markets || []); return ds;
       }
       const [ms, ds, stats] = await Promise.all([
@@ -156,6 +171,8 @@ export default function Home() {
         api.days(),
         api.marketStats().catch(() => ({ markets: [], family_totals: {} })),
       ]);
+      matchesCache.current.set(day, { matches: ms, ts: now });
+      daysCache.current = { days: ds, ts: now };
       setMatches(ms); setDays(ds); setMarketStats(stats?.markets || []); return ds;
     } catch { return []; } finally { setLoading(false); setRefreshing(false); }
   }, []);
@@ -191,10 +208,15 @@ export default function Home() {
 
   useFocusEffect(useCallback(() => {
     if (!didInit) return;
-    setLoading(true);
+    // Se abbiamo cache valida per il giorno corrente, NON mostriamo lo spinner
+    // (l'aggiornamento avviene istantaneo da cache, l'app sembra "snappy")
+    const day = selectedDay;
+    const cached = day ? matchesCache.current.get(day) : null;
+    const fresh = cached && Date.now() - cached.ts < CACHE_TTL_MS;
+    if (!fresh) setLoading(true);
     // Forza show della BottomNav quando entri nella home
     bottomNav.show();
-    load(selectedDay).then(() => {
+    load(day).then(() => {
       // Restore scroll position after data is loaded
       if (savedScrollY > 0) {
         setTimeout(() => {
@@ -376,7 +398,7 @@ export default function Home() {
           <TouchableOpacity onPress={() => router.push("/strumenti")} style={styles.emptyBtn}><Text style={styles.emptyBtnTxt}>Carica Excel</Text></TouchableOpacity>
         </View>
       ) : (
-        <ScrollView ref={scrollRef} onScroll={(e) => { const y = e.nativeEvent.contentOffset.y; savedScrollY = y; bottomNav.handleScroll(y); }} scrollEventThrottle={16} decelerationRate="fast" keyboardShouldPersistTaps="handled" contentContainerStyle={[styles.list, isDesktop && { paddingHorizontal: 24 }]} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { savedScrollY = 0; setRefreshing(true); load(selectedDay); }} tintColor={colors.primary} />}>
+        <ScrollView ref={scrollRef} onScroll={(e) => { const y = e.nativeEvent.contentOffset.y; savedScrollY = y; bottomNav.handleScroll(y); }} scrollEventThrottle={16} decelerationRate="fast" keyboardShouldPersistTaps="handled" contentContainerStyle={[styles.list, isDesktop && { paddingHorizontal: 24 }]} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { savedScrollY = 0; setRefreshing(true); load(selectedDay, true); }} tintColor={colors.primary} />}>
           {grouped.map(([league, items]) => {
             const lc = parseLeagueCode(league);
             return (
