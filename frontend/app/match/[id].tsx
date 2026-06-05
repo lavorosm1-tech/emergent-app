@@ -761,7 +761,7 @@ const styles = StyleSheet.create({
   },
   iconBtn: { padding: 8 },
   headerTitle: { flex: 1, color: colors.text, fontSize: 14, fontWeight: "800", textAlign: "center", textTransform: "uppercase", letterSpacing: 0.5 },
-  content: { padding: 16, gap: 16 },
+  content: { padding: 16, paddingBottom: 130, gap: 16 },
   hero: { alignItems: "center", paddingVertical: 16, backgroundColor: colors.surface, borderRadius: 16, borderWidth: 1, borderColor: colors.border },
   heroDay: { color: colors.textMuted, fontSize: 11, fontWeight: "700", letterSpacing: 1, marginBottom: 12 },
   team: { color: colors.text, fontSize: 18, fontWeight: "900", textTransform: "uppercase" },

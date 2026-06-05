@@ -43,20 +43,23 @@ export default function BottomNav() {
     }
   }, [path, show]);
 
+  // ============================================================
   // Padding bottom adattivo per piattaforma:
-  // - iOS: usa insets per gestire la home-indicator
-  // - Android: usa max(insets.bottom, 24) per stare SOPRA i tasti di sistema
-  //   (3-button nav, gesture bar). Su Android edge-to-edge insets.bottom può
-  //   essere 0, quindi forziamo un minimo di 24px per non finire coperti.
-  // - Web: 14px standard
+  // - Android edge-to-edge: insets.bottom è SPESSO 0 perché i system buttons
+  //   sono disegnati sopra l'app. Forziamo minimo 56dp (≈ altezza nav 3-button)
+  //   + 18dp di respiro → 74dp totali sotto le label
+  // - iOS: insets.bottom gestisce la home-indicator
+  // - Web: padding minimo
+  // ============================================================
   const isAndroid = Platform.OS === "android";
   const isIOS = Platform.OS === "ios";
+  const ANDROID_SYS_NAV_MIN = 56; // altezza tipica nav 3-button Android
   const safeBottom = isAndroid
-    ? Math.max(insets.bottom, 24) + 14  // Android: sempre sopra i system buttons
+    ? Math.max(insets.bottom, ANDROID_SYS_NAV_MIN) + 18  // SEMPRE sopra i system buttons
     : isIOS
-    ? insets.bottom + 14                 // iOS: rispetta home-indicator
-    : 14;                                // Web: padding minimo
-  const bottomPadding = Math.max(safeBottom, isAndroid ? 38 : 40);
+    ? insets.bottom + 14
+    : 14;
+  const bottomPadding = Math.max(safeBottom, isAndroid ? 74 : 40);
   const navHeight = bottomPadding + 56; // 56 ≈ altezza contenuto tab + paddingTop
 
   // ============================================================
