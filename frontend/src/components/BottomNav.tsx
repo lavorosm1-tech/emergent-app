@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
+import { View, Text, TouchableOpacity, StyleSheet, Platform } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter, usePathname } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -43,13 +43,31 @@ export default function BottomNav() {
     }
   }, [path, show]);
 
-  const bottomPadding = Math.max(insets.bottom + 14, 40);
+  // Padding bottom adattivo per piattaforma:
+  // - iOS: usa insets per gestire la home-indicator
+  // - Android: usa max(insets.bottom, 24) per stare SOPRA i tasti di sistema
+  //   (3-button nav, gesture bar). Su Android edge-to-edge insets.bottom può
+  //   essere 0, quindi forziamo un minimo di 24px per non finire coperti.
+  // - Web: 14px standard
+  const isAndroid = Platform.OS === "android";
+  const isIOS = Platform.OS === "ios";
+  const safeBottom = isAndroid
+    ? Math.max(insets.bottom, 24) + 14  // Android: sempre sopra i system buttons
+    : isIOS
+    ? insets.bottom + 14                 // iOS: rispetta home-indicator
+    : 14;                                // Web: padding minimo
+  const bottomPadding = Math.max(safeBottom, isAndroid ? 38 : 40);
   const navHeight = bottomPadding + 56; // 56 ≈ altezza contenuto tab + paddingTop
 
-  // Animazione translateY: 0 = visibile, navHeight = nascosta sotto schermo
+  // ============================================================
+  // BottomNav SEMPRE VISIBILE (no auto-hide su scroll)
+  // L'utente preferisce la nav fissa per evitare accavallamenti
+  // con i tasti di sistema Android. Il contenuto delle pagine
+  // ha padding-bottom dedicato per non sovrapporsi.
+  // ============================================================
   const animStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: interpolate(visible.value, [0, 1], [navHeight, 0]) }],
-    opacity: interpolate(visible.value, [0, 1], [0, 1]),
+    transform: [{ translateY: 0 }],
+    opacity: 1,
   }));
 
   return (

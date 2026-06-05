@@ -40,7 +40,7 @@ export default function Stats() {
   };
 
   const families = Object.keys(data);
-  const totalGames = families.reduce((s, f) => s + (data[f]?.reduce((x, sc) => x + sc.total, 0) || 0), 0);
+  const totalGames = families.reduce((s, f) => s + (data[f]?.reduce((x, sc) => x + (sc.total || 0), 0) || 0), 0);
   const totalMissed = families.reduce((s, f) => s + (data[f]?.reduce((x, sc) => x + (sc.missed_wins || 0), 0) || 0), 0);
   const CANDIDATE_MIN_MISSED = 5;
 

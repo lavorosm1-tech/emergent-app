@@ -459,6 +459,17 @@ export default function MatchDetail() {
                       <View style={[styles.srTag, { backgroundColor: `${fragColor}22`, borderColor: fragColor }]}>
                         <Text style={[styles.srTagTxt, { color: fragColor }]}>FRAG {frag}%</Text>
                       </View>
+                      {r.ml_adjustment && r.ml_adjustment.type !== "neutral" && (() => {
+                        const isBoost = r.ml_adjustment.type === "boost";
+                        const mlColor = isBoost ? colors.success : colors.danger;
+                        const mlBg = isBoost ? "rgba(16,185,129,0.18)" : "rgba(239,68,68,0.18)";
+                        return (
+                          <View style={[styles.srTag, { backgroundColor: mlBg, borderColor: mlColor }]}>
+                            <Ionicons name={isBoost ? "trending-up" : "trending-down"} size={9} color={mlColor} style={{ marginRight: 2 }} />
+                            <Text style={[styles.srTagTxt, { color: mlColor }]}>ML {r.ml_adjustment.delta} ({r.ml_adjustment.win_rate}%, n={r.ml_adjustment.total})</Text>
+                          </View>
+                        );
+                      })()}
                     </View>
                     {r.broken_by.length > 0 && (
                       <Text style={styles.srBroken}>Rotto da: {r.broken_by.join(", ")}</Text>
