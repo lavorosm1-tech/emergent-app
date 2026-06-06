@@ -195,6 +195,7 @@ def classify_family(odds: Dict) -> Dict:
     oGG = odds.get("odd_GG") or 99
     oNG = odds.get("odd_NG") or 99
     oO15 = odds.get("odd_O15") or 99
+    oU15 = odds.get("odd_U15") or 99
     oO25 = odds.get("odd_O25") or 99
     oU25 = odds.get("odd_U25") or 99
     oU35 = odds.get("odd_U35") or 99
@@ -222,23 +223,72 @@ def classify_family(odds: Dict) -> Dict:
     else:
         offensive_profile = "neutral"
 
-    # Goal floor
-    if oO15 <= 1.30:
-        goal_floor = 2
-    elif oO15 <= 1.50:
-        goal_floor = 1
+    # ============================================================
+    # GOAL FLOOR — con borderline step-DOWN per sicurezza
+    # ============================================================
+    # Principio: in zona borderline (incertezza tra 2 livelli),
+    # prendere il valore PIÙ BASSO per ampliare il range di sicurezza.
+    # - Floor=2 STRICT: O1.5 ≤ 1.20 AND U1.5 ≥ 4.00 (clear over 1.5)
+    # - Floor=2 NORMAL: O1.5 ≤ 1.30 AND U1.5 ≥ 3.00 (es. Slovacchia O1.5=1.30/U1.5=3.10)
+    # - Floor=1 BORDERLINE: scartato (border 2-1 → step DOWN a 0/1 a seconda dei dati)
+    # - Floor=0: tutto il resto (es. Kamatamare O1.5=1.33/U1.5=2.80)
+    # ============================================================
+    if oO15 <= 1.20 and oU15 >= 4.00:
+        goal_floor = 2  # super strict
+    elif oO15 <= 1.30 and oU15 >= 3.00:
+        goal_floor = 2  # strict (Slovacchia case)
     else:
+        # Zona borderline o chiara → step DOWN per sicurezza
+        # P(0-0) può essere ≥ 10%, meglio considerare 0 come floor
         goal_floor = 0
 
-    # Goal ceiling
+    # ============================================================
+    # GOAL CEILING — con borderline step-UP per sicurezza
+    # ============================================================
+    # Principio: in zona borderline (incertezza tra 2 livelli),
+    # prendere il valore PIÙ ALTO per ampliare il range di sicurezza.
+    #
+    # Esempio Slovacchia-Montenegro: U3.5=1.27, O3.5=3.25
+    # → con vecchia logica ceiling=3 (U3.5 ≤ 1.35)
+    # → MA risultato 2-2 = 4 gol → ceiling=3 SBAGLIATO
+    # → Nuova logica: borderline 3-4 → ceiling=4 ✓
+    #
+    # Esempio Myanmar-Guam: U3.5=1.80, O3.5=1.85
+    # → ceiling APERTO (O3.5 < 2.20)
+    #
+    # Esempio borderline 4-open: U3.5=1.70, O3.5=2.30
+    # → step UP a APERTO (massima sicurezza)
+    # ============================================================
     if oU25 <= 1.40:
+        # Ceiling=2 strict
         goal_ceiling = 2
-    elif oU35 <= 1.35:
+        goal_ceiling_open = False
+    elif oU35 <= 1.15:
+        # Ceiling=3 STRICT: U3.5 estremamente sicuro (no borderline)
         goal_ceiling = 3
-    elif oU35 <= 1.85:
+        goal_ceiling_open = False
+    elif oU35 <= 1.40 and oO35 >= 3.00:
+        # BORDERLINE 3-4: U3.5 forte ma non estremo, O3.5 conferma tetto
+        # → step UP a 4 per sicurezza (Slovacchia case 1.27/3.25)
         goal_ceiling = 4
+        goal_ceiling_open = False
+    elif oU35 <= 1.85 and oO35 >= 2.50:
+        # Ceiling=4 NORMAL: doppia conferma robusta
+        goal_ceiling = 4
+        goal_ceiling_open = False
+    elif oU35 <= 1.85 and oO35 >= 2.20:
+        # BORDERLINE 4-open: O3.5 in zona grigia (2.20-2.50)
+        # → step UP a APERTO per sicurezza
+        goal_ceiling = 7
+        goal_ceiling_open = True
     else:
-        goal_ceiling = 5
+        # Tetto APERTO chiaro: O3.5 < 2.20 (Myanmar case)
+        goal_ceiling = 7
+        goal_ceiling_open = True
+        # Usiamo 7 come valore numerico per coerenza math (MG 2-7 = open),
+        # ma il flag goal_ceiling_open=True segnala "no limite".
+        goal_ceiling = 7
+        goal_ceiling_open = True
 
     goal_compression = "high" if (oU35 <= 1.40 and oO35 >= 2.80) else (
         "medium" if oU35 <= 1.70 else "low"
@@ -251,7 +301,14 @@ def classify_family(odds: Dict) -> Dict:
     is_offensive = (oO25 <= 1.85 or oGG <= 1.85)
     is_closed = (oU25 <= 1.70 or oNG <= 1.70)
 
-    if not has_favorite and is_offensive and goal_ceiling <= 4:
+    # PRIORITÀ: tetto aperto + favorita → DOMINANZA_OVER (no compromessi)
+    # Questo previene il caso Myanmar (favorita estrema + tetto aperto
+    # classificato erroneamente come DOMINANZA_CHIUSA).
+    if goal_ceiling_open and has_favorite:
+        family = "DOMINANZA_OVER"
+    elif goal_ceiling_open and is_offensive:
+        family = "EQUILIBRATA_OFFENSIVA"
+    elif not has_favorite and is_offensive and goal_ceiling <= 4:
         family = "EQUILIBRATA_OFFENSIVA"
     elif not has_favorite and is_closed:
         family = "EQUILIBRATA_CHIUSA"
@@ -259,7 +316,9 @@ def classify_family(odds: Dict) -> Dict:
     # (es. quota 1.24 + NG 1.75 + U3.5 1.50) → clean sheet + range controllato
     elif extreme_fav and oNG <= 1.95 and oU35 <= 1.65:
         family = "DOMINANZA_CHIUSA"
-    elif has_favorite and goal_ceiling <= 3:
+    # DOMINANZA_CON_TETTO: favorita + ceiling chiuso ≤ 4
+    # (include sia il caso "tight tetto 3" che "borderline step-up 4")
+    elif has_favorite and goal_ceiling <= 4 and not goal_ceiling_open:
         family = "DOMINANZA_CON_TETTO"
     elif has_favorite and oO25 <= 1.65:
         family = "DOMINANZA_OVER"
@@ -275,7 +334,8 @@ def classify_family(odds: Dict) -> Dict:
         "goal_compression": goal_compression,
         "goal_floor": goal_floor,
         "goal_ceiling": goal_ceiling,
-        "goal_range": f"{goal_floor}-{goal_ceiling}",
+        "goal_ceiling_open": goal_ceiling_open,
+        "goal_range": f"{goal_floor}-{'∞' if goal_ceiling_open else goal_ceiling}",
         "lambda_home": derive_lambdas(odds)[0],
         "lambda_away": derive_lambdas(odds)[1],
     }
@@ -546,6 +606,45 @@ def structural_analysis(odds: Dict, min_odd: float = 1.40, ml_scores: Optional[D
                 score *= 0.50
             if "MG 2-4 OSPITE" in mu and lam_a < 1.0:
                 score *= 0.50
+
+        # ============================================================
+        # TETTO APERTO (fix bug Myanmar 7-0): O3.5 < 2.20 → 4+ gol probabili
+        # ============================================================
+        # Quando il tetto è "aperto" (goal_ceiling_open=True) il mercato
+        # vede ≥45% di chance ≥4 gol → penalty Under-based, boost Over-based.
+        if structure.get("goal_ceiling_open"):
+            mu_open = m.upper()
+            # Penalty Under-based puri (forte: -45%)
+            if mu_open in ("U3.5", "U2.5"):
+                score *= 0.55
+            # Penalty MG totali con upper bound ≤ 4 (rotti da 5-0/6-0)
+            if "MG" in mu_open and "TOTALI" in mu_open:
+                rng_o = _re.search(r"(\d+)\s*-\s*(\d+)", m)
+                if rng_o:
+                    hi_o = int(rng_o.group(2))
+                    if hi_o <= 4:
+                        score *= 0.65
+                    elif hi_o == 5:
+                        score *= 0.85
+            # Penalty MG 2-3 / 1-3 casa/ospite (rotti dal team forte)
+            if "MG 2-3" in mu_open or "MG 1-3" in mu_open:
+                score *= 0.70
+            # Penalty combo DC + Under
+            if "+ U3.5" in m or "+ U2.5" in m:
+                score *= 0.65
+            # BOOST Over puri + GG (+30%)
+            if mu_open in ("O2.5", "O3.5", "GG"):
+                score *= 1.30
+            # BOOST combo Over (+25%)
+            if "+ O2.5" in m or "+ O1.5" in m:
+                score *= 1.25
+            # BOOST MG totali con upper bound 6+ (range aperti)
+            if "MG" in mu_open and "TOTALI" in mu_open:
+                rng_o2 = _re.search(r"(\d+)\s*-\s*(\d+)", m)
+                if rng_o2:
+                    hi_o2 = int(rng_o2.group(2))
+                    if hi_o2 >= 6:
+                        score *= 1.20
 
         ranked.append({
             "market": m,

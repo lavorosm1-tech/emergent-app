@@ -70,6 +70,7 @@ export type StructuralStructure = {
   goal_compression: "high" | "medium" | "low";
   goal_floor: number;
   goal_ceiling: number;
+  goal_ceiling_open?: boolean;
   goal_range: string;
   lambda_home: number;
   lambda_away: number;
@@ -720,5 +721,199 @@ export function buildFinalVerdict(
     });
   out.sort((a, b) => b.score - a.score);
   return out;
+}
+
+// ============================================================
+// FILTRO ANTI-CONTRADDIZIONE per ALTERNATIVE CONCORDI
+// ============================================================
+// Date una giocata principale (PICK) e una lista di alternative, ritorna
+// le alternative COERENTI fra loro e col PICK. Una alternativa viene
+// scartata se:
+//   1. Contraddice il PICK o un'alternativa già accettata
+//   2. Viola i vincoli strutturali (floor/ceiling)
+//
+// Regole di contraddizione:
+//   • Esiti opposti: 1↔X, 1↔2, 1↔X2, 2↔X, 2↔1X, 1X↔X2, 1X↔12, X2↔12, X↔12
+//   • GG ↔ NG (e qualsiasi combo con GG vs combo con NG)
+//   • Any Under ↔ Any Over (direzioni opposte)
+//   • MG con range diversi sulla stessa categoria (TOTALI/CASA/OSPITE)
+//   • DC + Over ↔ DC + Under (combo direzionali opposte)
+//
+// Vincoli strutturali:
+//   • floor=0 → no MG che parte da 2+ (es. MG 2-4 totali)
+//   • ceiling_open → no Under ≤ 3.5 puri o combo
+// ============================================================
+
+const _hasUnderRegex = /\bU\d(?:\.\d)?\b|\+\s*U\d(?:\.\d)?/i;
+const _hasOverRegex = /\bO\d(?:\.\d)?\b|\+\s*O\d(?:\.\d)?/i;
+const _hasGGRegex = /\bGG\b|\+\s*GG/i;
+const _hasNGRegex = /\bNG\b|\+\s*NG/i;
+const _mgRangeRegex = /MG\s+(\d+)\s*-\s*(\d+)(?:\s+(TOTALI|CASA|OSPITE))?/i;
+
+function _hasUnder(m: string) { return _hasUnderRegex.test(m); }
+function _hasOver(m: string) { return _hasOverRegex.test(m); }
+function _hasGG(m: string) { return _hasGGRegex.test(m); }
+function _hasNG(m: string) { return _hasNGRegex.test(m); }
+
+const _OPPOSITES: Array<[string, string]> = [
+  ["1", "X"], ["1", "2"], ["1", "X2"],
+  ["2", "X"], ["2", "1X"],
+  ["1X", "X2"], ["1X", "12"], ["X2", "12"], ["X", "12"],
+  ["GG", "NG"],
+  ["O1.5", "U1.5"], ["O2.5", "U2.5"], ["O3.5", "U3.5"],
+];
+
+/** Estrae il segno base (1/X/2/1X/X2/12) dal mercato, undefined se non trovato. */
+function _extractSign(m: string): string | undefined {
+  const norm = m.trim().toUpperCase().replace(/\s+/g, " ");
+  // Mercato secco
+  if (/^(1X|X2|12|1|X|2)$/.test(norm.split(" ")[0])) return norm.split(" ")[0];
+  // Combo "X + Y" o "DC X + Y"
+  const m2 = norm.match(/^(DC\s+)?(1X|X2|12|1|X|2)\s*\+/);
+  if (m2) return m2[2];
+  return undefined;
+}
+
+export function areMarketsContradictory(a: string, b: string): boolean {
+  const A = a.trim().toUpperCase();
+  const B = b.trim().toUpperCase();
+  if (A === B) return false;
+
+  // 1) Opposti diretti (puri)
+  for (const [x, y] of _OPPOSITES) {
+    if ((A === x && B === y) || (A === y && B === x)) return true;
+  }
+
+  // 2) Segni base incompatibili (anche dentro combo)
+  const sA = _extractSign(A);
+  const sB = _extractSign(B);
+  if (sA && sB && sA !== sB) {
+    for (const [x, y] of _OPPOSITES.slice(0, 9)) {
+      if ((sA === x && sB === y) || (sA === y && sB === x)) return true;
+    }
+  }
+
+  // 3) Direzioni Under vs Over (qualsiasi soglia → direzioni opposte)
+  if (_hasUnder(A) && _hasOver(B)) return true;
+  if (_hasOver(A) && _hasUnder(B)) return true;
+
+  // 4) GG vs NG (incluse combo)
+  if (_hasGG(A) && _hasNG(B)) return true;
+  if (_hasNG(A) && _hasGG(B)) return true;
+
+  // 5) MG con range diversi sulla stessa categoria
+  const mA = A.match(_mgRangeRegex);
+  const mB = B.match(_mgRangeRegex);
+  if (mA && mB) {
+    const catA = (mA[3] || "TOTALI").toUpperCase();
+    const catB = (mB[3] || "TOTALI").toUpperCase();
+    if (catA === catB) {
+      const aLo = +mA[1], aHi = +mA[2];
+      const bLo = +mB[1], bHi = +mB[2];
+      if (aLo !== bLo || aHi !== bHi) return true;
+    }
+  }
+
+  return false;
+}
+
+/** Verifica se un mercato VIOLA i vincoli strutturali (floor/ceiling).
+ * Regole STRETTE (richiesta utente):
+ *   • MG [lo-hi]: valido solo se `lo ≤ floor + 1` AND (open ? hi ≥ 6 : hi ≥ ceiling)
+ *     - es. floor=0,ceiling=3: "MG 2-4" → lo=2 > 1 → INVALIDO
+ *     - es. floor=2,ceiling=4: "MG 1-3" → hi=3 < 4 → INVALIDO
+ *     - es. floor=2,open=true: "MG 2-4" → ceiling aperto ma hi=4 < 6 → INVALIDO
+ *   • U(N.5): valido solo se ceiling chiuso e N == ceiling (es. U3.5 ok con ceiling=3)
+ *     - se ceiling_open: tutti gli Under sono invalidi
+ *   • O(N.5): valido solo se ceiling > N (es. O3.5 ok solo se tetto ≥ 4 o aperto)
+ *     - se floor ≤ N AND ceiling ≤ N AND non-open → ridondante/incoerente
+ *   • Combo (DC + U/O o 1/X/2 + U/O) seguono le stesse regole sulla parte U/O
+ */
+export function violatesStructure(market: string, floor: number, ceiling: number, ceilingOpen: boolean): boolean {
+  const M = market.trim().toUpperCase();
+
+  // ============ MG RANGE ============
+  const mg = M.match(_mgRangeRegex);
+  if (mg) {
+    const mgLo = +mg[1];
+    const mgHi = +mg[2];
+    // Lower bound: MG deve includere il floor (lo ≤ floor+1)
+    if (mgLo > floor + 1) return true;
+    // Upper bound:
+    if (ceilingOpen) {
+      // ceiling aperto: serve un upper alto (≥ 6) o open
+      if (mgHi <= 5) return true;
+    } else {
+      // ceiling chiuso: MG deve includere il ceiling (hi ≥ ceiling)
+      if (mgHi < ceiling) return true;
+    }
+  }
+
+  // ============ UNDER ============
+  // U(N.5) - estrae N dal mercato (puro o combo)
+  const underMatch = M.match(/U\s*(\d+)\.5/);
+  if (underMatch) {
+    const u = +underMatch[1];
+    if (ceilingOpen) {
+      // Ceiling aperto: TUTTI gli under sono incoerenti
+      return true;
+    }
+    // U(N.5) valido se N >= ceiling - 1 (es. U3.5 ok con ceiling=3 o 4)
+    // Più stretto: U deve essere ESATTAMENTE al ceiling chiuso
+    if (u < ceiling - 1) return true; // troppo stretto rispetto al ceiling
+    if (u > ceiling) return true; // U non taglia (es. U3.5 quando ceiling=2: già garantito, no value)
+  }
+
+  // ============ OVER ============
+  const overMatch = M.match(/O\s*(\d+)\.5/);
+  if (overMatch) {
+    const o = +overMatch[1];
+    // Over valido se floor potrebbe superare la soglia
+    if (!ceilingOpen) {
+      // Ceiling chiuso a C: O(N.5) richiede C > N (altrimenti impossibile)
+      if (o >= ceiling) return true;
+      // E richiede floor ≤ N (altrimenti già garantito, no value)
+      if (floor > o) return true;
+    }
+    // Ceiling aperto: O sempre validi
+  }
+
+  return false;
+}
+
+/**
+ * Filtra le alternative scartando quelle in contraddizione col PICK
+ * o tra loro, o che violano i vincoli strutturali.
+ * Ritorna max `limit` alternative coerenti.
+ */
+export function filterCoherentAlternatives(
+  pick: VerdictPick,
+  alternatives: VerdictPick[],
+  structure?: { goal_floor: number; goal_ceiling: number; goal_ceiling_open?: boolean } | null,
+  limit: number = 3,
+): VerdictPick[] {
+  const accepted: VerdictPick[] = [];
+  const floor = structure?.goal_floor ?? 0;
+  const ceiling = structure?.goal_ceiling ?? 7;
+  const open = !!structure?.goal_ceiling_open;
+
+  for (const alt of alternatives) {
+    if (accepted.length >= limit) break;
+    // Skip se viola vincoli strutturali (floor/ceiling)
+    if (violatesStructure(alt.market, floor, ceiling, open)) continue;
+    // Skip se contraddice il PICK principale
+    if (areMarketsContradictory(pick.market, alt.market)) continue;
+    // Skip se contraddice un'alternativa già accettata
+    let conflicts = false;
+    for (const acc of accepted) {
+      if (areMarketsContradictory(acc.market, alt.market)) {
+        conflicts = true;
+        break;
+      }
+    }
+    if (conflicts) continue;
+    accepted.push(alt);
+  }
+  return accepted;
 }
 
