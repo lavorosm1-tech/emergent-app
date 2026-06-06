@@ -49,7 +49,7 @@ export default function QuotePage() {
     </View>
   );
 
-  const ora = match.ora || "";
+  const ora = match.time || "";
   const giorno = match.day || "";
 
   return (
@@ -60,8 +60,8 @@ export default function QuotePage() {
         </TouchableOpacity>
         <View style={{ flex: 1 }}>
           {!!match.manifestazione && <Text style={styles.headerLeague}>{match.manifestazione}</Text>}
-          <Text style={styles.headerTeams} numberOfLines={1}>
-            {match.casa} <Text style={styles.headerVs}>vs</Text> {match.ospite}
+          <Text style={styles.headerTeams} numberOfLines={2}>
+            {match.squadra1} <Text style={styles.headerVs}>vs</Text> {match.squadra2}
           </Text>
           {(giorno || ora) ? <Text style={styles.headerTime}>{giorno}{giorno && ora ? " · " : ""}{ora}</Text> : null}
         </View>
@@ -117,12 +117,14 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: colors.border,
   },
   famName: { color: colors.textDim, fontSize: 10, fontWeight: "800", letterSpacing: 0.5, marginBottom: 6 },
-  famGrid: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
+  famGrid: { flexDirection: "row", gap: 6 },
   famCard: {
-    paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8,
+    flex: 1,
+    paddingHorizontal: 8, paddingVertical: 10, borderRadius: 8,
     backgroundColor: colors.background,
     borderWidth: 1, borderColor: colors.border,
-    minWidth: 70, alignItems: "center", position: "relative",
+    alignItems: "center", position: "relative",
+    minHeight: 56,
   },
   famCardTop: { backgroundColor: colors.primary, borderColor: colors.primary },
   famLbl: { color: colors.textDim, fontSize: 10, fontWeight: "700" },
