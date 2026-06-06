@@ -3,7 +3,7 @@ import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator,
   TextInput, Alert,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -19,6 +19,9 @@ export default function MatchDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const scrollMem = useScrollMemory(`/match/${id ?? "x"}`);
+  const insets = useSafeAreaInsets();
+  // Altezza approssimativa della BottomNav per posizionare la barra fissa sopra
+  const navHeight = insets.bottom + 56 + 12;
   const [match, setMatch] = useState<Match | null>(null);
   const [prediction, setPrediction] = useState<Prediction | null>(null);
   const [loading, setLoading] = useState(true);
@@ -430,30 +433,7 @@ export default function MatchDetail() {
           </View>
         )}
 
-        {/* ============ QUICK ACTIONS (Genera/Ranking/Risultato) ============ */}
-        {structural?.structure && (
-          <View style={styles.quickActions}>
-            {!prediction && (
-              <TouchableOpacity
-                onPress={() => runPrediction(false)}
-                disabled={aiPending}
-                style={[styles.qaBtnPrimary, aiPending && { opacity: 0.5 }]}
-                activeOpacity={0.8}
-              >
-                <Ionicons name="sparkles" size={16} color="#000" />
-                <Text style={styles.qaBtnPrimaryTxt}>{aiPending ? "..." : "Genera Pronostico"}</Text>
-              </TouchableOpacity>
-            )}
-            <TouchableOpacity
-              onPress={() => router.push(`/risultato/${id}`)}
-              style={styles.qaBtnSecondary}
-              activeOpacity={0.8}
-            >
-              <Ionicons name="checkmark-done-circle" size={16} color={colors.primary} />
-              <Text style={styles.qaBtnSecondaryTxt}>Risultato + Quote</Text>
-            </TouchableOpacity>
-          </View>
-        )}
+        {/* ============ QUICK ACTIONS — RIMOSSI (ora nella BARRA FISSA in basso) ============ */}
 
         {/* ============ CLUSTER RISULTATI (Top probabili) ============ */}
         {structural?.cluster && structural.cluster.length > 0 && (() => {
@@ -774,74 +754,49 @@ export default function MatchDetail() {
               </TouchableOpacity>
             </>
           ) : (
-            <TouchableOpacity
-              testID="gen-ai"
-              onPress={() => runPrediction(false)}
-              disabled={aiPending}
-              style={styles.aiBtn}
-              activeOpacity={0.85}
-            >
-              <LinearGradient
-                colors={[colors.primaryLight, colors.primaryDark]}
-                start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
-                style={styles.aiBtnInner}
-              >
-                {aiPending ? (
-                  <>
-                    <ActivityIndicator color="#FFF" />
-                    <Text style={[styles.aiBtnTxt, { marginLeft: 8 }]}>Generazione in corso…</Text>
-                  </>
-                ) : (
-                  <>
-                    <Ionicons name="sparkles" size={16} color="#FFF" />
-                    <Text style={styles.aiBtnTxt}>Genera Pronostico</Text>
-                  </>
-                )}
-              </LinearGradient>
-            </TouchableOpacity>
+            // Quando non c'è ancora pronostico: mostra solo placeholder, il bottone
+            // "Genera Pronostico AI" sta nella BARRA FISSA in basso (vedi sotto).
+            <View style={styles.aiPlaceholder}>
+              <Ionicons name="sparkles-outline" size={28} color={colors.textDim} />
+              <Text style={styles.aiPlaceholderTxt}>Tocca "Pronostico AI" in basso per generarlo</Text>
+            </View>
           )}
         </View>
 
-        {/* Market families */}
-        <Text style={styles.sectionTitle}>QUOTE PER FAMIGLIA DI MERCATO</Text>
-        {families.map((fam) => fam.items.length > 0 && (
-          <View key={fam.name} style={styles.famBlock}>
-            <Text style={styles.famName}>{fam.name}</Text>
-            <View style={styles.famGrid}>
-              {fam.items.map((it, idx) => {
-                const isTop = idx === fam.topIdx;
-                return (
-                <View key={it.key} style={[styles.famCard, isTop && styles.famCardTop]}>
-                  <Text style={[styles.famLbl, isTop && { color: "#FFE4D9" }]}>{it.label}</Text>
-                  <Text style={[styles.famVal, isTop && { color: "#FFF" }]}>
-                    {it.value!.toFixed(2)}
-                  </Text>
-                  {it.estimated && (
-                    <Text style={[styles.famEst, isTop && { color: "#FFE4D9" }]}>(stima)</Text>
-                  )}
-                  {isTop && (
-                    <View style={styles.topMark}>
-                      <Ionicons name="star" size={9} color="#FFF" />
-                    </View>
-                  )}
-                </View>
-                );
-              })}
-            </View>
-          </View>
-        ))}
-
-        {/* Result input */}
-        <View style={styles.resultBlock}>
-          <Text style={styles.sectionTitle}>RISULTATO {match.result ? "(MODIFICABILE)" : ""}</Text>
-          <ScoreInput value={result} onChange={setResult} size="md" testIDPrefix="result" />
-          <TouchableOpacity testID="save-result" onPress={saveResult} style={styles.saveResultBtn}>
-            <Ionicons name="save" size={16} color="#FFF" />
-            <Text style={styles.saveResultTxt}>Salva Risultato</Text>
-          </TouchableOpacity>
-        </View>
-        <View style={{ height: 40 }} />
+        <View style={{ height: 12 }} />
       </ScrollView>
+
+      {/* ============================================================
+          BARRA FISSA CONTESTUALE (sopra la BottomNav)
+          - Sempre visibile mentre si è in /match/[id]
+          - 2 azioni: "Pronostico AI" + "Risultato + Quote"
+          - I tasti NON si nascondono mai (no auto-hide)
+       ============================================================ */}
+      <View style={[styles.fixedActionBar, { bottom: navHeight }]}>
+        <TouchableOpacity
+          onPress={() => runPrediction(prediction ? true : false)}
+          disabled={aiPending}
+          style={[styles.fabAction, styles.fabActionPrimary, aiPending && { opacity: 0.5 }]}
+          activeOpacity={0.8}
+        >
+          {aiPending ? (
+            <ActivityIndicator color="#000" size="small" />
+          ) : (
+            <Ionicons name="sparkles" size={16} color="#000" />
+          )}
+          <Text style={styles.fabActionTxt}>
+            {aiPending ? "..." : prediction ? "Rigenera AI" : "Pronostico AI"}
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          onPress={() => router.push(`/risultato/${id}`)}
+          style={[styles.fabAction, styles.fabActionSecondary]}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="checkmark-done-circle" size={16} color={colors.primary} />
+          <Text style={[styles.fabActionTxt, { color: colors.primary }]}>Risultato + Quote</Text>
+        </TouchableOpacity>
+      </View>
     </SafeAreaView>
   );
 }
@@ -854,7 +809,7 @@ const styles = StyleSheet.create({
   },
   iconBtn: { padding: 8 },
   headerTitle: { flex: 1, color: colors.text, fontSize: 14, fontWeight: "800", textAlign: "center", textTransform: "uppercase", letterSpacing: 0.5 },
-  content: { padding: 16, paddingBottom: 130, gap: 16 },
+  content: { padding: 16, paddingBottom: 200, gap: 16 },
   hero: { alignItems: "center", paddingVertical: 16, backgroundColor: colors.surface, borderRadius: 16, borderWidth: 1, borderColor: colors.border },
   heroDay: { color: colors.textMuted, fontSize: 11, fontWeight: "700", letterSpacing: 1, marginBottom: 12 },
   team: { color: colors.text, fontSize: 18, fontWeight: "900", textTransform: "uppercase" },
@@ -990,6 +945,40 @@ const styles = StyleSheet.create({
     borderRadius: 12,
   },
   qaBtnSecondaryTxt: { color: colors.primary, fontWeight: "800", fontSize: 13 },
+
+  // ===== BARRA FISSA AZIONI (sopra BottomNav, contestuale match page) =====
+  fixedActionBar: {
+    position: "absolute",
+    left: 12,
+    right: 12,
+    flexDirection: "row",
+    gap: 8,
+    zIndex: 20,
+  },
+  fabAction: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    paddingVertical: 12,
+    borderRadius: 12,
+  },
+  fabActionPrimary: {
+    backgroundColor: colors.primary,
+  },
+  fabActionSecondary: {
+    backgroundColor: "rgba(20,20,20,0.92)",
+    borderWidth: 1,
+    borderColor: colors.primary,
+  },
+  fabActionTxt: { color: "#000", fontWeight: "900", fontSize: 13 },
+  aiPlaceholder: {
+    alignItems: "center",
+    paddingVertical: 16,
+    gap: 6,
+  },
+  aiPlaceholderTxt: { color: colors.textDim, fontSize: 12, fontStyle: "italic" },
   structLambda: { color: colors.aiText, fontWeight: "900" },
 
   // ===== CLUSTER RISULTATI =====
