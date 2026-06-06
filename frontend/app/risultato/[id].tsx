@@ -117,7 +117,7 @@ export default function RisultatoPage() {
   );
 
   // Orario partita
-  const ora = match.ora || (match.kickoff_iso ? new Date(match.kickoff_iso).toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" }) : "");
+  const ora = match.time || "";
   const giorno = match.day || "";
 
   return (
@@ -130,7 +130,7 @@ export default function RisultatoPage() {
         <View style={{ flex: 1 }}>
           {!!match.manifestazione && <Text style={styles.headerLeague}>{match.manifestazione}</Text>}
           <Text style={styles.headerTeams} numberOfLines={1}>
-            {match.casa} <Text style={styles.headerVs}>vs</Text> {match.ospite}
+            {match.squadra1} <Text style={styles.headerVs}>vs</Text> {match.squadra2}
           </Text>
           {(giorno || ora) ? (
             <Text style={styles.headerTime}>{giorno}{giorno && ora ? " · " : ""}{ora}</Text>
