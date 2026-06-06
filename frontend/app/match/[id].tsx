@@ -8,7 +8,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 
-import { api, Match, Prediction, MARKET_FAMILIES, ODD_LABELS, OddsKey, quickPredictionFamily, rankPicks, StructuralAnalysis, buildFinalVerdict, VerdictPick, getMarketOdd } from "@/src/api";
+import { api, Match, Prediction, MARKET_FAMILIES, ODD_LABELS, OddsKey, quickPredictionFamily, rankPicks, StructuralAnalysis, buildFinalVerdict, VerdictPick, getMarketOdd, filterCoherentAlternatives, violatesStructure } from "@/src/api";
 import { colors } from "@/src/theme";
 import { ScoreInput } from "@/src/components/ScoreInput";
 import { FamilyLegendModal } from "@/src/components/FamilyLegendModal";
@@ -187,15 +187,30 @@ export default function MatchDetail() {
           const fam = quickPredictionFamily(match.odds);
           const llmMarkets = prediction?.playable_markets?.map((p) => p.market) || (prediction?.main_prediction ? [prediction.main_prediction] : []);
           const preRanked = rankPicks(fam, llmMarkets, marketStats);
-          const verdict = buildFinalVerdict(structural, preRanked, prediction?.playable_markets, match.odds);
+          const verdictRaw = buildFinalVerdict(structural, preRanked, prediction?.playable_markets, match.odds);
+          if (verdictRaw.length === 0) return null;
+          // ============================================================
+          // FILTRO STRUTTURALE: scarta picks che violano floor/ceiling
+          // (es. MG 2-4 con floor=0, MG 1-3 con floor=2-tetto=4, U2.5 con tetto aperto)
+          // Manteniamo il PICK migliore CONSENTITO, fallback al primo se filtraggio
+          // azzera tutto (caso edge raro).
+          // ============================================================
+          const violatesFn = (m: string) => !!structural?.structure && violatesStructure(
+            m,
+            structural.structure.goal_floor,
+            structural.structure.goal_ceiling,
+            !!structural.structure.goal_ceiling_open,
+          );
+          const verdict = verdictRaw.filter((v) => !violatesFn(v.market));
           if (verdict.length === 0) return null;
           const top = verdict[0];
-          // Alternative ordinate per concordanza DESC, poi score DESC:
-          // 3/3 prima, poi 2/3, poi 1/3 (a parità lo score decide)
-          const alts = verdict
+          // Alternative ordinate per concordanza DESC, poi score DESC.
+          // POI filtrate per coerenza: scartano contraddizioni col PICK e
+          // violazioni floor/ceiling (es. MG 2-X se floor=0, U3.5 se tetto aperto)
+          const altsRaw = verdict
             .slice(1)
-            .sort((a, b) => (b.concordance - a.concordance) || (b.score - a.score))
-            .slice(0, 3);
+            .sort((a, b) => (b.concordance - a.concordance) || (b.score - a.score));
+          const alts = filterCoherentAlternatives(top, altsRaw, structural?.structure, 3);
 
           const concColor = top.concordance === 3 ? colors.success
             : top.concordance === 2 ? colors.primary : colors.textDim;
@@ -313,10 +328,22 @@ export default function MatchDetail() {
                           {a.odd && a.odd > 0 ? <Text style={styles.verdictAltOdd}>@ {a.odd.toFixed(2)}</Text> : null}
                           <Text style={[styles.verdictConcMini, { color: a.concordance === 3 ? colors.success : a.concordance === 2 ? colors.primary : colors.textDim }]}>{a.concordance}/3</Text>
                           {a.vetoed && (
-                            <View style={styles.vetoTag}>
-                              <Ionicons name="warning" size={9} color="#FFF" />
-                              <Text style={styles.vetoTxt}>VETO STRUTTURALE</Text>
-                            </View>
+                            <TouchableOpacity
+                              onPress={() => confirmAction({
+                                title: "VETO STRUTTURALE",
+                                message: "Il motore matematico (Poisson) ha RIFIUTATO questo mercato perché non rientra nei TOP-10 strutturali. L'AI e/o il Pre-pronostico lo suggeriscono ma il calcolo dice che è strutturalmente debole: la matematica delle quote indica che ha alta probabilità di essere rotto da un risultato fuori range.\n\nIn pratica: l'AI propone, la matematica veta.",
+                                confirmText: "Ho capito",
+                                cancelText: "Chiudi",
+                                onConfirm: () => {},
+                              })}
+                              activeOpacity={0.7}
+                            >
+                              <View style={styles.vetoTag}>
+                                <Ionicons name="warning" size={9} color="#FFF" />
+                                <Text style={styles.vetoTxt}>VETO STRUTTURALE</Text>
+                                <Ionicons name="information-circle-outline" size={10} color="#FFF" style={{ marginLeft: 2 }} />
+                              </View>
+                            </TouchableOpacity>
                           )}
                         </View>
                         <View style={{ marginTop: 4 }}>{rankBadges(a)}</View>
@@ -342,15 +369,36 @@ export default function MatchDetail() {
             <View style={styles.structGrid}>
               <View style={styles.structCell}>
                 <Text style={styles.structLbl}>DOMINANZA</Text>
-                <Text style={styles.structVal}>{structural.structure.dominance.replace(/_/g, " ")}</Text>
+                <Text style={styles.structVal}>{(() => {
+                  const d = structural.structure.dominance;
+                  if (d === "strong_home") return "🏠 CASA NETTA";
+                  if (d === "light_home") return "🏠 casa leggera";
+                  if (d === "strong_away") return "✈️ OSPITE NETTA";
+                  if (d === "light_away") return "✈️ ospite leggera";
+                  return "⚖️ equilibrio";
+                })()}</Text>
+                <Text style={styles.structSub}>chi è favorito</Text>
               </View>
               <View style={styles.structCell}>
                 <Text style={styles.structLbl}>PROFILO</Text>
-                <Text style={styles.structVal}>{structural.structure.offensive_profile.replace(/_/g, " ")}</Text>
+                <Text style={styles.structVal}>{(() => {
+                  const p = structural.structure.offensive_profile;
+                  if (p === "reciprocity_high") return "💥 ESPLOSIVA";
+                  if (p === "moderate") return "⚽ equilibrata";
+                  if (p === "defensive") return "🛡️ DIFENSIVA";
+                  return "▫ neutra";
+                })()}</Text>
+                <Text style={styles.structSub}>stile gol attesi</Text>
               </View>
               <View style={styles.structCell}>
                 <Text style={styles.structLbl}>COMPRESSIONE</Text>
-                <Text style={styles.structVal}>{structural.structure.goal_compression}</Text>
+                <Text style={styles.structVal}>{(() => {
+                  const c = structural.structure.goal_compression;
+                  if (c === "high") return "🎯 alta";
+                  if (c === "medium") return "📊 media";
+                  return "🌐 bassa";
+                })()}</Text>
+                <Text style={styles.structSub}>quanto è stretto il range</Text>
               </View>
             </View>
             <View style={styles.structGrid}>
@@ -491,7 +539,21 @@ export default function MatchDetail() {
           const fam = quickPredictionFamily(match.odds);
           if (fam.length === 0) return null;
           const llmMarkets = match.playable_markets?.map((p) => p.market) || (match.main_prediction ? [match.main_prediction] : []);
-          const ranked = rankPicks(fam, llmMarkets, marketStats);
+          const rankedRaw = rankPicks(fam, llmMarkets, marketStats);
+          // ============================================================
+          // FILTRO STRUTTURALE: scarta mercati che violano floor/ceiling
+          // (es. MG 2-4 quando floor=0, MG 1-3 quando floor=2-tetto=4,
+          // U2.5 quando ceiling aperto, MG con range non coerente)
+          // ============================================================
+          const ranked = structural?.structure
+            ? rankedRaw.filter((p) => !violatesStructure(
+                p.market,
+                structural.structure.goal_floor,
+                structural.structure.goal_ceiling,
+                !!structural.structure.goal_ceiling_open,
+              ))
+            : rankedRaw;
+          if (ranked.length === 0) return null;
           return (
             <View style={styles.preBlock}>
               <View style={styles.preHeader}>
