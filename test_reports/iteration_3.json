@@ -1,0 +1,39 @@
+{
+  "summary": "Backend testing of the balanced-pick fix in cluster_engine.py (rows 571-595) complete. ALL 46/46 pytest tests PASS (100%) — 12 new + 34 pre-existing regression tests. Verified the four claims of the fix: (1) on a BALANCED match (gap |λ_h - λ_a| < 0.30 — Columbus-Connecticut style, computed λ_h=1.295 / λ_a=1.335, gap=0.04) the main pick is NO LONGER 1X/X2/12 (now resolves to 'MG 1-3 totali') and neither 1X nor X2 appears in the top-3 of the structural ranking; (2) on a STRONG HOME match (λ_h-λ_a >= 0.30, odds 1=1.55/X=3.80/2=5.50) the pick remains home-oriented (1 / 1X / 1+O1.5 / DC 1X+O...) — no away market in top; (3) on a STRONG AWAY match the pick is symmetric away-oriented; (4) regression on POST /api/matches/{id}/predict (Emergent LLM cluster injection path) returns a valid pick with family + main_prediction + playable_markets and no _id leak. The full /api/upload-excel + /api/upload/skipped diagnostic suite (test_upload_skipped_diagnostic.py, 10 tests) and the legacy ScoreBlast API suite (test_scoreblast_api.py, 24 tests) all still pass without modification.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_balanced_pick_logic.py (NEW — 12 tests covering balanced-pick fix + home/away favorite regressions + endpoint regression)",
+    "/app/backend/tests/test_scoreblast_api.py (unchanged, 24 tests pass)",
+    "/app/backend/tests/test_upload_skipped_diagnostic.py (unchanged, 10 tests pass)",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Fix in cluster_engine.py rows 571-597 is logically correct: asymmetric boost (only when lam_h - lam_a >= 0.30 for 1X, lam_a - lam_h >= 0.30 for X2) + symmetric penalty 0.50 when balanced + harsher 0.45 for '12' in low-lambda-max balance + 0.65 on DC+Over/GG/Under combos in balance. Each branch is mutually exclusive (elif chain) — clean.",
+    "LAMBDA_GAP_DIR=0.30 is recomputed inside the per-market loop. Functionally harmless (constant) but could be hoisted above the loop together with lambda_gap/is_balanced for a tiny perf win — agent note in the request already flagged this and accepted it as 'ok for now'.",
+    "On the balanced case (λ ≈ 1.30/1.34) the engine still selects 'MG 1-3 totali' as PICK — this is a calibrated MG totali whose [lo, hi] coincides with [floor, ceiling], so it receives the 1.30 boost from rows 510-511. The boost is structural (range matches family) and unrelated to direction → semantically correct ('no direction → bet on totals').",
+    "The 12 penalty is gated on `lam_max < 2.2` (line 593). In a balanced high-scoring match (e.g. λ_h=2.3, λ_a=2.3, gap=0) '12' would still NOT be penalized — but that is acceptable because high lam_max means draw is less likely so '12' has genuine value. Logic is intentional, not a gap.",
+    "cluster_engine.py is still under 800 lines (738 lines) — readable. server.py remains the long file (~1980 lines) and is the right candidate for a future modular refactor (flagged previously)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_balanced_pick_logic.py (new file, 12 tests)"
+  ],
+  "success_rate": {
+    "backend": "100% (46/46)",
+    "frontend": "not tested (backend-only scope per request)"
+  },
+  "seed_data_creation": "Most tests bypass DB by hitting POST /api/predict/structural with raw odds dicts (no persistence required). The regression test for POST /api/matches/{id}/predict uses POST /api/import to seed a single deterministic match (id='test-balanced-regression-1') and DELETE /api/matches/all in autouse teardown.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Balanced-pick fix in /app/backend/cluster_engine.py rows 571-597 is fully validated. Canonical regression suite for direction-aware double-chance logic: /app/backend/tests/test_balanced_pick_logic.py — exercises POST /api/predict/structural with three odds profiles (balanced, home-fav, away-fav) and re-checks the AI prediction endpoint. The LAMBDA_GAP_DIR threshold is 0.30; any future tuning of that constant must update the test_lambdas_have_direction setup odds correspondingly. For the balanced reference profile (1=2.45, X=3.50, 2=2.35, U35=1.30) the engine yields λ_h≈1.295, λ_a≈1.335, gap≈0.04, pick='MG 1-3 totali'.",
+  "rca_of_issue": "N/A — fix verified working. Original bug RCA (for record): in the pre-fix branch the engine boosted 1X whenever lam_h >= lam_a - 0.1 (i.e. even when home was slightly weaker) and symmetrically for X2. Both branches triggered in a balanced match, but X2 typically won the tie-break because lam_a ≥ lam_h by an epsilon → X2 became the main pick despite zero actionable directional edge. The new asymmetric boost (require gap >= 0.30 in the favored direction) plus the 0.50 in-balance malus removes both 1X and X2 from candidacy when there is no edge, opening the top slot to neutral markets (MG, O/U, GG) that genuinely reflect 'no direction'."
+}

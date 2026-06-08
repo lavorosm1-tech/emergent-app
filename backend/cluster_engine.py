@@ -479,6 +479,72 @@ def structural_analysis(odds: Dict, min_odd: float = 1.40, ml_scores: Optional[D
     ranked = []
     floor = structure["goal_floor"]
     ceiling = structure["goal_ceiling"]
+    ceiling_open = structure.get("goal_ceiling_open", False)
+
+    # === FILTRO STRUTTURALE FLOOR/CEILING (regola severa utente) ===
+    # Esclude a priori mercati incoerenti con la "banda" floor..ceiling.
+    # FLOOR ≥ N → escludi Under con soglia ≤ N+1 (banda troppo stretta o impossibile)
+    # CEILING chiuso ≤ N → escludi Over con soglia ≥ N-0.5 (banda troppo stretta o impossibile)
+    import re as _re_pre
+    _vm_filtered = []
+    for m in valid_markets:
+        mu = m.upper().strip()
+
+        # ---- FLOOR exclusions ----
+        # U0.5 / U1.5 / U2.5 / U3.5 esclusi se la banda di copertura è troppo stretta
+        if mu == "U0.5":
+            continue  # quasi mai utile
+        if mu == "U1.5" and floor >= 1:
+            continue
+        if mu == "U2.5" and floor >= 2:
+            continue
+        if mu == "U3.5" and floor >= 2:
+            continue  # nuova regola severa utente
+        # MG totali che iniziano sotto floor → ridondanti
+        if "MG" in mu and "TOTALI" in mu:
+            rng = _re_pre.search(r"(\d+)\s*-\s*(\d+)", m)
+            if rng:
+                lo = int(rng.group(1))
+                if lo < floor:
+                    continue
+        # Combo "DC X + Under N" escluse con floor incompatibile
+        if "+ U1.5" in mu and floor >= 1:
+            continue
+        if "+ U2.5" in mu and floor >= 2:
+            continue
+        if "+ U3.5" in mu and floor >= 2:
+            continue
+        # Combo "1 + O1.5" / "2 + O1.5" se floor è già alto sono ridondanti
+        # (sono coperti meglio dal segno singolo). Tengo per ora, non escludo.
+
+        # ---- CEILING exclusions ----
+        if not ceiling_open:
+            if mu == "O3.5" and ceiling <= 3:
+                continue
+            if mu == "O2.5" and ceiling <= 3:
+                continue  # nuova regola severa utente
+            if mu == "O1.5" and ceiling <= 2:
+                continue
+            # MG totali che finiscono sopra ceiling → ridondanti
+            if "MG" in mu and "TOTALI" in mu:
+                rng = _re_pre.search(r"(\d+)\s*-\s*(\d+)", m)
+                if rng:
+                    hi = int(rng.group(2))
+                    if hi > ceiling:
+                        continue
+            # Combo "DC X + Over N" escluse con ceiling incompatibile
+            if "+ O3.5" in mu and ceiling <= 3:
+                continue
+            if "+ O2.5" in mu and ceiling <= 3:
+                continue
+            if "+ O1.5" in mu and ceiling <= 2:
+                continue
+            # "1 + O1.5" / "2 + O1.5" escluse se Over fuori ceiling
+            if mu in ("1 + O1.5", "2 + O1.5") and ceiling <= 2:
+                continue
+
+        _vm_filtered.append(m)
+    valid_markets = _vm_filtered
 
     for m in valid_markets:
         cov, covered, broken = coverage_for_market(m, central)
@@ -568,12 +634,33 @@ def structural_analysis(odds: Dict, min_odd: float = 1.40, ml_scores: Optional[D
         # NG secco: boost se almeno uno dei due ha λ <= 0.75 (clean sheet vivo)
         elif mu == "NG" and min(lam_h, lam_a) <= 0.75:
             score *= 1.25
-        # 1X: boost se home favorita (λ_h >= λ_a + 0.3) o equilibrato
-        elif mu == "1X" and lam_h >= lam_a - 0.1:
-            score *= 1.15
-        # X2: boost se away favorita o equilibrato
-        elif mu == "X2" and lam_a >= lam_h - 0.1:
-            score *= 1.15
+        # === DOPPIE CHANCE: solo se DIREZIONE CHIARA ===
+        # In equilibrio (gap λ < 0.30) NON scegliere 1X/X2/12: non c'è direzione,
+        # il match va giocato su mercati neutri (X secco, GG, O/U, MG totali).
+        # 12 in equilibrio è doppiamente assurdo: esclude X che è il risultato
+        # più probabile quando lam_h ≈ lam_a.
+        LAMBDA_GAP_DIR = 0.30  # soglia "direzione chiara"
+        lambda_gap = abs(lam_h - lam_a)
+        is_balanced = lambda_gap < LAMBDA_GAP_DIR
+        # 1X: boost SOLO se casa è davvero favorita; penalty in equilibrio
+        if mu == "1X":
+            if lam_h - lam_a >= LAMBDA_GAP_DIR:
+                score *= 1.20  # casa favorita reale
+            elif is_balanced:
+                score *= 0.50  # equilibrio: nessuna direzione → declassa
+        # X2: boost SOLO se ospite è davvero favorito; penalty in equilibrio
+        elif mu == "X2":
+            if lam_a - lam_h >= LAMBDA_GAP_DIR:
+                score *= 1.20  # ospite favorito reale
+            elif is_balanced:
+                score *= 0.50  # equilibrio: nessuna direzione → declassa
+        # 12: doppia chance senza pareggio. In equilibrio il pareggio è probabile
+        # quindi 12 è la scelta peggiore. Penalty severa.
+        elif mu == "12" and is_balanced and lam_max < 2.2:
+            score *= 0.45
+        # Anche le combo "DC + Over" perdono direzione in equilibrio
+        elif mu in ("DC 1X + O1.5", "DC X2 + O1.5", "DC 1X + O2.5", "DC X2 + O2.5", "DC 1X + GG", "DC X2 + GG", "DC 1X + U3.5", "DC X2 + U3.5") and is_balanced:
+            score *= 0.65
 
 
         # Quando una squadra ha λ ≥ 2.4 (forte) e l'altra λ ≤ 0.7 (debole),
