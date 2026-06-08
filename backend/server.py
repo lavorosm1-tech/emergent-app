@@ -69,7 +69,16 @@ COL_O35 = 23     # X
 COL_GG = 24      # Y
 COL_NG = 25      # Z
 
-REQUIRED_ODDS = ['odd_1', 'odd_X', 'odd_2', 'odd_U25', 'odd_O25', 'odd_GG', 'odd_NG']
+# Quote OBBLIGATORIE per considerare valida la partita.
+# Se MANCA anche solo UNA di queste, la partita viene scartata.
+# 1X, X2, 12 NON sono obbligatorie: vengono stimate da estimate_missing().
+REQUIRED_ODDS = [
+    'odd_1', 'odd_X', 'odd_2',
+    'odd_U15', 'odd_O15',
+    'odd_U25', 'odd_O25',
+    'odd_U35', 'odd_O35',
+    'odd_GG', 'odd_NG',
+]
 
 
 # ============================================================
@@ -265,8 +274,12 @@ def lambda_from_o25(odd_o25: float) -> float:
     return (lo + hi) / 2
 
 
-def parse_excel_bytes(content: bytes, filename: str) -> List[dict]:
-    """Parse the Excel file. Return list of match dicts."""
+def parse_excel_bytes(content: bytes, filename: str) -> dict:
+    """Parse the Excel file. Return dict with:
+       - matches: list of valid match dicts
+       - skipped: list of {row, reason, sq1, sq2, time} for diagnostic
+       - rows_seen: total non-empty rows examined
+    """
     bio = io.BytesIO(content)
     if filename.lower().endswith('.xls'):
         raw = pd.read_excel(bio, header=None, engine='xlrd')
@@ -280,18 +293,19 @@ def parse_excel_bytes(content: bytes, filename: str) -> List[dict]:
         logger.warning("No date header detected; defaulting to today %s", first_day)
 
     matches = []
+    skipped: List[dict] = []
     current_day = first_day
     prev_time_min: Optional[int] = None
-    explicit_day_set = False  # becomes True after we encounter an in-file date header
+    explicit_day_set = False
+    rows_seen = 0
 
     for idx in range(len(raw)):
         row = raw.iloc[idx]
 
-        # Check first column for a date header (e.g. "lunedì, 25 maggio")
         date_in_row = parse_date_header(row.iat[COL_ORA] if COL_ORA < len(row) else None, base_year)
         if date_in_row:
             current_day = date_in_row
-            prev_time_min = None  # reset
+            prev_time_min = None
             explicit_day_set = True
             continue
 
@@ -299,15 +313,16 @@ def parse_excel_bytes(content: bytes, filename: str) -> List[dict]:
         time_str = parse_time(ora_raw)
         if not time_str:
             continue
+        rows_seen += 1
 
         sq1 = str(row.iat[COL_SQ1]).strip() if COL_SQ1 < len(row) and pd.notna(row.iat[COL_SQ1]) else ''
         sq2 = str(row.iat[COL_SQ2]).strip() if COL_SQ2 < len(row) and pd.notna(row.iat[COL_SQ2]) else ''
         if not sq1 or not sq2:
+            skipped.append({"row": idx + 1, "time": time_str, "sq1": sq1, "sq2": sq2, "manif": "N/D", "reason": "Squadre mancanti", "odds_read": {}, "missing": []})
             continue
 
         manif = str(row.iat[COL_MANIF]).strip() if COL_MANIF < len(row) and pd.notna(row.iat[COL_MANIF]) else 'N/D'
 
-        # Day rollover only when there is NO explicit date header in the file
         cur_min = int(time_str[:2]) * 60 + int(time_str[3:])
         if not explicit_day_set and prev_time_min is not None and cur_min < prev_time_min:
             current_day = current_day + timedelta(days=1)
@@ -333,8 +348,16 @@ def parse_excel_bytes(content: bytes, filename: str) -> List[dict]:
             'odd_NG': parse_odd(col(COL_NG)),
         }
 
-        # Skip if any required odd missing
-        if any(odds.get(k) is None for k in REQUIRED_ODDS):
+        # Skip if any required odd missing — track WHICH one is missing
+        missing = [k for k in REQUIRED_ODDS if odds.get(k) is None]
+        if missing:
+            skipped.append({
+                "row": idx + 1, "time": time_str,
+                "sq1": sq1, "sq2": sq2, "manif": manif,
+                "reason": f"Quote mancanti: {', '.join(missing)}",
+                "odds_read": {k: v for k, v in odds.items() if v is not None},
+                "missing": missing,
+            })
             continue
 
         estimated = estimate_missing(odds)
@@ -348,7 +371,11 @@ def parse_excel_bytes(content: bytes, filename: str) -> List[dict]:
             'odds': {**odds, 'estimated': estimated},
         })
 
-    return matches
+    return {
+        "matches": matches,
+        "skipped": skipped,
+        "rows_seen": rows_seen,
+    }
 
 
 # ============================================================
@@ -1054,8 +1081,12 @@ async def upload_excel(file: UploadFile = File(...)):
         logger.exception("excel parse error")
         raise HTTPException(400, f"Errore parsing Excel: {e}")
 
-    inserted, updated, skipped = 0, 0, 0
-    for m in parsed:
+    valid_matches = parsed.get("matches", [])
+    skipped_rows = parsed.get("skipped", [])
+    rows_seen = parsed.get("rows_seen", 0)
+
+    inserted, updated, unchanged = 0, 0, 0
+    for m in valid_matches:
         key = {
             'squadra1': m['squadra1'],
             'squadra2': m['squadra2'],
@@ -1068,7 +1099,7 @@ async def upload_excel(file: UploadFile = File(...)):
             old_odds = {k: v for k, v in existing.get('odds', {}).items() if k != 'estimated'}
             new_compare = {k: v for k, v in new_odds.items() if k != 'estimated'}
             if old_odds == new_compare:
-                skipped += 1
+                unchanged += 1
                 continue
             await db.matches.update_one(
                 key,
@@ -1092,12 +1123,51 @@ async def upload_excel(file: UploadFile = File(...)):
             await db.matches.insert_one(doc)
             inserted += 1
 
+    # Persist the LAST upload diagnostic so the user can inspect skipped rows
+    await db.upload_skipped.replace_one(
+        {"_id": "latest"},
+        {
+            "_id": "latest",
+            "filename": file.filename or "upload.xlsx",
+            "uploaded_at": datetime.now(timezone.utc).isoformat(),
+            "rows_seen": rows_seen,
+            "valid_matches": len(valid_matches),
+            "inserted": inserted,
+            "updated": updated,
+            "unchanged": unchanged,
+            "skipped_count": len(skipped_rows),
+            "skipped": skipped_rows,
+        },
+        upsert=True,
+    )
+
     return {
         "inserted": inserted,
         "updated": updated,
-        "skipped": skipped,
-        "total_parsed": len(parsed),
+        "unchanged": unchanged,
+        "skipped": len(skipped_rows),
+        "total_parsed": len(valid_matches),
+        "rows_seen": rows_seen,
     }
+
+
+@api_router.get("/upload/skipped")
+async def get_upload_skipped():
+    """Return diagnostic info about rows skipped in the last upload."""
+    doc = await db.upload_skipped.find_one({"_id": "latest"}, {"_id": 0})
+    if not doc:
+        return {
+            "filename": None,
+            "uploaded_at": None,
+            "rows_seen": 0,
+            "valid_matches": 0,
+            "inserted": 0,
+            "updated": 0,
+            "unchanged": 0,
+            "skipped_count": 0,
+            "skipped": [],
+        }
+    return doc
 
 
 @api_router.get("/matches")
