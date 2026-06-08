@@ -265,8 +265,12 @@ def lambda_from_o25(odd_o25: float) -> float:
     return (lo + hi) / 2
 
 
-def parse_excel_bytes(content: bytes, filename: str) -> List[dict]:
-    """Parse the Excel file. Return list of match dicts."""
+def parse_excel_bytes(content: bytes, filename: str) -> dict:
+    """Parse the Excel file. Return dict with:
+       - matches: list of valid match dicts
+       - skipped: list of {row, reason, sq1, sq2, time} for diagnostic
+       - rows_seen: total non-empty rows examined
+    """
     bio = io.BytesIO(content)
     if filename.lower().endswith('.xls'):
         raw = pd.read_excel(bio, header=None, engine='xlrd')
@@ -280,18 +284,19 @@ def parse_excel_bytes(content: bytes, filename: str) -> List[dict]:
         logger.warning("No date header detected; defaulting to today %s", first_day)
 
     matches = []
+    skipped: List[dict] = []
     current_day = first_day
     prev_time_min: Optional[int] = None
-    explicit_day_set = False  # becomes True after we encounter an in-file date header
+    explicit_day_set = False
+    rows_seen = 0
 
     for idx in range(len(raw)):
         row = raw.iloc[idx]
 
-        # Check first column for a date header (e.g. "lunedì, 25 maggio")
         date_in_row = parse_date_header(row.iat[COL_ORA] if COL_ORA < len(row) else None, base_year)
         if date_in_row:
             current_day = date_in_row
-            prev_time_min = None  # reset
+            prev_time_min = None
             explicit_day_set = True
             continue
 
@@ -299,15 +304,16 @@ def parse_excel_bytes(content: bytes, filename: str) -> List[dict]:
         time_str = parse_time(ora_raw)
         if not time_str:
             continue
+        rows_seen += 1
 
         sq1 = str(row.iat[COL_SQ1]).strip() if COL_SQ1 < len(row) and pd.notna(row.iat[COL_SQ1]) else ''
         sq2 = str(row.iat[COL_SQ2]).strip() if COL_SQ2 < len(row) and pd.notna(row.iat[COL_SQ2]) else ''
         if not sq1 or not sq2:
+            skipped.append({"row": idx + 1, "time": time_str, "sq1": sq1, "sq2": sq2, "reason": "Squadre mancanti"})
             continue
 
         manif = str(row.iat[COL_MANIF]).strip() if COL_MANIF < len(row) and pd.notna(row.iat[COL_MANIF]) else 'N/D'
 
-        # Day rollover only when there is NO explicit date header in the file
         cur_min = int(time_str[:2]) * 60 + int(time_str[3:])
         if not explicit_day_set and prev_time_min is not None and cur_min < prev_time_min:
             current_day = current_day + timedelta(days=1)
@@ -333,8 +339,14 @@ def parse_excel_bytes(content: bytes, filename: str) -> List[dict]:
             'odd_NG': parse_odd(col(COL_NG)),
         }
 
-        # Skip if any required odd missing
-        if any(odds.get(k) is None for k in REQUIRED_ODDS):
+        # Skip if any required odd missing — track WHICH one is missing
+        missing = [k for k in REQUIRED_ODDS if odds.get(k) is None]
+        if missing:
+            skipped.append({
+                "row": idx + 1, "time": time_str,
+                "sq1": sq1, "sq2": sq2, "manif": manif,
+                "reason": f"Quote mancanti: {', '.join(missing)}",
+            })
             continue
 
         estimated = estimate_missing(odds)
