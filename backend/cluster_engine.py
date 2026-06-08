@@ -568,12 +568,33 @@ def structural_analysis(odds: Dict, min_odd: float = 1.40, ml_scores: Optional[D
         # NG secco: boost se almeno uno dei due ha λ <= 0.75 (clean sheet vivo)
         elif mu == "NG" and min(lam_h, lam_a) <= 0.75:
             score *= 1.25
-        # 1X: boost se home favorita (λ_h >= λ_a + 0.3) o equilibrato
-        elif mu == "1X" and lam_h >= lam_a - 0.1:
-            score *= 1.15
-        # X2: boost se away favorita o equilibrato
-        elif mu == "X2" and lam_a >= lam_h - 0.1:
-            score *= 1.15
+        # === DOPPIE CHANCE: solo se DIREZIONE CHIARA ===
+        # In equilibrio (gap λ < 0.30) NON scegliere 1X/X2/12: non c'è direzione,
+        # il match va giocato su mercati neutri (X secco, GG, O/U, MG totali).
+        # 12 in equilibrio è doppiamente assurdo: esclude X che è il risultato
+        # più probabile quando lam_h ≈ lam_a.
+        LAMBDA_GAP_DIR = 0.30  # soglia "direzione chiara"
+        lambda_gap = abs(lam_h - lam_a)
+        is_balanced = lambda_gap < LAMBDA_GAP_DIR
+        # 1X: boost SOLO se casa è davvero favorita; penalty in equilibrio
+        if mu == "1X":
+            if lam_h - lam_a >= LAMBDA_GAP_DIR:
+                score *= 1.20  # casa favorita reale
+            elif is_balanced:
+                score *= 0.50  # equilibrio: nessuna direzione → declassa
+        # X2: boost SOLO se ospite è davvero favorito; penalty in equilibrio
+        elif mu == "X2":
+            if lam_a - lam_h >= LAMBDA_GAP_DIR:
+                score *= 1.20  # ospite favorito reale
+            elif is_balanced:
+                score *= 0.50  # equilibrio: nessuna direzione → declassa
+        # 12: doppia chance senza pareggio. In equilibrio il pareggio è probabile
+        # quindi 12 è la scelta peggiore. Penalty severa.
+        elif mu == "12" and is_balanced and lam_max < 2.2:
+            score *= 0.45
+        # Anche le combo "DC + Over" perdono direzione in equilibrio
+        elif mu in ("DC 1X + O1.5", "DC X2 + O1.5", "DC 1X + O2.5", "DC X2 + O2.5", "DC 1X + GG", "DC X2 + GG", "DC 1X + U3.5", "DC X2 + U3.5") and is_balanced:
+            score *= 0.65
 
 
         # Quando una squadra ha λ ≥ 2.4 (forte) e l'altra λ ≤ 0.7 (debole),
