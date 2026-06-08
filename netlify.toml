@@ -1,10 +1,9 @@
 [build]
-  base = "frontend"
   publish = "frontend/dist"
-  command = "yarn install --frozen-lockfile && yarn build:web"
+  command = "cd frontend && yarn install --frozen-lockfile && yarn build:web"
 
 [build.environment]
-  NODE_VERSION = "20"
+  NODE_VERSION = "22"
   EXPO_PUBLIC_BACKEND_URL = "https://match-quota-analyzer.emergent.host"
 
 [[redirects]]
