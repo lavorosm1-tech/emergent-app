@@ -396,7 +396,7 @@ CANDIDATE_MARKETS = [
     # Direct-result + Over combos (offensiva pulita con dominante)
     "1 + O1.5", "2 + O1.5", "1 + O2.5", "2 + O2.5",
     # GG + Over combos (entrambe segnano + over)
-    "GG + O2.5", "GG + O1.5",
+    "GG + O2.5",
     # Double-chance + Over/Under combos
     "DC 1X + O1.5", "DC X2 + O1.5", "DC 12 + O1.5",
     "DC 1X + O2.5", "DC X2 + O2.5", "DC 12 + O2.5",
@@ -500,6 +500,23 @@ def structural_analysis(odds: Dict, min_odd: float = 1.40, ml_scores: Optional[D
             continue
         if mu == "U3.5" and floor >= 2:
             continue  # nuova regola severa utente
+
+        # FLOOR garantisce O1.5/O2.5: combo con quegli Over sono RIDONDANTI
+        # (la combo equivale al segno puro). Escludi per evitare doppioni.
+        if floor >= 2:
+            # O1.5 puro o combo che lo includono → ridondanti (Over 1.5 è certo)
+            if mu == "O1.5":
+                continue
+            if "+ O1.5" in mu:
+                continue
+            if mu in ("1 + O1.5", "2 + O1.5"):
+                continue
+        if floor >= 3:
+            if mu == "O2.5":
+                continue
+            if "+ O2.5" in mu:
+                continue
+
         # MG totali che iniziano sotto floor → ridondanti
         if "MG" in mu and "TOTALI" in mu:
             rng = _re_pre.search(r"(\d+)\s*-\s*(\d+)", m)
@@ -514,8 +531,6 @@ def structural_analysis(odds: Dict, min_odd: float = 1.40, ml_scores: Optional[D
             continue
         if "+ U3.5" in mu and floor >= 2:
             continue
-        # Combo "1 + O1.5" / "2 + O1.5" se floor è già alto sono ridondanti
-        # (sono coperti meglio dal segno singolo). Tengo per ora, non escludo.
 
         # ---- CEILING exclusions ----
         if not ceiling_open:
@@ -525,6 +540,17 @@ def structural_analysis(odds: Dict, min_odd: float = 1.40, ml_scores: Optional[D
                 continue  # nuova regola severa utente
             if mu == "O1.5" and ceiling <= 2:
                 continue
+            # CEILING stretto garantisce U3.5/U2.5: combo con Under sono RIDONDANTI
+            if ceiling <= 3:
+                if mu == "U3.5":
+                    continue
+                if "+ U3.5" in mu:
+                    continue
+            if ceiling <= 2:
+                if mu == "U2.5":
+                    continue
+                if "+ U2.5" in mu:
+                    continue
             # MG totali che finiscono sopra ceiling → ridondanti
             if "MG" in mu and "TOTALI" in mu:
                 rng = _re_pre.search(r"(\d+)\s*-\s*(\d+)", m)
