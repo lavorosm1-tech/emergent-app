@@ -7,6 +7,11 @@
   EXPO_PUBLIC_BACKEND_URL = "https://match-quota-analyzer.emergent.host"
 
 [[redirects]]
+  from = "/predict"
+  to = "/.netlify/functions/predict"
+  status = 200
+
+[[redirects]]
   from = "/*"
   to = "/index.html"
   status = 200
