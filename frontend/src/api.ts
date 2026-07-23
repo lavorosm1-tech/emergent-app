@@ -155,7 +155,7 @@ export const api = {
   setLlmSettings: (id: string) => netlifyReq<{ ok: boolean; selected_id: string }>("/llm-settings", { method: "POST", body: JSON.stringify({ id }) }),
   getBudget: () => netlifyReq<{ estimated_spent_usd: number; predictions_made: number; current_model: string; cost_per_prediction_usd: number; topup_url: string }>("/budget"),
   resetBudget: () => netlifyReq<{ ok: boolean }>("/budget?reset=true", { method: "POST" }),
-  marketStats: () => req<{ markets: { family: string; market: string; wins: number; losses: number; total: number; missed: number; family_total: number; miss_rate: number; win_rate: number }[]; family_totals: Record<string, number> }>("/ml/stats"),
+  marketStats: () => netlifyReq<{ markets: { family: string; market: string; wins: number; losses: number; total: number; missed: number; family_total: number; miss_rate: number; win_rate: number }[]; family_totals: Record<string, number> }>("/ml-stats"),
   fetchResultsAuto: (ids: string[], apply = true, apply_threshold = 80) => req<{ results: any[]; applied: number; not_found: number; skipped: number }>("/results/fetch", { method: "POST", body: JSON.stringify({ ids, apply, apply_threshold }) }),
   applyResultManual: (id: string, score: string) => req<{ ok: boolean; result: string }>("/results/apply", { method: "POST", body: JSON.stringify({ id, score }) }),
   matchCandidates: (id: string) => req<{ candidates: { market: string; family: string; missed: number; family_total: number; miss_rate: number }[]; family: string | null; family_total: number }>(`/match/${id}/candidates`),
