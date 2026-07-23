@@ -32,6 +32,16 @@
   status = 200
 
 [[redirects]]
+  from = "/upload-excel"
+  to = "/.netlify/functions/upload-excel"
+  status = 200
+
+[[redirects]]
+  from = "/upload-skipped"
+  to = "/.netlify/functions/upload-skipped"
+  status = 200
+
+[[redirects]]
   from = "/*"
   to = "/index.html"
   status = 200

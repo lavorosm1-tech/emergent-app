@@ -178,11 +178,11 @@ export const api = {
       // @ts-ignore - RN FormData file shape
       form.append("file", { uri, name, type: mimeType || "application/octet-stream" });
     }
-    const res = await fetch(`${BASE}/api/upload-excel`, { method: "POST", body: form });
+    const res = await fetch(`/upload-excel`, { method: "POST", body: form });
     if (!res.ok) throw new Error(`${res.status} ${await res.text()}`);
     return res.json() as Promise<{ inserted: number; updated: number; unchanged?: number; skipped: number; total_parsed: number; rows_seen?: number }>;
   },
-  uploadSkipped: () => req<UploadSkippedReport>(`/upload/skipped`),
+  uploadSkipped: () => netlifyReq<UploadSkippedReport>(`/upload-skipped`),
 };
 
 export type SkippedRow = {
