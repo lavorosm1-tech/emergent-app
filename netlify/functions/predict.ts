@@ -69,6 +69,12 @@ export default async (req: Request): Promise<Response> => {
   const result = structuralAnalysis(odds);
 
   return json({
+    structure: result.structure,
+    cluster: result.cluster,
+    central_cluster: result.central_cluster,
+    pick: result.pick,
+    ranking: result.ranking,
+    explanation: result.explanation,
     match: {
       id: row.id,
       day: row.day,
@@ -78,10 +84,6 @@ export default async (req: Request): Promise<Response> => {
       squadra2: row.squadra2,
       result: row.result,
     },
-    structure: result.structure,
-    pick: result.pick,
-    ranking: result.ranking,
-    explanation: result.explanation,
     source: "netlify-function + supabase (nessuna dipendenza da Emergent)",
   });
 };

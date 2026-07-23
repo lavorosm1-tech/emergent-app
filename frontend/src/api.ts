@@ -1,5 +1,22 @@
 const BASE = process.env.EXPO_PUBLIC_BACKEND_URL || "";
 
+/**
+ * Chiamate alle Netlify Functions "proprie" (stesso dominio, niente Emergent).
+ * Usata per gli endpoint gia' migrati su Supabase.
+ */
+async function netlifyReq<T>(path: string, init?: RequestInit): Promise<T> {
+  const res = await fetch(path, {
+    ...init,
+    headers: { "Content-Type": "application/json", ...(init?.headers || {}) },
+  });
+  if (!res.ok) {
+    const t = await res.text();
+    throw new Error(`${res.status} ${t}`);
+  }
+  return res.json();
+}
+
+
 export type OddsKey =
   | "odd_1" | "odd_X" | "odd_2"
   | "odd_1X" | "odd_X2" | "odd_12"
@@ -104,16 +121,16 @@ export const api = {
     if (day) p.set("day", day);
     if (q) p.set("q", q);
     const qs = p.toString();
-    return req<Match[]>(`/matches${qs ? `?${qs}` : ""}`);
+    return netlifyReq<Match[]>(`/matches-list${qs ? `?${qs}` : ""}`);
   },
-  days: () => req<string[]>("/matches/days"),
-  match: (id: string) => req<Match & { prediction?: Prediction }>(`/matches/${id}`),
+  days: () => netlifyReq<string[]>("/matches-days"),
+  match: (id: string) => netlifyReq<Match & { prediction?: Prediction }>(`/match-detail?id=${encodeURIComponent(id)}`),
   predict: (id: string, force?: boolean) =>
     req<Prediction>(`/matches/${id}/predict${force ? "?force=true" : ""}`, { method: "POST" }),
   setResult: (id: string, result: string) =>
-    req<{ ok: boolean; learning?: { applied: boolean; main_prediction?: string; result_ok?: boolean } }>(`/matches/${id}/result`, {
+    netlifyReq<{ ok: boolean; learning?: { applied: boolean; main_prediction?: string; result_ok?: boolean } }>(`/match-result`, {
       method: "POST",
-      body: JSON.stringify({ result }),
+      body: JSON.stringify({ matchId: id, result }),
     }),
   bulkResults: (items: { id: string; result: string }[]) =>
     req<{ updated: number; learnings?: any[] }>(`/results/bulk`, {
@@ -143,7 +160,7 @@ export const api = {
   applyResultManual: (id: string, score: string) => req<{ ok: boolean; result: string }>("/results/apply", { method: "POST", body: JSON.stringify({ id, score }) }),
   matchCandidates: (id: string) => req<{ candidates: { market: string; family: string; missed: number; family_total: number; miss_rate: number }[]; family: string | null; family_total: number }>(`/match/${id}/candidates`),
   matchHistory: (id: string) => req<{ league: string; global: Record<string, any[]>; league_specific: Record<string, any[]> }>(`/match/${id}/history`),
-  matchStructural: (id: string) => req<StructuralAnalysis>(`/match/${id}/structural`),
+  matchStructural: (id: string) => netlifyReq<StructuralAnalysis>(`/predict?matchId=${encodeURIComponent(id)}`),
   uploadExcel: async (uri: string, name: string, mimeType?: string) => {
     const form = new FormData();
     if (typeof window !== "undefined" && window.fetch && uri.startsWith("blob:")) {
