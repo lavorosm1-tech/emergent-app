@@ -126,7 +126,7 @@ export const api = {
   days: () => netlifyReq<string[]>("/matches-days"),
   match: (id: string) => netlifyReq<Match & { prediction?: Prediction }>(`/match-detail?id=${encodeURIComponent(id)}`),
   predict: (id: string, force?: boolean) =>
-    req<Prediction>(`/matches/${id}/predict${force ? "?force=true" : ""}`, { method: "POST" }),
+    netlifyReq<Prediction>(`/ai-predict?matchId=${encodeURIComponent(id)}${force ? "&force=true" : ""}`, { method: "POST" }),
   setResult: (id: string, result: string) =>
     netlifyReq<{ ok: boolean; learning?: { applied: boolean; main_prediction?: string; result_ok?: boolean } }>(`/match-result`, {
       method: "POST",
@@ -151,10 +151,10 @@ export const api = {
     req<any>(`/import`, { method: "POST", body: JSON.stringify(payload) }),
   deleteAll: () => req<{ ok: boolean }>(`/matches/all`, { method: "DELETE" }),
   aiStudioPrompt: () => req<{ csv: string; count: number }>(`/aistudio/prompt`),
-  getLlmSettings: () => req<{ options: any[]; selected_id: string }>("/settings/llm"),
-  setLlmSettings: (id: string) => req<{ ok: boolean; selected_id: string }>("/settings/llm", { method: "POST", body: JSON.stringify({ id }) }),
-  getBudget: () => req<{ estimated_spent_usd: number; predictions_made: number; current_model: string; cost_per_prediction_usd: number; topup_url: string }>("/settings/budget"),
-  resetBudget: () => req<{ ok: boolean }>("/settings/budget/reset", { method: "POST" }),
+  getLlmSettings: () => netlifyReq<{ options: any[]; selected_id: string }>("/llm-settings"),
+  setLlmSettings: (id: string) => netlifyReq<{ ok: boolean; selected_id: string }>("/llm-settings", { method: "POST", body: JSON.stringify({ id }) }),
+  getBudget: () => netlifyReq<{ estimated_spent_usd: number; predictions_made: number; current_model: string; cost_per_prediction_usd: number; topup_url: string }>("/budget"),
+  resetBudget: () => netlifyReq<{ ok: boolean }>("/budget?reset=true", { method: "POST" }),
   marketStats: () => req<{ markets: { family: string; market: string; wins: number; losses: number; total: number; missed: number; family_total: number; miss_rate: number; win_rate: number }[]; family_totals: Record<string, number> }>("/ml/stats"),
   fetchResultsAuto: (ids: string[], apply = true, apply_threshold = 80) => req<{ results: any[]; applied: number; not_found: number; skipped: number }>("/results/fetch", { method: "POST", body: JSON.stringify({ ids, apply, apply_threshold }) }),
   applyResultManual: (id: string, score: string) => req<{ ok: boolean; result: string }>("/results/apply", { method: "POST", body: JSON.stringify({ id, score }) }),

@@ -55,11 +55,17 @@ export default function LlmSettings() {
             <Text style={styles.budgetVal}>${budget.estimated_spent_usd.toFixed(4)}</Text>
             <Text style={styles.budgetDetail}>{budget.predictions_made} pronostici · Modello: {budget.current_model}</Text>
             <Text style={styles.budgetDetail}>~ ${budget.cost_per_prediction_usd.toFixed(4)} per pronostico</Text>
-            <TouchableOpacity onPress={() => openExternalUrl(budget.topup_url)} style={styles.topupBtn}>
-              <Ionicons name="card-outline" size={16} color="#FFF" />
-              <Text style={styles.topupTxt}>RICARICA EMERGENT KEY</Text>
-            </TouchableOpacity>
-            <Text style={styles.budgetHint}>Apre app.emergent.sh/chat → Profilo → Universal Key</Text>
+            {budget.cost_per_prediction_usd > 0 ? (
+              <>
+                <TouchableOpacity onPress={() => openExternalUrl(budget.topup_url)} style={styles.topupBtn}>
+                  <Ionicons name="card-outline" size={16} color="#FFF" />
+                  <Text style={styles.topupTxt}>RICARICA CREDITO</Text>
+                </TouchableOpacity>
+                <Text style={styles.budgetHint}>Apre la pagina di ricarica di {budget.current_model}</Text>
+              </>
+            ) : (
+              <Text style={styles.budgetHint}>✓ {budget.current_model} è gratuito — nessuna ricarica necessaria</Text>
+            )}
           </View>
         )}
         <Text style={styles.section}>SCEGLI MODELLO LLM</Text>

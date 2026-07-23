@@ -42,6 +42,21 @@
   status = 200
 
 [[redirects]]
+  from = "/ai-predict"
+  to = "/.netlify/functions/ai-predict"
+  status = 200
+
+[[redirects]]
+  from = "/llm-settings"
+  to = "/.netlify/functions/llm-settings"
+  status = 200
+
+[[redirects]]
+  from = "/budget"
+  to = "/.netlify/functions/budget"
+  status = 200
+
+[[redirects]]
   from = "/*"
   to = "/index.html"
   status = 200
