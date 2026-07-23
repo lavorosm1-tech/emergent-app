@@ -22,8 +22,8 @@ export default async (req: Request): Promise<Response> => {
     const isReset = req.method === "POST" && url.searchParams.get("reset") === "true";
 
     if (isReset) {
-      await pgPost("settings", { key: "ai_spent", value: "0" }, "resolution=merge-duplicates,return=minimal");
-      await pgPost("settings", { key: "ai_count", value: "0" }, "resolution=merge-duplicates,return=minimal");
+      await pgPost("settings", { key: "ai_spent", value: 0 }, "resolution=merge-duplicates,return=minimal");
+      await pgPost("settings", { key: "ai_count", value: 0 }, "resolution=merge-duplicates,return=minimal");
       return jsonResponse({ ok: true });
     }
 
@@ -34,9 +34,9 @@ export default async (req: Request): Promise<Response> => {
       pgGet(`settings?key=eq.ai_count&select=value`),
       pgGet(`settings?key=eq.llm_model&select=value`),
     ]);
-    const spent = spentRows.length ? Number(JSON.parse(spentRows[0].value)) || 0 : 0;
-    const count = countRows.length ? Number(JSON.parse(countRows[0].value)) || 0 : 0;
-    const selectedId = modelRows.length ? JSON.parse(modelRows[0].value) : DEFAULT_LLM;
+    const spent = spentRows.length ? Number(spentRows[0].value) || 0 : 0;
+    const count = countRows.length ? Number(countRows[0].value) || 0 : 0;
+    const selectedId = modelRows.length ? modelRows[0].value : DEFAULT_LLM;
     const selected = LLM_OPTIONS.find((o) => o.id === selectedId) || LLM_OPTIONS[0];
 
     return jsonResponse({

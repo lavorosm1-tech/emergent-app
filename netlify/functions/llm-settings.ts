@@ -12,7 +12,7 @@ export default async (req: Request): Promise<Response> => {
   try {
     if (req.method === "GET") {
       const rows = await pgGet(`settings?key=eq.llm_model&select=value`);
-      const selectedId = rows.length ? JSON.parse(rows[0].value) : DEFAULT_LLM;
+      const selectedId = rows.length ? rows[0].value : DEFAULT_LLM;
       const options = LLM_OPTIONS.map((o) => ({ ...o, configured: CONFIGURED_PROVIDERS.has(o.provider) }));
       return jsonResponse({ options, selected_id: selectedId });
     }
@@ -25,7 +25,7 @@ export default async (req: Request): Promise<Response> => {
       }
       await pgPost(
         "settings",
-        { key: "llm_model", value: JSON.stringify(id) },
+        { key: "llm_model", value: id },
         "resolution=merge-duplicates,return=minimal"
       );
       return jsonResponse({ ok: true, selected_id: id });

@@ -129,7 +129,7 @@ REGOLE OBBLIGATORIE basate sul PIN:
 async function getSelectedLlm(): Promise<LlmOption> {
   try {
     const rows = await pgGet(`settings?key=eq.llm_model&select=value`);
-    const id = rows.length ? JSON.parse(rows[0].value) : DEFAULT_LLM;
+    const id = rows.length ? rows[0].value : DEFAULT_LLM;
     return LLM_OPTIONS.find((o) => o.id === id) || LLM_OPTIONS[0];
   } catch {
     return LLM_OPTIONS[0];
@@ -138,10 +138,10 @@ async function getSelectedLlm(): Promise<LlmOption> {
 
 async function incrementSetting(key: string, delta: number) {
   const rows = await pgGet(`settings?key=eq.${key}&select=*`);
-  const current = rows.length ? Number(JSON.parse(rows[0].value)) || 0 : 0;
+  const current = rows.length ? Number(rows[0].value) || 0 : 0;
   await pgPost(
     "settings",
-    { key, value: JSON.stringify(current + delta) },
+    { key, value: current + delta },
     "resolution=merge-duplicates,return=minimal"
   );
 }
