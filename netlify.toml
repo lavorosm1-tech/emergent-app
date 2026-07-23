@@ -12,6 +12,26 @@
   status = 200
 
 [[redirects]]
+  from = "/matches-list"
+  to = "/.netlify/functions/matches-list"
+  status = 200
+
+[[redirects]]
+  from = "/matches-days"
+  to = "/.netlify/functions/matches-days"
+  status = 200
+
+[[redirects]]
+  from = "/match-detail"
+  to = "/.netlify/functions/match-detail"
+  status = 200
+
+[[redirects]]
+  from = "/match-result"
+  to = "/.netlify/functions/match-result"
+  status = 200
+
+[[redirects]]
   from = "/*"
   to = "/index.html"
   status = 200
