@@ -56,6 +56,24 @@ const PROVIDER_ENV_KEY: Record<string, string> = {
   groq: "GROQ_API_KEY",
 };
 
+declare const Netlify: { env: { get(key: string): string | undefined } } | undefined;
+
+function readEnv(key: string): string | undefined {
+  try {
+    // Le variabili segnate come "secret" su Netlify non sono esposte su
+    // process.env per motivi di sicurezza: vanno lette con Netlify.env.get().
+    // @ts-ignore — Netlify e' un global iniettato a runtime dalla piattaforma
+    if (typeof Netlify !== "undefined" && Netlify?.env?.get) {
+      // @ts-ignore
+      const v = Netlify.env.get(key);
+      if (v) return v;
+    }
+  } catch {
+    /* Netlify global non disponibile in questo contesto, uso il fallback */
+  }
+  return process.env[key];
+}
+
 export async function callLlm(
   option: LlmOption,
   systemPrompt: string,
@@ -68,7 +86,7 @@ export async function callLlm(
   }
 
   const baseUrl = PROVIDER_BASE_URL[option.provider];
-  const apiKey = process.env[PROVIDER_ENV_KEY[option.provider]];
+  const apiKey = readEnv(PROVIDER_ENV_KEY[option.provider]);
   if (!apiKey) {
     throw new Error(`Variabile d'ambiente ${PROVIDER_ENV_KEY[option.provider]} non configurata su Netlify`);
   }
