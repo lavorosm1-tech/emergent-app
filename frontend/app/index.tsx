@@ -128,7 +128,23 @@ export default function Home() {
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   const [marketStats, setMarketStats] = useState<{ market: string; win_rate: number; total: number; family: string }[]>([]);
   const [pendingPreds, setPendingPreds] = useState<Set<string>>(new Set());
+  const [searchResults, setSearchResults] = useState<Match[] | null>(null);
+  const [searching, setSearching] = useState(false);
   const scrollRef = useRef<ScrollView | null>(null);
+
+  // Ricerca globale: quando c'e' del testo, cerca su TUTTI i giorni (non solo quello aperto)
+  useEffect(() => {
+    const q = query.trim();
+    if (q.length < 2) { setSearchResults(null); setSearching(false); return; }
+    setSearching(true);
+    const t = setTimeout(() => {
+      api.matches(undefined, q)
+        .then((res) => setSearchResults(res))
+        .catch(() => setSearchResults([]))
+        .finally(() => setSearching(false));
+    }, 300);
+    return () => clearTimeout(t);
+  }, [query]);
 
   // Subscribe to background prediction queue → re-render to show spinners on pending matches
   useEffect(() => {
@@ -250,18 +266,15 @@ export default function Home() {
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return matches.filter((m) => {
+    const source = q.length >= 2 ? (searchResults || []) : matches;
+    return source.filter((m) => {
       const lc = parseLeagueCode(m.manifestazione);
       if (countryFilter && lc.country !== countryFilter) return false;
       if (areaFilter && lc.area !== areaFilter) return false;
       if (tierFilter === "top" && !lc.isTop) return false;
-      if (q) {
-        const hay = `${m.squadra1} ${m.squadra2} ${m.manifestazione} ${lc.label}`.toLowerCase();
-        if (!hay.includes(q)) return false;
-      }
       return true;
     });
-  }, [matches, query, tierFilter, areaFilter, countryFilter]);
+  }, [matches, searchResults, query, tierFilter, areaFilter, countryFilter]);
 
   const grouped = useMemo(() => {
     if (sortByTime) {

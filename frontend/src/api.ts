@@ -140,12 +140,12 @@ export const api = {
   statsScores: () => req<Record<string, any[]>>("/stats/scores"),
   statsReset: () => req<{ ok: boolean }>("/stats/reset", { method: "POST" }),
   updateSelection: (ids: string[], selected: boolean) =>
-    req<{ ok: boolean }>(`/matches/selection`, {
+    netlifyReq<{ ok: boolean }>(`/selection-update`, {
       method: "POST",
       body: JSON.stringify({ ids, selected }),
     }),
-  selectedList: () => req<Match[]>("/matches/selected/list"),
-  clearSelection: () => req<{ ok: boolean }>(`/selection/clear`, { method: "POST" }),
+  selectedList: () => netlifyReq<Match[]>("/selected-list"),
+  clearSelection: () => netlifyReq<{ ok: boolean }>(`/selection-clear`, { method: "POST" }),
   exportDb: () => req<any>("/export"),
   importDb: (payload: any) =>
     req<any>(`/import`, { method: "POST", body: JSON.stringify(payload) }),

@@ -62,6 +62,21 @@
   status = 200
 
 [[redirects]]
+  from = "/selection-update"
+  to = "/.netlify/functions/selection-update"
+  status = 200
+
+[[redirects]]
+  from = "/selected-list"
+  to = "/.netlify/functions/selected-list"
+  status = 200
+
+[[redirects]]
+  from = "/selection-clear"
+  to = "/.netlify/functions/selection-clear"
+  status = 200
+
+[[redirects]]
   from = "/*"
   to = "/index.html"
   status = 200
