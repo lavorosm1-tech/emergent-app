@@ -21,12 +21,10 @@ export const LLM_OPTIONS: LlmOption[] = [
     cost_per_pred: 0.0014, speed: "Veloce", quality: "Buono", desc: "Economicissimo (~€1,56/mese per 40 pred/giorno)" },
   { id: "deepseek-reasoner", label: "DeepSeek V4 Pro", provider: "deepseek", model: "deepseek-reasoner",
     cost_per_pred: 0.0027, speed: "Lento", quality: "Ottimo", desc: "Ragionamento profondo, costo ridotto (~€3/mese)" },
-  { id: "groq-qwen", label: "Qwen 3 32B (Groq)", provider: "groq", model: "qwen/qwen3-32b",
-    cost_per_pred: 0, speed: "Velocissimo", quality: "Buono", desc: "Gratuito — nessun costo, limiti di velocità generosi" },
-  { id: "groq-deepseek-r1", label: "DeepSeek R1 Distill (Groq)", provider: "groq", model: "deepseek-r1-distill-llama-70b",
-    cost_per_pred: 0, speed: "Veloce", quality: "Ottimo", desc: "Gratuito — ragionamento più profondo, nessun costo" },
-  { id: "groq-llama", label: "Llama 3.3 70B (Groq)", provider: "groq", model: "llama-3.3-70b-versatile",
-    cost_per_pred: 0, speed: "Velocissimo", quality: "Buono", desc: "Gratuito — molto veloce, nessun costo" },
+  { id: "groq-gpt-oss-120b", label: "GPT-OSS 120B (Groq)", provider: "groq", model: "openai/gpt-oss-120b",
+    cost_per_pred: 0, speed: "Veloce", quality: "Ottimo", desc: "Gratuito — miglior qualità disponibile su Groq, nessun costo" },
+  { id: "groq-gpt-oss-20b", label: "GPT-OSS 20B (Groq)", provider: "groq", model: "openai/gpt-oss-20b",
+    cost_per_pred: 0, speed: "Velocissimo", quality: "Buono", desc: "Gratuito — più leggero e ancora più veloce, nessun costo" },
   { id: "gemini-flash", label: "Gemini 2.5 Flash", provider: "gemini", model: "gemini-2.5-flash",
     cost_per_pred: 0.002, speed: "Veloce", quality: "Buono", desc: "Veloce e bilanciato" },
   { id: "gemini-pro", label: "Gemini 2.5 Pro", provider: "gemini", model: "gemini-2.5-pro",
@@ -121,5 +119,3 @@ export async function callLlm(
   if (!text.trim() && msg?.reasoning_content) text = msg.reasoning_content;
   return text;
 }
-
-
