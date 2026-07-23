@@ -85,7 +85,7 @@ export default function Selected() {
     setItems((arr) => arr.filter((x) => x.id !== id));
     selectedListCache.invalidate();
     if (m?.day) matchesCache.invalidate(m.day);
-    if (m) toast.show(`Rimossa: ${m.casa} vs ${m.ospite}`, "info");
+    if (m) toast.show(`Rimossa: ${m.squadra1} vs ${m.squadra2}`, "info");
     try { await api.updateSelection([id], false); } catch {}
   };
 

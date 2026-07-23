@@ -326,7 +326,7 @@ export default function Home() {
     selectedListCache.invalidate();
     matchesCache.invalidate(m.day);
     // 3) Toast feedback
-    const teams = `${m.casa} vs ${m.ospite}`;
+    const teams = `${m.squadra1} vs ${m.squadra2}`;
     toast.show(next ? `✓ Aggiunta: ${teams}` : `Rimossa: ${teams}`, next ? "success" : "info");
     // 4) Sync con backend
     try { await api.updateSelection([m.id], next); } catch {}
