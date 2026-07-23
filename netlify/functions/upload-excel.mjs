@@ -33555,12 +33555,6 @@ function headers(key, extra) {
     ...extra
   };
 }
-async function pgGet(path) {
-  const { url, key } = supabaseConfig();
-  const res = await fetch(`${url}/rest/v1/${path}`, { headers: headers(key) });
-  if (!res.ok) throw new Error(`Supabase GET ${path}: ${res.status} ${await res.text()}`);
-  return res.json();
-}
 async function pgPost(path, body, prefer = "return=representation") {
   const { url, key } = supabaseConfig();
   const res = await fetch(`${url}/rest/v1/${path}`, {
@@ -33572,15 +33566,16 @@ async function pgPost(path, body, prefer = "return=representation") {
   if (prefer.includes("return=minimal")) return null;
   return res.json();
 }
-async function pgPatch(path, body) {
+async function pgRpc(fn, args) {
   const { url, key } = supabaseConfig();
-  const res = await fetch(`${url}/rest/v1/${path}`, {
-    method: "PATCH",
-    headers: headers(key, { Prefer: "return=representation" }),
-    body: JSON.stringify(body)
+  const res = await fetch(`${url}/rest/v1/rpc/${fn}`, {
+    method: "POST",
+    headers: headers(key),
+    body: JSON.stringify(args)
   });
-  if (!res.ok) throw new Error(`Supabase PATCH ${path}: ${res.status} ${await res.text()}`);
-  return res.json();
+  if (!res.ok) throw new Error(`Supabase RPC ${fn}: ${res.status} ${await res.text()}`);
+  const text = await res.text();
+  return text ? JSON.parse(text) : null;
 }
 function jsonResponse(body, status = 200) {
   return new Response(JSON.stringify(body, null, 2), {
@@ -33617,64 +33612,12 @@ async function handle(req) {
   }
   const { matches: validMatches, skipped, rows_seen } = parsed;
   let inserted = 0, updated = 0, unchanged = 0;
-  for (const m of validMatches) {
-    const filter = `squadra1=eq.${encodeURIComponent(m.squadra1)}&squadra2=eq.${encodeURIComponent(m.squadra2)}&day=eq.${encodeURIComponent(m.day)}`;
-    const existingRows = await pgGet(`matches?${filter}&select=*`);
-    const existing = existingRows[0];
-    if (existing) {
-      const oldOdds = extractOddsForCompare(existing);
-      const newOdds = extractOddsForCompare(m.odds);
-      if (sameOdds(oldOdds, newOdds)) {
-        unchanged++;
-        continue;
-      }
-      await pgPatch(`matches?id=eq.${existing.id}`, {
-        odd_1: m.odds.odd_1,
-        odd_x: m.odds.odd_X,
-        odd_2: m.odds.odd_2,
-        odd_1x: m.odds.odd_1X,
-        odd_x2: m.odds.odd_X2,
-        odd_12: m.odds.odd_12,
-        odd_u15: m.odds.odd_U15,
-        odd_o15: m.odds.odd_O15,
-        odd_u25: m.odds.odd_U25,
-        odd_o25: m.odds.odd_O25,
-        odd_u35: m.odds.odd_U35,
-        odd_o35: m.odds.odd_O35,
-        odd_gg: m.odds.odd_GG,
-        odd_ng: m.odds.odd_NG,
-        estimated: m.odds.estimated,
-        time: m.time,
-        manifestazione: m.manifestazione,
-        updated_at: (/* @__PURE__ */ new Date()).toISOString()
-      });
-      await deletePredictions(existing.id);
-      updated++;
-    } else {
-      await pgPost("matches", {
-        day: m.day,
-        time: m.time,
-        manifestazione: m.manifestazione,
-        squadra1: m.squadra1,
-        squadra2: m.squadra2,
-        odd_1: m.odds.odd_1,
-        odd_x: m.odds.odd_X,
-        odd_2: m.odds.odd_2,
-        odd_1x: m.odds.odd_1X,
-        odd_x2: m.odds.odd_X2,
-        odd_12: m.odds.odd_12,
-        odd_u15: m.odds.odd_U15,
-        odd_o15: m.odds.odd_O15,
-        odd_u25: m.odds.odd_U25,
-        odd_o25: m.odds.odd_O25,
-        odd_u35: m.odds.odd_U35,
-        odd_o35: m.odds.odd_O35,
-        odd_gg: m.odds.odd_GG,
-        odd_ng: m.odds.odd_NG,
-        estimated: m.odds.estimated
-      }, "return=minimal");
-      inserted++;
-    }
+  if (validMatches.length) {
+    const rows = await pgRpc("bulk_upsert_matches", { p_matches: validMatches });
+    const r = Array.isArray(rows) ? rows[0] : rows;
+    inserted = r?.inserted ?? 0;
+    updated = r?.updated ?? 0;
+    unchanged = r?.unchanged ?? 0;
   }
   try {
     await pgPost("upload_skipped", {
@@ -33698,38 +33641,6 @@ async function handle(req) {
     skipped: skipped.length,
     total_parsed: validMatches.length,
     rows_seen
-  });
-}
-function extractOddsForCompare(o) {
-  return {
-    odd_1: numOrNull(o.odd_1 ?? o.odd_X1 ?? o["odd_1"]),
-    odd_X: numOrNull(o.odd_X ?? o["odd_X"] ?? o.odd_x),
-    odd_2: numOrNull(o.odd_2 ?? o["odd_2"]),
-    odd_1X: numOrNull(o.odd_1X ?? o.odd_1x),
-    odd_X2: numOrNull(o.odd_X2 ?? o.odd_x2),
-    odd_12: numOrNull(o.odd_12),
-    odd_U15: numOrNull(o.odd_U15 ?? o.odd_u15),
-    odd_O15: numOrNull(o.odd_O15 ?? o.odd_o15),
-    odd_U25: numOrNull(o.odd_U25 ?? o.odd_u25),
-    odd_O25: numOrNull(o.odd_O25 ?? o.odd_o25),
-    odd_U35: numOrNull(o.odd_U35 ?? o.odd_u35),
-    odd_O35: numOrNull(o.odd_O35 ?? o.odd_o35),
-    odd_GG: numOrNull(o.odd_GG ?? o.odd_gg),
-    odd_NG: numOrNull(o.odd_NG ?? o.odd_ng)
-  };
-}
-function numOrNull(v) {
-  return v === void 0 || v === null ? null : Number(v);
-}
-function sameOdds(a, b) {
-  const keys = Object.keys(a);
-  return keys.every((k) => a[k] === b[k]);
-}
-async function deletePredictions(matchId) {
-  const { url, key } = supabaseConfig();
-  await fetch(`${url}/rest/v1/predictions?match_id=eq.${encodeURIComponent(matchId)}`, {
-    method: "DELETE",
-    headers: { apikey: key, Authorization: `Bearer ${key}` }
   });
 }
 export {
