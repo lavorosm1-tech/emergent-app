@@ -7,6 +7,14 @@ import { pgGet, pgPost, pgPatch, jsonResponse, supabaseConfig } from "./lib/supa
  * di insert/update/unchanged, ma scrive su Supabase invece che MongoDB.
  */
 export default async (req: Request): Promise<Response> => {
+  try {
+    return await handle(req);
+  } catch (e: any) {
+    return jsonResponse({ error: `Errore interno: ${e?.message || String(e)}`, stack: e?.stack }, 500);
+  }
+};
+
+async function handle(req: Request): Promise<Response> {
   if (req.method !== "POST") return jsonResponse({ error: "Usa POST" }, 405);
 
   let file: File | null = null;
@@ -22,9 +30,9 @@ export default async (req: Request): Promise<Response> => {
   let parsed;
   try {
     const buf = await file.arrayBuffer();
-    parsed = parseExcelBytes(buf, file.name || "upload.xlsx");
+    parsed = await parseExcelBytes(buf, file.name || "upload.xlsx");
   } catch (e: any) {
-    return jsonResponse({ error: `Errore parsing Excel: ${e.message}` }, 400);
+    return jsonResponse({ error: `Errore parsing Excel: ${e?.message || String(e)}`, stack: e?.stack }, 400);
   }
 
   const { matches: validMatches, skipped, rows_seen } = parsed;
@@ -99,7 +107,7 @@ export default async (req: Request): Promise<Response> => {
     total_parsed: validMatches.length,
     rows_seen,
   });
-};
+}
 
 function extractOddsForCompare(o: any): Record<string, number | null> {
   return {

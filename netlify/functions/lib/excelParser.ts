@@ -1,8 +1,11 @@
-import * as XLSX from "xlsx";
-
 /**
  * Porting 1:1 di parse_excel_bytes() / estimate_missing() da backend/server.py.
  * Layout colonne Excel fisso (0-based), stesso identico schema del backend originale.
+ *
+ * NOTA: l'import di "xlsx" e' dinamico (dentro parseExcelBytes) e non in cima
+ * al file, cosi' un eventuale problema di caricamento del modulo viene
+ * catturato dal try/catch del chiamante invece di far crashare la funzione
+ * (che altrimenti risulterebbe in un 502 senza nessun dettaglio).
  */
 
 const ITALIAN_MONTHS: Record<string, number> = {
@@ -219,7 +222,8 @@ function toIsoDate(d: Date): string {
   return d.toISOString().slice(0, 10);
 }
 
-export function parseExcelBytes(buffer: ArrayBuffer, filename: string): ParsedExcel {
+export async function parseExcelBytes(buffer: ArrayBuffer, filename: string): Promise<ParsedExcel> {
+  const XLSX = await import("xlsx");
   const wb = XLSX.read(buffer, { type: "array", cellDates: false });
   const sheet = wb.Sheets[wb.SheetNames[0]];
   const rows: any[][] = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: true, defval: null });
