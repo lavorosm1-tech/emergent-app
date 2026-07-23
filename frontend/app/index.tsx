@@ -100,8 +100,17 @@ function evalLocal(market: string, home: number, away: number): boolean | null {
   return null;
 }
 
-// Module-level scroll position cache to restore between navigations
+// Stato "di sessione" salvato fuori dal componente: sopravvive quando si
+// esce dallo schermo (es. apri una partita, vai in Schedina) e si ritorna,
+// cosa che React resetterebbe altrimenti essendo il componente ricreato.
 let savedScrollY = 0;
+let savedQuery = "";
+let savedSelectedDay: string | null = null;
+let savedShowSearch = false;
+let savedTierFilter: "top" | null = null;
+let savedAreaFilter: string | null = null;
+let savedCountryFilter: string | null = null;
+let savedDidInit = false;
 
 export default function Home() {
   const router = useRouter();
@@ -113,17 +122,17 @@ export default function Home() {
 
   const [matches, setMatches] = useState<Match[]>([]);
   const [days, setDays] = useState<string[]>([]);
-  const [selectedDay, setSelectedDay] = useState<string | null>(null);
-  const [query, setQuery] = useState("");
-  const [showSearch, setShowSearch] = useState(false);
+  const [selectedDay, setSelectedDay] = useState<string | null>(savedSelectedDay);
+  const [query, setQuery] = useState(savedQuery);
+  const [showSearch, setShowSearch] = useState(savedShowSearch);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [calOpen, setCalOpen] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
-  const [didInit, setDidInit] = useState(false);
-  const [tierFilter, setTierFilter] = useState<"top" | null>(null);
-  const [areaFilter, setAreaFilter] = useState<string | null>(null);
-  const [countryFilter, setCountryFilter] = useState<string | null>(null);
+  const [didInit, setDidInit] = useState(savedDidInit);
+  const [tierFilter, setTierFilter] = useState<"top" | null>(savedTierFilter);
+  const [areaFilter, setAreaFilter] = useState<string | null>(savedAreaFilter);
+  const [countryFilter, setCountryFilter] = useState<string | null>(savedCountryFilter);
   const [sortByTime, setSortByTime] = useState(false);
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   const [marketStats, setMarketStats] = useState<{ market: string; win_rate: number; total: number; family: string }[]>([]);
@@ -132,14 +141,27 @@ export default function Home() {
   const [searching, setSearching] = useState(false);
   const scrollRef = useRef<ScrollView | null>(null);
 
-  // Ricerca globale: quando c'e' del testo, cerca su TUTTI i giorni (non solo quello aperto)
+  // Rispecchia lo stato "vivo" nelle variabili persistenti, cosi' se si
+  // torna su questo schermo il valore e' ancora quello di prima.
+  useEffect(() => { savedQuery = query; }, [query]);
+  useEffect(() => { savedSelectedDay = selectedDay; }, [selectedDay]);
+  useEffect(() => { savedShowSearch = showSearch; }, [showSearch]);
+  useEffect(() => { savedTierFilter = tierFilter; }, [tierFilter]);
+  useEffect(() => { savedAreaFilter = areaFilter; }, [areaFilter]);
+  useEffect(() => { savedCountryFilter = countryFilter; }, [countryFilter]);
+  useEffect(() => { savedDidInit = didInit; }, [didInit]);
+
+  // Ricerca globale: quando c'e' del testo, cerca su TUTTI i giorni DA OGGI IN POI
+  // (non su tutta la cronologia: le partite gia' giocate mesi fa non devono
+  // comparire tra i risultati mentre si sta sfogliando il calendario corrente).
   useEffect(() => {
     const q = query.trim();
     if (q.length < 2) { setSearchResults(null); setSearching(false); return; }
     setSearching(true);
     const t = setTimeout(() => {
+      const todayStr = new Date().toISOString().slice(0, 10);
       api.matches(undefined, q)
-        .then((res) => setSearchResults(res))
+        .then((res) => setSearchResults(res.filter((m) => m.day >= todayStr)))
         .catch(() => setSearchResults([]))
         .finally(() => setSearching(false));
     }, 300);
@@ -211,8 +233,12 @@ export default function Home() {
     (async () => {
       setLoading(true);
       const ds = await load(null);
-      const d = nearestDay(ds);
-      if (d) setSelectedDay(d);
+      // Se torniamo su questo schermo (giorno gia' scelto in precedenza), non
+      // sovrascriverlo con "il giorno piu' vicino" — mantieni la scelta di prima.
+      if (!savedSelectedDay) {
+        const d = nearestDay(ds);
+        if (d) setSelectedDay(d);
+      }
       setDidInit(true);
     })();
   }, [didInit, load]);
