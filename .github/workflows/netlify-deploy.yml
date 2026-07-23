@@ -1,0 +1,14 @@
+name: Trigger Netlify Deploy
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  trigger-netlify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call Netlify build hook
+        run: |
+          curl -X POST -fsS "https://api.netlify.com/build_hooks/6a22961a4ba410da69bb1a63"
+          echo "Netlify build hook chiamato con successo."
