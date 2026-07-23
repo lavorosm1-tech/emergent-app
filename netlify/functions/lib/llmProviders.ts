@@ -89,7 +89,9 @@ export async function callLlm(
     throw new Error(`Variabile d'ambiente ${PROVIDER_ENV_KEY[option.provider]} non configurata su Netlify`);
   }
 
-  const maxTokens = option.model.includes("reasoner") || option.model.includes("r1") ? 8000 : 2000;
+  const isReasoningModel =
+    option.model.includes("reasoner") || option.model.includes("r1") || option.model.includes("gpt-oss");
+  const maxTokens = isReasoningModel ? 8000 : 2000;
 
   const res = await fetch(`${baseUrl}/chat/completions`, {
     method: "POST",
