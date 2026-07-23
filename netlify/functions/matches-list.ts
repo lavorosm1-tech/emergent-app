@@ -1,4 +1,4 @@
-import { pgGet, jsonResponse } from "./lib/supabaseRest";
+import { pgGet, jsonResponse, rowToMatch } from "./lib/supabaseRest";
 
 /**
  * GET /matches-list?day=YYYY-MM-DD&q=testo
@@ -19,7 +19,7 @@ export default async (req: Request): Promise<Response> => {
 
   try {
     const rows = await pgGet(`matches?select=*&order=day.asc,time.asc${filter}&limit=5000`);
-    return jsonResponse(rows);
+    return jsonResponse(rows.map(rowToMatch));
   } catch (e: any) {
     return jsonResponse({ error: e.message }, 502);
   }

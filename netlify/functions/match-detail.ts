@@ -1,4 +1,4 @@
-import { pgGet, jsonResponse } from "./lib/supabaseRest";
+import { pgGet, jsonResponse, rowToMatch } from "./lib/supabaseRest";
 
 /**
  * GET /match-detail?id=<uuid>
@@ -12,7 +12,7 @@ export default async (req: Request): Promise<Response> => {
   try {
     const matches = await pgGet(`matches?id=eq.${encodeURIComponent(id)}&select=*`);
     if (!matches.length) return jsonResponse({ error: "Match not found" }, 404);
-    const match = matches[0];
+    const match: any = rowToMatch(matches[0]);
 
     const preds = await pgGet(
       `predictions?match_id=eq.${encodeURIComponent(id)}&select=*&order=created_at.desc&limit=1`

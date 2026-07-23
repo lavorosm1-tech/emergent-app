@@ -93,3 +93,26 @@ export function rowToOdds(row: any) {
     odd_NG: row.odd_ng,
   };
 }
+
+/**
+ * Converte una riga piatta della tabella `matches` nella forma { ...match, odds: {...} }
+ * che il frontend (api.ts / Match type) si aspetta — con le quote annidate in "odds"
+ * e le chiavi con le maiuscole originali (odd_X, odd_1X, odd_O15, ...).
+ */
+export function rowToMatch(row: any) {
+  return {
+    id: row.id,
+    day: row.day,
+    time: row.time,
+    manifestazione: row.manifestazione,
+    squadra1: row.squadra1,
+    squadra2: row.squadra2,
+    result: row.result,
+    family: row.family,
+    main_prediction: row.main_prediction,
+    selected: row.selected,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+    odds: { ...rowToOdds(row), estimated: row.estimated || [] },
+  };
+}
