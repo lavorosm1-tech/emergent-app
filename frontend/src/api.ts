@@ -641,8 +641,11 @@ export function buildFinalVerdict(
       const computed = getMarketOdd(b.market, odds);
       if (computed) b.odd = computed;
     }
-    if (b.sources.size === 3) b.score += 4;        // piena
-    else if (b.sources.size === 2) b.score += 1.5; // forte
+    // La concordanza tra sistemi INDIPENDENTI è il segnale più forte che
+    // abbiamo (3 metodi diversi che arrivano alla stessa conclusione):
+    // deve pesare più della fiducia di un solo sistema nel proprio pick.
+    if (b.sources.size === 3) b.score += 8;        // piena
+    else if (b.sources.size === 2) b.score += 2.5; // forte
   }
 
   // === Segnale strutturale debole: lieve penalità (non veto) per i mercati
@@ -664,9 +667,9 @@ export function buildFinalVerdict(
 
   // === Contributo strutturale ===
   // Il motore Poisson resta un input autorevole (è l'unico con base matematica
-  // sui gol attesi), quindi il suo pick #1 riceve un bonus additivo — ma NON
-  // più una garanzia di vittoria: AI e PRE possono ancora prevalere se
-  // concordano fortemente su un mercato diverso.
+  // sui gol attesi), quindi il suo pick #1 riceve un bonus additivo — ma da
+  // solo non deve poter superare una concordanza piena a 3 sistemi indipendenti
+  // (vedi bonus concordanza sopra, ora più alto di questo).
   if (structural?.ranking && structural.ranking.length > 0) {
     const top = structural.ranking[0];
     const robust = top.coverage >= 0.60 && top.fragility <= 0.35;
@@ -674,11 +677,11 @@ export function buildFinalVerdict(
       const rank = b.ranks.structural;
       if (!rank) continue;
       if (rank === 1) {
-        b.score += robust ? 6 : 3;
+        b.score += robust ? 3 : 1.5;
       } else if (rank === 2) {
-        b.score += 2;
-      } else if (rank === 3) {
         b.score += 1;
+      } else if (rank === 3) {
+        b.score += 0.5;
       }
     }
   }
