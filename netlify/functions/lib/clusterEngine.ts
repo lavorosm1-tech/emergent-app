@@ -444,6 +444,7 @@ export type RankedMarket = {
   broken_by: string[];
   score: number;
   odd: number | null;
+  ev: number | null;
   ml_adjustment?: { type: "boost" | "malus" | "neutral"; win_rate: number; total: number; delta: string };
 };
 
@@ -521,8 +522,14 @@ export function structuralAnalysis(
       const rng = m.match(/(\d+)\s*-\s*(\d+)/);
       if (rng && parseInt(rng[1], 10) < floor) continue;
     }
-    if (mu.startsWith("DC ") && mu.includes("+ U1.5") && floor >= 1) continue;
-    if (mu.startsWith("DC ") && mu.includes("+ U2.5") && floor >= 2) continue;
+    // Combo "DC X + Under N" ammesse come mercati standard book.
+    // Regola "banda >= 2 gol totali per essere ammessa" (Fase A):
+    //   banda_under = N - floor  (dove N.5 -> N gol max, floor = min gol)
+    //   Se banda_under < 2 -> banda troppo stretta -> escludi
+    if (mu.startsWith("DC ") && mu.includes("+ U1.5") && (1 - floor) < 2) continue;
+    if (mu.startsWith("DC ") && mu.includes("+ U2.5") && (2 - floor) < 2) continue;
+    if (mu.startsWith("DC ") && mu.includes("+ U3.5") && (3 - floor) < 2) continue;
+    if (mu.startsWith("DC ") && mu.includes("+ U4.5") && (4 - floor) < 2) continue;
 
     const odd1 = num(odds, "odd_1") || 99;
     const odd2 = num(odds, "odd_2") || 99;
@@ -678,6 +685,22 @@ export function structuralAnalysis(
       }
     }
 
+    // === EXPECTED VALUE (EV) — misura la reale convenienza del pick (Fase A) ===
+    // EV = coverage (probabilita' Poisson) x quota - 1
+    //   EV >= +0.10 -> value bet forte (+25% score)
+    //   EV >= +0.03 -> value bet moderato (+10% score)
+    //   EV <= -0.05 -> rischio negativo forte (-35% score)
+    //   EV <= -0.02 -> rischio negativo marginale (-20% score)
+    const comboOddVal = comboOdd(m, odds);
+    let ev: number | null = null;
+    if (comboOddVal && comboOddVal >= 1.01) {
+      ev = Math.round((cov * comboOddVal - 1.0) * 1000) / 1000;
+      if (ev >= 0.1) score *= 1.25;
+      else if (ev >= 0.03) score *= 1.1;
+      else if (ev <= -0.05) score *= 0.65;
+      else if (ev <= -0.02) score *= 0.8;
+    }
+
     ranked.push({
       market: m,
       coverage: cov,
@@ -686,7 +709,8 @@ export function structuralAnalysis(
       covered_scores: covered.slice(0, 6),
       broken_by: broken.slice(0, 5),
       score: round4(score),
-      odd: comboOdd(m, odds),
+      odd: comboOddVal,
+      ev,
     });
   }
 
