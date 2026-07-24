@@ -8,7 +8,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 
-import { api, Match, Prediction, MARKET_FAMILIES, ODD_LABELS, OddsKey, quickPredictionFamily, rankPicks, StructuralAnalysis, buildFinalVerdict, VerdictPick, getMarketOdd, filterCoherentAlternatives, violatesStructure, getMatchCautionWarning } from "@/src/api";
+import { api, Match, Prediction, MARKET_FAMILIES, ODD_LABELS, OddsKey, quickPredictionFamily, rankPicks, StructuralAnalysis, buildFinalVerdict, VerdictPick, getMarketOdd, filterCoherentAlternatives, violatesStructure, getMatchCautionWarning, MatchHistory } from "@/src/api";
 import { useScrollMemory } from "@/src/utils/scrollMemory";
 import { colors } from "@/src/theme";
 import { ScoreInput } from "@/src/components/ScoreInput";
@@ -34,14 +34,16 @@ export default function MatchDetail() {
   const [showLegend, setShowLegend] = useState(false);
   const [structural, setStructural] = useState<StructuralAnalysis | null>(null);
   const [showClusterAll, setShowClusterAll] = useState(false);
+  const [history, setHistory] = useState<MatchHistory | null>(null);
 
   const load = useCallback(async () => {
     try {
-      const [m, stats, cands, struct] = await Promise.all([
+      const [m, stats, cands, struct, hist] = await Promise.all([
         api.match(id!),
         api.marketStats().catch(() => ({ markets: [], family_totals: {} })),
         api.matchCandidates(id!).catch(() => ({ candidates: [], family: null, family_total: 0 })),
         api.matchStructural(id!).catch(() => null),
+        api.matchHistory(id!).catch(() => null),
       ]);
       setMatch(m);
       setPrediction(m.prediction ?? null);
@@ -49,6 +51,7 @@ export default function MatchDetail() {
       setMarketStats(stats?.markets || []);
       setYellowCandidates(cands?.candidates || []);
       setStructural(struct as StructuralAnalysis | null);
+      setHistory(hist as MatchHistory | null);
     } catch (e: any) {
       Alert.alert("Errore", e?.message || "Caricamento");
     } finally {
@@ -205,7 +208,7 @@ export default function MatchDetail() {
           const fam = quickPredictionFamily(match.odds);
           const llmMarkets = prediction?.playable_markets?.map((p) => p.market) || (prediction?.main_prediction ? [prediction.main_prediction] : []);
           const preRanked = rankPicks(fam, llmMarkets, marketStats);
-          const verdictRaw = buildFinalVerdict(structural, preRanked, prediction?.playable_markets, match.odds);
+          const verdictRaw = buildFinalVerdict(structural, preRanked, prediction?.playable_markets, match.odds, history);
           if (verdictRaw.length === 0) return null;
           // ============================================================
           // FILTRO STRUTTURALE: scarta picks che violano floor/ceiling

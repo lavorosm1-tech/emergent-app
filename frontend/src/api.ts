@@ -144,7 +144,7 @@ export const api = {
   fetchResultsAuto: (ids: string[], apply = true, apply_threshold = 80) => netlifyReq<{ results: any[]; applied: number; not_found: number; skipped: number }>("/results-fetch", { method: "POST", body: JSON.stringify({ ids, apply, apply_threshold }) }),
   applyResultManual: (id: string, score: string) => netlifyReq<{ ok: boolean; result: string }>("/results-apply", { method: "POST", body: JSON.stringify({ id, score }) }),
   matchCandidates: (id: string) => netlifyReq<{ candidates: { market: string; family: string; missed: number; family_total: number; miss_rate: number }[]; family: string | null; family_total: number }>(`/match-candidates?id=${encodeURIComponent(id)}`),
-  matchHistory: (id: string) => netlifyReq<{ league: string; global: Record<string, any[]>; league_specific: Record<string, any[]> }>(`/match-history?id=${encodeURIComponent(id)}`),
+  matchHistory: (id: string) => netlifyReq<MatchHistory>(`/match-history?id=${encodeURIComponent(id)}`),
   matchStructural: (id: string) => netlifyReq<StructuralAnalysis>(`/predict?matchId=${encodeURIComponent(id)}`),
   uploadExcel: async (uri: string, name: string, mimeType?: string) => {
     const form = new FormData();
@@ -546,11 +546,44 @@ export function getMarketOdd(market: string, odds: any): number | undefined {
   return undefined;
 }
 
+export type MatchHistoryStat = { market: string; wins: number; total: number; win_rate: number; missed: number };
+export type MatchHistory = {
+  league: string | null;
+  global: Record<string, MatchHistoryStat[]>;
+  league_specific: Record<string, MatchHistoryStat[]>;
+};
+
+// Numero minimo di partite perché il dato per-campionato sia considerato
+// affidabile abbastanza da rifinire quello globale (che invece è sempre
+// ben popolato per famiglia, quindi usato come base di default).
+const MIN_LEAGUE_SAMPLE = 30;
+
+function getHistoricalRate(
+  history: MatchHistory | null | undefined,
+  family: string | undefined,
+  market: string,
+): { rate: number; total: number } | undefined {
+  if (!history || !family) return undefined;
+  const key = normalizeMarket(market);
+  const leagueStats = history.league_specific?.[family];
+  const leagueStat = leagueStats?.find((s) => normalizeMarket(s.market) === key);
+  if (leagueStat && leagueStat.total >= MIN_LEAGUE_SAMPLE) {
+    return { rate: leagueStat.win_rate / 100, total: leagueStat.total };
+  }
+  const globalStats = history.global?.[family];
+  const globalStat = globalStats?.find((s) => normalizeMarket(s.market) === key);
+  if (globalStat && globalStat.total > 0) {
+    return { rate: globalStat.win_rate / 100, total: globalStat.total };
+  }
+  return undefined;
+}
+
 export function buildFinalVerdict(
   structural: StructuralAnalysis | null,
   preRanked: RankedPick[],
   aiMarkets: { market: string; reasoning?: string }[] | string[] | undefined,
   odds?: any,
+  history?: MatchHistory | null,
   options?: { minOdd?: number },
 ): VerdictPick[] {
   const minOdd = options?.minOdd ?? MIN_VALUE_ODD;
@@ -694,6 +727,35 @@ export function buildFinalVerdict(
   for (const b of buckets.values()) {
     if (b.coverage !== undefined) {
       b.score += (b.coverage - 0.5) * COVERAGE_WEIGHT;
+    }
+  }
+
+  // === CORRETTIVO STORICO REALE: divario tra coverage dichiarata e win-rate
+  // vero della famiglia ===
+  // Caso reale San Jose-Orlando: "1" aveva coverage 78% (motore Poisson),
+  // ma lo storico reale di DOMINANZA_OVER dice che "1" vince solo il 48%
+  // delle volte — un divario enorme che nessuno controllava. Qui, quando
+  // sia la coverage che lo storico sono disponibili per lo stesso mercato,
+  // penalizziamo il divario in eccesso oltre una soglia di tolleranza
+  // (15 punti — differenze piccole sono normali rumore statistico, non un
+  // allarme). Se la coverage promette molto più di quanto lo storico
+  // conferma, il pick viene ridimensionato proporzionalmente all'eccesso.
+  // Se non c'è coverage (mercato proposto solo da AI/PRE) usiamo lo storico
+  // da solo, con un peso più leggero perché è l'unico segnale disponibile.
+  const matchFamily = structural?.structure?.family;
+  const HIST_GAP_WEIGHT = 45;   // penalità per punto di divario in eccesso
+  const HIST_GAP_TOLERANCE = 0.15;
+  const HIST_ONLY_WEIGHT = 15;  // più leggero: unico segnale disponibile
+  for (const b of buckets.values()) {
+    const hist = getHistoricalRate(history, matchFamily, b.market);
+    if (!hist) continue;
+    if (b.coverage !== undefined) {
+      const gap = b.coverage - hist.rate;
+      if (gap > HIST_GAP_TOLERANCE) {
+        b.score -= (gap - HIST_GAP_TOLERANCE) * HIST_GAP_WEIGHT;
+      }
+    } else {
+      b.score += (hist.rate - 0.5) * HIST_ONLY_WEIGHT;
     }
   }
 
