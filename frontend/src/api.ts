@@ -801,6 +801,48 @@ export function getMatchCautionWarning(
 }
 
 // ============================================================
+// VALUTAZIONE MERCATO (vinto/perso) — per colorare i risultati in Schedina
+// ============================================================
+export function evaluateMarketOutcome(market: string, result: string): boolean | null {
+  const parts = result.split("-").map((n) => parseInt(n.trim(), 10));
+  if (parts.length !== 2 || parts.some((n) => isNaN(n))) return null;
+  const [home, away] = parts;
+  const total = home + away;
+  const m = market.trim().toUpperCase().replace(/\s+/g, "");
+
+  if (m.includes("+")) {
+    const results = market.toUpperCase().split("+").map((p) => evaluateMarketOutcome(p.trim(), result));
+    if (results.some((r) => r === null)) return null;
+    return results.every((r) => r === true);
+  }
+
+  if (m === "1") return home > away;
+  if (m === "X") return home === away;
+  if (m === "2") return away > home;
+  if (m === "1X" || m === "DC1X") return home >= away;
+  if (m === "X2" || m === "DCX2") return away >= home;
+  if (m === "12" || m === "DC12") return home !== away;
+
+  const overMatch = m.match(/^O(?:VER)?(\d+(?:\.\d+)?)/);
+  if (overMatch) return total > parseFloat(overMatch[1]);
+  const underMatch = m.match(/^U(?:NDER)?(\d+(?:\.\d+)?)/);
+  if (underMatch) return total < parseFloat(underMatch[1]);
+
+  if (m === "GG" || m === "BTTS") return home > 0 && away > 0;
+  if (m === "NG" || m === "NOBTTS") return home === 0 || away === 0;
+
+  if (m.includes("MG") && m.includes("2-4")) {
+    if (m.includes("CASA")) return home >= 2 && home <= 4;
+    if (m.includes("OSPITE")) return away >= 2 && away <= 4;
+    return total >= 2 && total <= 4;
+  }
+
+  return null;
+}
+
+
+// ============================================================
+// ============================================================
 // FILTRO ANTI-CONTRADDIZIONE per ALTERNATIVE CONCORDI
 // ============================================================
 // Date una giocata principale (PICK) e una lista di alternative, ritorna

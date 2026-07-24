@@ -7,7 +7,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter, useFocusEffect } from "expo-router";
 
-import { api, Match, quickPrediction } from "@/src/api";
+import { api, Match, quickPrediction, evaluateMarketOutcome } from "@/src/api";
 import { colors } from "@/src/theme";
 import { ScoreInput } from "@/src/components/ScoreInput";
 import { confirmAction } from "@/src/utils/platform";
@@ -117,6 +117,15 @@ export default function Selected() {
     }
     try {
       const out = await api.bulkResults(payload);
+      // Invalida le cache (altrimenti tornando su questa schermata o sulla
+      // lista partite si rivedrebbero i dati vecchi) e ricarica per riflettere
+      // subito i risultati salvati (necessario anche per il colore vinto/perso).
+      selectedListCache.invalidate();
+      for (const { id } of payload) {
+        const m = items.find((x) => x.id === id);
+        if (m?.day) matchesCache.invalidate(m.day);
+      }
+      await load();
       Alert.alert("Salvato", `${out.updated} risultati aggiornati`);
     } catch (e: any) {
       Alert.alert("Errore", e?.message);
@@ -239,6 +248,12 @@ export default function Selected() {
             {items.map((m) => {
               const pre = quickPrediction(m.odds);
               const lc = parseLeagueCode(m.manifestazione);
+              const preOutcome = m.result && pre ? evaluateMarketOutcome(pre.market, m.result) : null;
+              const aiOutcome = m.result && m.main_prediction ? evaluateMarketOutcome(m.main_prediction, m.result) : null;
+              const outcomeStyle = (o: boolean | null) =>
+                o === true ? { backgroundColor: "rgba(16,185,129,0.20)", borderColor: colors.success }
+                : o === false ? { backgroundColor: "rgba(239,68,68,0.20)", borderColor: colors.danger }
+                : null;
               return (
               <View key={m.id} style={styles.card}>
                 <TouchableOpacity
@@ -251,14 +266,14 @@ export default function Selected() {
                   <Text style={styles.cardWhen}>{m.day} · {m.time}</Text>
                   <View style={styles.predRow}>
                     {pre && (
-                      <View style={styles.preTag}>
+                      <View style={[styles.preTag, outcomeStyle(preOutcome)]}>
                         <Ionicons name="flash" size={10} color={colors.primary} />
                         <Text style={styles.preTagTxt}>{pre.market}</Text>
                         <Text style={styles.preTagOdd}>@ {pre.odd.toFixed(2)}</Text>
                       </View>
                     )}
                     {m.main_prediction && (
-                      <View style={styles.predTag}>
+                      <View style={[styles.predTag, outcomeStyle(aiOutcome)]}>
                         <Ionicons name="sparkles" size={10} color={colors.aiText} />
                         <Text style={styles.predTagTxt}>{m.main_prediction}</Text>
                       </View>

@@ -137,8 +137,6 @@ export default function Home() {
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   const [marketStats, setMarketStats] = useState<{ market: string; win_rate: number; total: number; family: string }[]>([]);
   const [pendingPreds, setPendingPreds] = useState<Set<string>>(new Set());
-  const [searchResults, setSearchResults] = useState<Match[] | null>(null);
-  const [searching, setSearching] = useState(false);
   const scrollRef = useRef<ScrollView | null>(null);
 
   // Rispecchia lo stato "vivo" nelle variabili persistenti, cosi' se si
@@ -150,23 +148,6 @@ export default function Home() {
   useEffect(() => { savedAreaFilter = areaFilter; }, [areaFilter]);
   useEffect(() => { savedCountryFilter = countryFilter; }, [countryFilter]);
   useEffect(() => { savedDidInit = didInit; }, [didInit]);
-
-  // Ricerca globale: quando c'e' del testo, cerca su TUTTI i giorni DA OGGI IN POI
-  // (non su tutta la cronologia: le partite gia' giocate mesi fa non devono
-  // comparire tra i risultati mentre si sta sfogliando il calendario corrente).
-  useEffect(() => {
-    const q = query.trim();
-    if (q.length < 2) { setSearchResults(null); setSearching(false); return; }
-    setSearching(true);
-    const t = setTimeout(() => {
-      const todayStr = new Date().toISOString().slice(0, 10);
-      api.matches(undefined, q)
-        .then((res) => setSearchResults(res.filter((m) => m.day >= todayStr)))
-        .catch(() => setSearchResults([]))
-        .finally(() => setSearching(false));
-    }, 300);
-    return () => clearTimeout(t);
-  }, [query]);
 
   // Subscribe to background prediction queue → re-render to show spinners on pending matches
   useEffect(() => {
@@ -292,15 +273,18 @@ export default function Home() {
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    const source = q.length >= 2 ? (searchResults || []) : matches;
-    return source.filter((m) => {
+    return matches.filter((m) => {
+      if (q.length >= 2) {
+        const hay = `${m.squadra1} ${m.squadra2} ${m.manifestazione}`.toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
       const lc = parseLeagueCode(m.manifestazione);
       if (countryFilter && lc.country !== countryFilter) return false;
       if (areaFilter && lc.area !== areaFilter) return false;
       if (tierFilter === "top" && !lc.isTop) return false;
       return true;
     });
-  }, [matches, searchResults, query, tierFilter, areaFilter, countryFilter]);
+  }, [matches, query, tierFilter, areaFilter, countryFilter]);
 
   const grouped = useMemo(() => {
     if (sortByTime) {

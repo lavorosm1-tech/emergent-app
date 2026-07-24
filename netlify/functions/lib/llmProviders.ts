@@ -93,6 +93,15 @@ export async function callLlm(
     option.id === "deepseek-reasoner" || option.model.includes("r1") || option.model.includes("gpt-oss");
   const maxTokens = isReasoningModel ? 8000 : 2000;
 
+  // DeepSeek V4 (sia Flash che Pro) attiva di default la "thinking mode" —
+  // diversamente dal vecchio V3.2 (deepseek-chat), che non ragionava affatto.
+  // Per l'opzione "Lite/Veloce" (deepseek-chat, non reasoner) vogliamo lo
+  // stesso comportamento di prima: risposta diretta senza catena di
+  // ragionamento, altrimenti con soli 2000 token la risposta viene troncata
+  // a metà ragionamento e non arriva mai al JSON finale (il fallback su
+  // reasoning_content qui sotto resterebbe con testo incompleto).
+  const disableThinking = option.provider === "deepseek" && option.id !== "deepseek-reasoner";
+
   const res = await fetch(`${baseUrl}/chat/completions`, {
     method: "POST",
     headers: {
@@ -107,6 +116,7 @@ export async function callLlm(
       ],
       temperature: 0.2,
       max_tokens: maxTokens,
+      ...(disableThinking ? { thinking: { type: "disabled" } } : {}),
     }),
   });
 
