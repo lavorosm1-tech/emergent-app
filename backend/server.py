@@ -807,9 +807,9 @@ def build_match_prompt(match: dict) -> str:
 # ============================================================
 
 LLM_OPTIONS = [
-    {"id": "deepseek-chat", "label": "DeepSeek V4 Lite", "provider": "deepseek", "model": "deepseek-chat",
+    {"id": "deepseek-chat", "label": "DeepSeek V4 Lite", "provider": "deepseek", "model": "deepseek-v4-flash",
      "cost_per_pred": 0.0014, "speed": "Veloce", "quality": "Buono", "desc": "Economicissimo (~€1,56/mese per 40 pred/giorno)"},
-    {"id": "deepseek-reasoner", "label": "DeepSeek V4 Pro", "provider": "deepseek", "model": "deepseek-reasoner",
+    {"id": "deepseek-reasoner", "label": "DeepSeek V4 Pro", "provider": "deepseek", "model": "deepseek-v4-pro",
      "cost_per_pred": 0.0027, "speed": "Lento", "quality": "Ottimo", "desc": "Ragionamento profondo, costo ridotto (~€3/mese)"},
     {"id": "gemini-flash", "label": "Gemini 2.5 Flash", "provider": "gemini", "model": "gemini-2.5-flash",
      "cost_per_pred": 0.002, "speed": "Veloce", "quality": "Buono", "desc": "Veloce e bilanciato"},
@@ -944,7 +944,7 @@ REGOLE OBBLIGATORIE basate sul PIN:
             raise HTTPException(500, "DEEPSEEK_API_KEY not configured")
         import litellm
         # Reasoner model needs much higher token limit (thinking tokens consumed)
-        max_tok = 8000 if "reasoner" in llm["model"] else 2000
+        max_tok = 8000 if llm["id"] == "deepseek-reasoner" else 2000
         try:
             resp = await litellm.acompletion(
                 model=f"deepseek/{llm['model']}",
