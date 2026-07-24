@@ -8,7 +8,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 
-import { api, Match, Prediction, MARKET_FAMILIES, ODD_LABELS, OddsKey, quickPredictionFamily, rankPicks, StructuralAnalysis, buildFinalVerdict, VerdictPick, getMarketOdd, filterCoherentAlternatives, violatesStructure } from "@/src/api";
+import { api, Match, Prediction, MARKET_FAMILIES, ODD_LABELS, OddsKey, quickPredictionFamily, rankPicks, StructuralAnalysis, buildFinalVerdict, VerdictPick, getMarketOdd, filterCoherentAlternatives, violatesStructure, getMatchCautionWarning } from "@/src/api";
 import { useScrollMemory } from "@/src/utils/scrollMemory";
 import { colors } from "@/src/theme";
 import { ScoreInput } from "@/src/components/ScoreInput";
@@ -229,6 +229,7 @@ export default function MatchDetail() {
             .slice(1)
             .sort((a, b) => (b.concordance - a.concordance) || (b.score - a.score));
           const alts = filterCoherentAlternatives(top, altsRaw, structural?.structure, 3);
+          const cautionWarning = getMatchCautionWarning(match.manifestazione, match.odds);
 
           const concColor = top.concordance === 3 ? colors.success
             : top.concordance === 2 ? colors.primary : colors.textDim;
@@ -301,6 +302,20 @@ export default function MatchDetail() {
               </View>
               <Text style={styles.verdictHint}>Fusione pesata di Motore Strutturale (Poisson) + AI + Pre-pronostico locale</Text>
 
+              {cautionWarning && (
+                <View style={{ flexDirection: "row", gap: 6, alignItems: "flex-start", backgroundColor: "rgba(245,158,11,0.15)", borderColor: "#F59E0B", borderWidth: 1, borderRadius: 8, padding: 8, marginTop: 6 }}>
+                  <Ionicons name="warning" size={14} color="#F59E0B" />
+                  <Text style={{ color: "#F59E0B", fontSize: 11, flex: 1 }}>{cautionWarning}</Text>
+                </View>
+              )}
+
+              {top.ambiguousPair && (
+                <View style={{ flexDirection: "row", gap: 6, alignItems: "flex-start", backgroundColor: "rgba(245,158,11,0.15)", borderColor: "#F59E0B", borderWidth: 1, borderRadius: 8, padding: 8, marginTop: 6 }}>
+                  <Ionicons name="warning" size={14} color="#F59E0B" />
+                  <Text style={{ color: "#F59E0B", fontSize: 11, flex: 1 }}>Mercato scelto perché i due migliori candidati sono opposti e troppo vicini per essere affidabili da soli (vedi alternative).</Text>
+                </View>
+              )}
+
               <View style={styles.verdictHero}>
                 <View style={styles.verdictMedal}>
                   <Ionicons name="medal" size={22} color="#FFF" />
@@ -348,8 +363,8 @@ export default function MatchDetail() {
                           {a.vetoed && (
                             <TouchableOpacity
                               onPress={() => confirmAction({
-                                title: "VETO STRUTTURALE",
-                                message: "Il motore matematico (Poisson) ha RIFIUTATO questo mercato perché non rientra nei TOP-10 strutturali. L'AI e/o il Pre-pronostico lo suggeriscono ma il calcolo dice che è strutturalmente debole: la matematica delle quote indica che ha alta probabilità di essere rotto da un risultato fuori range.\n\nIn pratica: l'AI propone, la matematica veta.",
+                                title: "SEGNALE STRUTTURALE DEBOLE",
+                                message: "Il motore matematico (Poisson) non ha messo questo mercato nella sua top-6, quindi riceve una lieve penalità nel punteggio finale (non un'esclusione). L'AI e/o il Pre-pronostico lo suggeriscono comunque: se qui compare, è perché la concordanza tra i sistemi lo ha comunque portato in classifica.",
                                 confirmText: "Ho capito",
                                 cancelText: "Chiudi",
                                 onConfirm: () => {},
@@ -358,10 +373,16 @@ export default function MatchDetail() {
                             >
                               <View style={styles.vetoTag}>
                                 <Ionicons name="warning" size={9} color="#FFF" />
-                                <Text style={styles.vetoTxt}>VETO STRUTTURALE</Text>
+                                <Text style={styles.vetoTxt}>SEGNALE DEBOLE</Text>
                                 <Ionicons name="information-circle-outline" size={10} color="#FFF" style={{ marginLeft: 2 }} />
                               </View>
                             </TouchableOpacity>
+                          )}
+                          {a.ambiguousPair && (
+                            <View style={[styles.vetoTag, { backgroundColor: "#F59E0B" }]}>
+                              <Ionicons name="swap-horizontal" size={9} color="#FFF" />
+                              <Text style={styles.vetoTxt}>OPPOSTO AL PICK</Text>
+                            </View>
                           )}
                         </View>
                         <View style={{ marginTop: 4 }}>{rankBadges(a)}</View>

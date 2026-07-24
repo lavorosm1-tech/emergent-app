@@ -642,9 +642,10 @@ def structural_analysis(odds: Dict, min_odd: float = 1.40, ml_scores: Optional[D
     for m in valid_markets:
         cov, covered, broken = coverage_for_market(m, central)
         frag = fragility_score(m, central)
-        # Skip if coverage < 30%
-        if cov < 0.30:
-            continue
+        # Non scartiamo più i mercati con coverage bassa: restano calcolati e
+        # visibili (col loro score reale, quindi in fondo alla classifica per
+        # via del punteggio basso) invece di sparire senza che l'utente possa
+        # vedere PERCHÉ sono deboli (es. GG con coverage 26%/fragility 74%).
         # Base score = coverage × (1 - fragility×0.3)
         score = cov * (1 - frag * 0.3)
 
@@ -888,17 +889,22 @@ def structural_analysis(odds: Dict, min_odd: float = 1.40, ml_scores: Optional[D
 
     ranked.sort(key=lambda x: -x["score"])
 
-    # Apply coherence filter: alternatives must be coherent with PICK
+    # Non nascondiamo più i mercati incoerenti col pick #1 (es. GG quando NG è
+    # il pick): l'utente deve poter vedere coverage/fragility di TUTTI i mercati
+    # validi calcolati, anche quelli opposti al pick principale. Li marchiamo
+    # solo per trasparenza (il frontend può segnalarli visivamente).
     pick = ranked[0]["market"] if ranked else ""
-    coherent = ranked[:1] + filter_coherent(pick, ranked[1:])
+    for r in ranked:
+        r["opposes_pick"] = are_incoherent(pick, r["market"]) if pick else False
+    top10 = ranked[:10]
 
     return {
         "structure": structure,
         "cluster": cluster,
         "central_cluster": central,
-        "ranking": coherent[:10],
+        "ranking": top10,
         "pick": ranked[0] if ranked else None,
-        "explanation": _build_explanation(structure, coherent),
+        "explanation": _build_explanation(structure, top10),
     }
 
 

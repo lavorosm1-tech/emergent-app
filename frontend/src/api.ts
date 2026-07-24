@@ -522,6 +522,7 @@ export type VerdictPick = {
   concordance: number;           // numero di sistemi in cui appare (1-3)
   agreementLabel: "piena" | "forte" | "parziale" | "divergente";
   vetoed?: boolean;              // true se il motore strutturale ha posto veto
+  ambiguousPair?: boolean;       // true se questo pick forma una coppia opposta ravvicinata col #1/#2 (es. GG vs NG testa a testa)
 };
 
 const SRC_WEIGHTS: Record<VerdictSource, { top: number; decay: number; bonus: number }> = {
@@ -644,27 +645,28 @@ export function buildFinalVerdict(
     else if (b.sources.size === 2) b.score += 1.5; // forte
   }
 
-  // === Structural veto: penalize markets rejected by the Poisson engine ===
-  // Only applied when we have a structural ranking to compare against.
+  // === Segnale strutturale debole: lieve penalità (non veto) per i mercati
+  // che il motore Poisson non ha messo nella sua top-6. Non è più un "rifiuto"
+  // (-60%), solo un fattore in meno nel punteggio: i 3 sistemi competono ad
+  // armi pari, non c'è più un vincitore garantito a priori.
   const vetoedKeys = new Set<string>();
   if (structural?.ranking && structural.ranking.length > 0) {
     for (const b of buckets.values()) {
       const key = norm(b.market);
       const inStructural = structuralWhitelist.has(key);
-      // Skip veto if the market is in the structural top OR if it's only proposed by structural
       const onlyStructural = b.sources.size === 1 && b.sources.has("structural");
       if (!inStructural && !onlyStructural) {
-        // Apply heavy penalty (-60% score) but don't fully remove (user can still see it)
-        b.score *= 0.40;
+        b.score *= 0.85; // lieve penalità, non più eliminazione di fatto
         vetoedKeys.add(key);
       }
     }
   }
 
-  // === STRUCTURAL PRIMACY ===
-  // Il motore matematico (Poisson) è la guida. Se il suo PICK #1 è robusto
-  // (coverage ≥ 60%, fragility ≤ 35%) gli diamo un boost massiccio così non
-  // può essere battuto da una concordanza casuale AI+PRE su un pick inferiore.
+  // === Contributo strutturale ===
+  // Il motore Poisson resta un input autorevole (è l'unico con base matematica
+  // sui gol attesi), quindi il suo pick #1 riceve un bonus additivo — ma NON
+  // più una garanzia di vittoria: AI e PRE possono ancora prevalere se
+  // concordano fortemente su un mercato diverso.
   if (structural?.ranking && structural.ranking.length > 0) {
     const top = structural.ranking[0];
     const robust = top.coverage >= 0.60 && top.fragility <= 0.35;
@@ -672,33 +674,26 @@ export function buildFinalVerdict(
       const rank = b.ranks.structural;
       if (!rank) continue;
       if (rank === 1) {
-        // PICK strutturale: boost forte se robusto, moderato altrimenti
-        b.score += robust ? 10 : 5;
+        b.score += robust ? 6 : 3;
       } else if (rank === 2) {
-        b.score += 3;
+        b.score += 2;
       } else if (rank === 3) {
-        b.score += 1.5;
+        b.score += 1;
       }
     }
+  }
 
-    // GUARDRAIL: se il PICK strutturale #1 è robusto, garantisci che il suo
-    // score finale sia almeno il +15% sopra il massimo tra gli altri mercati.
-    // Questo evita che concordanze casuali AI+PRE su mercati inferiori
-    // (es. U2.5 quando il vero pick è MG 1-3 totali) battano il motore matematico.
-    if (robust) {
-      const topKey = norm(top.market);
-      const topBucket = buckets.get(topKey);
-      if (topBucket) {
-        let maxOther = 0;
-        for (const b of buckets.values()) {
-          if (norm(b.market) !== topKey && b.score > maxOther) {
-            maxOther = b.score;
-          }
-        }
-        const minRequired = maxOther * 1.15 + 0.5;
-        if (topBucket.score < minRequired) {
-          topBucket.score = minRequired;
-        }
+  // === Combo ridondanti: penalità se il segno singolo ha già valore da solo ===
+  // Una combo "1X + O2.5" ha senso SOLO se il segno secco (1X) è sotto soglia
+  // di valore (quota troppo bassa). Se il segno singolo ha già una quota
+  // giocabile (≥ minOdd), la combo è ridondante e va proposta come pick
+  // principale solo la versione singola.
+  for (const b of buckets.values()) {
+    if (b.market.includes("+")) {
+      const baseSign = b.market.split("+")[0].replace(/^dc\s*/i, "").trim();
+      const baseOdd = getMarketOdd(baseSign, odds);
+      if (baseOdd !== undefined && baseOdd >= minOdd) {
+        b.score *= 0.5;
       }
     }
   }
@@ -761,7 +756,60 @@ export function buildFinalVerdict(
       };
     });
   out.sort((a, b) => b.score - a.score);
+
+  // === Mercati opposti ravvicinati (es. NG vs GG testa a testa) ===
+  // Se il #1 e il #2 sono mercati mutuamente esclusivi con punteggio vicino
+  // (entro il 20%), nessuno dei due è un pick affidabile da solo: si passa
+  // al primo mercato successivo che non è in conflitto con nessuno dei due.
+  // I due mercati ambigui restano visibili in lista, solo marcati.
+  if (out.length >= 3) {
+    const [first, second] = out;
+    if (areMarketsContradictory(first.market, second.market)) {
+      const gap = first.score > 0 ? (first.score - second.score) / first.score : 0;
+      if (gap < 0.20) {
+        const fallbackIdx = out.findIndex((v, i) =>
+          i >= 2 &&
+          !areMarketsContradictory(v.market, first.market) &&
+          !areMarketsContradictory(v.market, second.market),
+        );
+        if (fallbackIdx !== -1) {
+          first.ambiguousPair = true;
+          second.ambiguousPair = true;
+          const [fallback] = out.splice(fallbackIdx, 1);
+          out.unshift(fallback);
+        }
+      }
+    }
+  }
+
   return out;
+}
+
+// ============================================================
+// WARNING AMICHEVOLE + QUOTA ESTREMA
+// ============================================================
+// In amichevole le squadre spesso schierano riserve: una quota estrema
+// (favorita nettissima) è meno affidabile che nello stesso scenario in
+// campionato. Non cambia il pick calcolato, ma avvisa l'utente di
+// abbassare la fiducia — è il caso Napoli-Arezzo (quota 1 a 1.16, finita
+// 1-3 per l'Arezzo).
+// ============================================================
+const EXTREME_ODD_THRESHOLD = 1.25;
+
+export function getMatchCautionWarning(
+  manifestazione: string | null | undefined,
+  odds: Odds | null | undefined,
+): string | null {
+  if (!manifestazione || !odds) return null;
+  const isFriendly = /^AMI\b/i.test(manifestazione.trim());
+  if (!isFriendly) return null;
+  const o1 = odds.odd_1 ?? 99;
+  const o2 = odds.odd_2 ?? 99;
+  const minOdd = Math.min(o1, o2);
+  if (minOdd < EXTREME_ODD_THRESHOLD) {
+    return `Amichevole con favorita nettissima (quota ${minOdd.toFixed(2)}): le squadre spesso schierano riserve, affidabilità del pronostico ridotta rispetto a un campionato ufficiale.`;
+  }
+  return null;
 }
 
 // ============================================================
