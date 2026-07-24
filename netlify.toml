@@ -4,7 +4,6 @@
 
 [build.environment]
   NODE_VERSION = "22"
-  EXPO_PUBLIC_BACKEND_URL = "https://match-quota-analyzer.emergent.host"
 
 [[redirects]]
   from = "/predict"
@@ -74,6 +73,61 @@
 [[redirects]]
   from = "/selection-clear"
   to = "/.netlify/functions/selection-clear"
+  status = 200
+
+[[redirects]]
+  from = "/export-db"
+  to = "/.netlify/functions/export-db"
+  status = 200
+
+[[redirects]]
+  from = "/import-db"
+  to = "/.netlify/functions/import-db"
+  status = 200
+
+[[redirects]]
+  from = "/delete-all"
+  to = "/.netlify/functions/delete-all"
+  status = 200
+
+[[redirects]]
+  from = "/match-candidates"
+  to = "/.netlify/functions/match-candidates"
+  status = 200
+
+[[redirects]]
+  from = "/match-history"
+  to = "/.netlify/functions/match-history"
+  status = 200
+
+[[redirects]]
+  from = "/results-apply"
+  to = "/.netlify/functions/results-apply"
+  status = 200
+
+[[redirects]]
+  from = "/results-bulk"
+  to = "/.netlify/functions/results-bulk"
+  status = 200
+
+[[redirects]]
+  from = "/stats-scores"
+  to = "/.netlify/functions/stats-scores"
+  status = 200
+
+[[redirects]]
+  from = "/stats-reset"
+  to = "/.netlify/functions/stats-reset"
+  status = 200
+
+[[redirects]]
+  from = "/aistudio-prompt"
+  to = "/.netlify/functions/aistudio-prompt"
+  status = 200
+
+[[redirects]]
+  from = "/results-fetch"
+  to = "/.netlify/functions/results-fetch"
   status = 200
 
 [[redirects]]

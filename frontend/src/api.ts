@@ -1,5 +1,3 @@
-const BASE = process.env.EXPO_PUBLIC_BACKEND_URL || "";
-
 /**
  * Chiamate alle Netlify Functions "proprie" (stesso dominio, niente Emergent).
  * Usata per gli endpoint gia' migrati su Supabase.
@@ -102,20 +100,7 @@ export type StructuralAnalysis = {
   explanation: string;
 };
 
-async function req<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${BASE}/api${path}`, {
-    ...init,
-    headers: { "Content-Type": "application/json", ...(init?.headers || {}) },
-  });
-  if (!res.ok) {
-    const t = await res.text();
-    throw new Error(`${res.status} ${t}`);
-  }
-  return res.json();
-}
-
 export const api = {
-  base: BASE,
   matches: (day?: string, q?: string) => {
     const p = new URLSearchParams();
     if (day) p.set("day", day);
@@ -133,12 +118,12 @@ export const api = {
       body: JSON.stringify({ matchId: id, result }),
     }),
   bulkResults: (items: { id: string; result: string }[]) =>
-    req<{ updated: number; learnings?: any[] }>(`/results/bulk`, {
+    netlifyReq<{ updated: number; learnings?: any[] }>(`/results-bulk`, {
       method: "POST",
       body: JSON.stringify({ items }),
     }),
-  statsScores: () => req<Record<string, any[]>>("/stats/scores"),
-  statsReset: () => req<{ ok: boolean }>("/stats/reset", { method: "POST" }),
+  statsScores: () => netlifyReq<Record<string, any[]>>("/stats-scores"),
+  statsReset: () => netlifyReq<{ ok: boolean }>("/stats-reset", { method: "POST" }),
   updateSelection: (ids: string[], selected: boolean) =>
     netlifyReq<{ ok: boolean }>(`/selection-update`, {
       method: "POST",
@@ -146,20 +131,20 @@ export const api = {
     }),
   selectedList: () => netlifyReq<Match[]>("/selected-list"),
   clearSelection: () => netlifyReq<{ ok: boolean }>(`/selection-clear`, { method: "POST" }),
-  exportDb: () => req<any>("/export"),
+  exportDb: () => netlifyReq<any>("/export-db"),
   importDb: (payload: any) =>
-    req<any>(`/import`, { method: "POST", body: JSON.stringify(payload) }),
-  deleteAll: () => req<{ ok: boolean }>(`/matches/all`, { method: "DELETE" }),
-  aiStudioPrompt: () => req<{ csv: string; count: number }>(`/aistudio/prompt`),
+    netlifyReq<any>(`/import-db`, { method: "POST", body: JSON.stringify(payload) }),
+  deleteAll: () => netlifyReq<{ ok: boolean }>(`/delete-all`, { method: "DELETE" }),
+  aiStudioPrompt: () => netlifyReq<{ csv: string; count: number }>(`/aistudio-prompt`),
   getLlmSettings: () => netlifyReq<{ options: any[]; selected_id: string }>("/llm-settings"),
   setLlmSettings: (id: string) => netlifyReq<{ ok: boolean; selected_id: string }>("/llm-settings", { method: "POST", body: JSON.stringify({ id }) }),
   getBudget: () => netlifyReq<{ estimated_spent_usd: number; predictions_made: number; current_model: string; cost_per_prediction_usd: number; topup_url: string }>("/budget"),
   resetBudget: () => netlifyReq<{ ok: boolean }>("/budget?reset=true", { method: "POST" }),
   marketStats: () => netlifyReq<{ markets: { family: string; market: string; wins: number; losses: number; total: number; missed: number; family_total: number; miss_rate: number; win_rate: number }[]; family_totals: Record<string, number> }>("/ml-stats"),
-  fetchResultsAuto: (ids: string[], apply = true, apply_threshold = 80) => req<{ results: any[]; applied: number; not_found: number; skipped: number }>("/results/fetch", { method: "POST", body: JSON.stringify({ ids, apply, apply_threshold }) }),
-  applyResultManual: (id: string, score: string) => req<{ ok: boolean; result: string }>("/results/apply", { method: "POST", body: JSON.stringify({ id, score }) }),
-  matchCandidates: (id: string) => req<{ candidates: { market: string; family: string; missed: number; family_total: number; miss_rate: number }[]; family: string | null; family_total: number }>(`/match/${id}/candidates`),
-  matchHistory: (id: string) => req<{ league: string; global: Record<string, any[]>; league_specific: Record<string, any[]> }>(`/match/${id}/history`),
+  fetchResultsAuto: (ids: string[], apply = true, apply_threshold = 80) => netlifyReq<{ results: any[]; applied: number; not_found: number; skipped: number }>("/results-fetch", { method: "POST", body: JSON.stringify({ ids, apply, apply_threshold }) }),
+  applyResultManual: (id: string, score: string) => netlifyReq<{ ok: boolean; result: string }>("/results-apply", { method: "POST", body: JSON.stringify({ id, score }) }),
+  matchCandidates: (id: string) => netlifyReq<{ candidates: { market: string; family: string; missed: number; family_total: number; miss_rate: number }[]; family: string | null; family_total: number }>(`/match-candidates?id=${encodeURIComponent(id)}`),
+  matchHistory: (id: string) => netlifyReq<{ league: string; global: Record<string, any[]>; league_specific: Record<string, any[]> }>(`/match-history?id=${encodeURIComponent(id)}`),
   matchStructural: (id: string) => netlifyReq<StructuralAnalysis>(`/predict?matchId=${encodeURIComponent(id)}`),
   uploadExcel: async (uri: string, name: string, mimeType?: string) => {
     const form = new FormData();

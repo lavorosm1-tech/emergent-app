@@ -67,6 +67,15 @@ export async function pgRpc(fn: string, args: Record<string, unknown>): Promise<
   return text ? JSON.parse(text) : null;
 }
 
+export async function pgDelete(path: string): Promise<void> {
+  const { url, key } = supabaseConfig();
+  const res = await fetch(`${url}/rest/v1/${path}`, {
+    method: "DELETE",
+    headers: headers(key, { Prefer: "return=minimal" }),
+  });
+  if (!res.ok) throw new Error(`Supabase DELETE ${path}: ${res.status} ${await res.text()}`);
+}
+
 export function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body, null, 2), {
     status,
