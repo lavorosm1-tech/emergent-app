@@ -671,6 +671,32 @@ export function buildFinalVerdict(
     }
   }
 
+  // === CORRETTIVO COVERAGE REALE: verifica di realtà per ogni mercato ===
+  // Caso Colorado Springs-Miami FC: AI e PRE concordavano su O2.5 (coverage
+  // reale 47%, sotto la metà) contro NG proposto solo dal motore Poisson
+  // (coverage 64%). O2.5 vinceva comunque, perché il blocco sopra guarda solo
+  // la top-6 del motore strutturale — O2.5 era 7°, quindi la sua coverage non
+  // veniva mai controllata da nessuno. Qui recuperiamo la coverage reale per
+  // OGNI mercato che il motore ha calcolato (fino al 20° posto, non solo i
+  // primi 6) e la usiamo come correttivo indipendente da chi propone il
+  // mercato o da quanti sistemi sono d'accordo: sopra il 50% = bonus,
+  // sotto il 50% = penalità, proporzionale alla distanza.
+  if (structural?.ranking) {
+    for (const r of structural.ranking) {
+      const b = buckets.get(norm(r.market));
+      if (b && b.coverage === undefined) {
+        b.coverage = r.coverage;
+        b.fragility = r.fragility;
+      }
+    }
+  }
+  const COVERAGE_WEIGHT = 30;
+  for (const b of buckets.values()) {
+    if (b.coverage !== undefined) {
+      b.score += (b.coverage - 0.5) * COVERAGE_WEIGHT;
+    }
+  }
+
   // === Combo ridondanti: penalità se il segno singolo ha già valore da solo ===
   // Una combo "1X + O2.5" ha senso SOLO se il segno secco (1X) è sotto soglia
   // di valore (quota troppo bassa). Se il segno singolo ha già una quota

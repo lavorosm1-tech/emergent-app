@@ -896,15 +896,19 @@ def structural_analysis(odds: Dict, min_odd: float = 1.40, ml_scores: Optional[D
     pick = ranked[0]["market"] if ranked else ""
     for r in ranked:
         r["opposes_pick"] = are_incoherent(pick, r["market"]) if pick else False
-    top10 = ranked[:10]
+    # Alzato da 10 a 20: piu' mercati restano visibili con coverage/fragility
+    # reali, cosi' la fusione (frontend) puo' verificare anche i pick proposti
+    # da AI/PRE che il motore Poisson non mette nella sua top-6/10 assoluta
+    # (es. un mercato in 7a posizione, come successo con O2.5 a Colorado Springs).
+    top20 = ranked[:20]
 
     return {
         "structure": structure,
         "cluster": cluster,
         "central_cluster": central,
-        "ranking": top10,
+        "ranking": top20,
         "pick": ranked[0] if ranked else None,
-        "explanation": _build_explanation(structure, top10),
+        "explanation": _build_explanation(structure, top20),
     }
 
 
