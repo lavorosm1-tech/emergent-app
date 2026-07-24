@@ -17,9 +17,9 @@ export type LlmOption = {
 };
 
 export const LLM_OPTIONS: LlmOption[] = [
-  { id: "deepseek-chat", label: "DeepSeek V4 Lite", provider: "deepseek", model: "deepseek-chat",
+  { id: "deepseek-chat", label: "DeepSeek V4 Lite", provider: "deepseek", model: "deepseek-v4-flash",
     cost_per_pred: 0.0014, speed: "Veloce", quality: "Buono", desc: "Economicissimo (~€1,56/mese per 40 pred/giorno)" },
-  { id: "deepseek-reasoner", label: "DeepSeek V4 Pro", provider: "deepseek", model: "deepseek-reasoner",
+  { id: "deepseek-reasoner", label: "DeepSeek V4 Pro", provider: "deepseek", model: "deepseek-v4-pro",
     cost_per_pred: 0.0027, speed: "Lento", quality: "Ottimo", desc: "Ragionamento profondo, costo ridotto (~€3/mese)" },
   { id: "groq-gpt-oss-120b", label: "GPT-OSS 120B (Groq)", provider: "groq", model: "openai/gpt-oss-120b",
     cost_per_pred: 0, speed: "Veloce", quality: "Ottimo", desc: "Gratuito — miglior qualità disponibile su Groq, nessun costo" },
@@ -90,7 +90,7 @@ export async function callLlm(
   }
 
   const isReasoningModel =
-    option.model.includes("reasoner") || option.model.includes("r1") || option.model.includes("gpt-oss");
+    option.id === "deepseek-reasoner" || option.model.includes("r1") || option.model.includes("gpt-oss");
   const maxTokens = isReasoningModel ? 8000 : 2000;
 
   const res = await fetch(`${baseUrl}/chat/completions`, {
