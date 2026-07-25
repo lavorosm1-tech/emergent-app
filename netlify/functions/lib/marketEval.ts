@@ -4,6 +4,7 @@
  * (diverso da evaluateMarketStrict in clusterEngine.ts, che valuta sul
  * cluster ipotetico — qui si valuta il risultato VERO della partita).
  */
+import { CANDIDATE_MARKETS } from "./clusterEngine";
 
 export function evaluateMarket(market: string, home: number, away: number): boolean | null {
   const total = home + away;
@@ -37,10 +38,15 @@ export function evaluateMarket(market: string, home: number, away: number): bool
   if (m === "GG" || m === "BTTS") return home > 0 && away > 0;
   if (m === "NG" || m === "NOBTTS") return home === 0 || away === 0;
 
-  if (m.includes("MG") && m.includes("2-4")) {
-    if (m.includes("CASA")) return home >= 2 && home <= 4;
-    if (m.includes("OSPITE")) return away >= 2 && away <= 4;
-    return total >= 2 && total <= 4;
+  // MG X-Y (qualsiasi range, non solo 2-4): "MG 1-3 CASA", "MG 2-5 TOTALI", ecc.
+  if (m.includes("MG")) {
+    const range = m.match(/(\d+)-(\d+)/);
+    if (!range) return null;
+    const lo = parseInt(range[1], 10);
+    const hi = parseInt(range[2], 10);
+    if (m.includes("CASA")) return home >= lo && home <= hi;
+    if (m.includes("OSPITE")) return away >= lo && away <= hi;
+    return total >= lo && total <= hi;
   }
 
   return null;
@@ -53,9 +59,9 @@ export function parseResult(resultStr: string | null | undefined): [number, numb
   return [parseInt(m[1], 10), parseInt(m[2], 10)];
 }
 
-export const STANDARD_MARKETS: string[] = [
-  "1", "X", "2", "1X", "X2", "12",
-  "O1.5", "U1.5", "O2.5", "U2.5", "O3.5", "U3.5",
-  "GG", "NG", "MG 2-4 totali", "MG 2-4 casa", "MG 2-4 ospite",
-  "DC 1X + U3.5", "DC X2 + U3.5", "DC 1X + O1.5", "DC X2 + O1.5",
-];
+// Fonte unica di verità: gli stessi 42 mercati che il motore Poisson
+// considera candidati (CANDIDATE_MARKETS in clusterEngine.ts). Prima qui
+// c'era un sottoinsieme di 21 mercati, quindi lo storico non copriva
+// molte combo (es. "1 + O2.5", "DC 12 + GG", i range MG oltre 2-4) — un
+// pick 2/combo diverso da questi non aveva mai un riscontro storico.
+export const STANDARD_MARKETS: string[] = CANDIDATE_MARKETS;

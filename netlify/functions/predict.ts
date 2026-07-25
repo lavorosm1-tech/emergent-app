@@ -1,15 +1,17 @@
-import { structuralAnalysis, type Odds } from "./lib/clusterEngine";
+import { structuralAnalysis, classifyFamily, type Odds, type MlScoreEntry } from "./lib/clusterEngine";
+import { pgGet } from "./lib/supabaseRest";
 
 /**
  * GET /predict?matchId=<uuid>
  *
- * Legge la partita da Supabase (tabella `matches`) via REST diretto
- * (nessuna dipendenza npm, solo fetch nativo) e calcola il pronostico
- * strutturale con il motore Poisson portato in TypeScript.
+ * Legge la partita da Supabase (tabella `matches`) e calcola il pronostico
+ * strutturale con il motore Poisson portato in TypeScript. Recupera anche
+ * lo storico reale (market_scores) per la famiglia della partita e lo passa
+ * al motore, che lo usa per correggere lo score dei mercati con
+ * performance storica estrema (win-rate ≥70% o ≤30%, meccanismo
+ * "ml_adjustment" già presente nel motore ma prima mai alimentato).
  *
- * Non scrive nulla su `predictions` — è solo lettura, pensato per
- * verificare che l'intera catena Netlify -> Supabase -> motore funzioni,
- * senza toccare Emergent in alcun modo.
+ * Non scrive nulla su `predictions` — è solo lettura.
  */
 export default async (req: Request): Promise<Response> => {
   const url = new URL(req.url);
@@ -19,34 +21,15 @@ export default async (req: Request): Promise<Response> => {
     return json({ error: "Parametro 'matchId' mancante. Uso: /predict?matchId=<uuid>" }, 400);
   }
 
-  const supabaseUrl = process.env.VITE_SUPABASE_URL;
-  const supabaseKey = process.env.VITE_SUPABASE_ANON_KEY;
-
-  if (!supabaseUrl || !supabaseKey) {
-    return json({ error: "Variabili SUPABASE non configurate su Netlify" }, 500);
-  }
-
   let row: any;
   try {
-    const res = await fetch(
-      `${supabaseUrl}/rest/v1/matches?id=eq.${encodeURIComponent(matchId)}&select=*`,
-      {
-        headers: {
-          apikey: supabaseKey,
-          Authorization: `Bearer ${supabaseKey}`,
-        },
-      }
-    );
-    if (!res.ok) {
-      return json({ error: `Errore Supabase: ${res.status} ${await res.text()}` }, 502);
-    }
-    const rows = await res.json();
+    const rows = await pgGet(`matches?id=eq.${encodeURIComponent(matchId)}&select=*`);
     if (!rows.length) {
       return json({ error: `Nessuna partita trovata con id=${matchId}` }, 404);
     }
     row = rows[0];
   } catch (e: any) {
-    return json({ error: `Errore di rete verso Supabase: ${e.message}` }, 502);
+    return json({ error: `Errore Supabase: ${e.message}` }, 502);
   }
 
   const odds: Odds = {
@@ -66,7 +49,10 @@ export default async (req: Request): Promise<Response> => {
     odd_NG: row.odd_ng,
   };
 
-  const result = structuralAnalysis(odds);
+  const family = classifyFamily(odds).family;
+  const mlScores = await buildMlScores(family, row.manifestazione || null);
+
+  const result = structuralAnalysis(odds, 1.4, mlScores);
 
   return json({
     structure: result.structure,
@@ -87,6 +73,39 @@ export default async (req: Request): Promise<Response> => {
     source: "netlify-function + supabase (nessuna dipendenza da Emergent)",
   });
 };
+
+/**
+ * Costruisce la mappa mercato -> statistiche storiche per la famiglia della
+ * partita, da passare al motore. Base globale per famiglia (sempre ben
+ * popolata), rifinita col dato per-campionato solo se ha almeno 30
+ * partite (stessa soglia usata nel correttivo lato fusione, per coerenza —
+ * sotto soglia il dato per-campionato è troppo rumoroso).
+ */
+async function buildMlScores(family: string, league: string | null): Promise<Record<string, MlScoreEntry>> {
+  const map: Record<string, MlScoreEntry> = {};
+  try {
+    const globalRows = await pgGet(
+      `market_scores?family=eq.${encodeURIComponent(family)}&league=is.null&select=market,wins,total,losses`,
+    );
+    for (const r of globalRows) {
+      if (!r.total) continue;
+      map[r.market] = { win_rate: Math.round((r.wins / r.total) * 1000) / 10, total: r.total, wins: r.wins, losses: r.losses };
+    }
+    if (league) {
+      const leagueRows = await pgGet(
+        `market_scores?family=eq.${encodeURIComponent(family)}&league=eq.${encodeURIComponent(league)}&select=market,wins,total,losses`,
+      );
+      for (const r of leagueRows) {
+        if (!r.total || r.total < 30) continue;
+        map[r.market] = { win_rate: Math.round((r.wins / r.total) * 1000) / 10, total: r.total, wins: r.wins, losses: r.losses };
+      }
+    }
+  } catch {
+    // Se lo storico non è disponibile, il motore funziona comunque senza
+    // ml_adjustment (comportamento identico a prima di questo fix).
+  }
+  return map;
+}
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body, null, 2), {
