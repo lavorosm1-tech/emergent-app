@@ -65,6 +65,57 @@ Altre cose da sapere subito:
 
 ## Log (più recente in cima)
 
+### 2026-07-25 (sera) — FASE 3: lo storico entra davvero nel motore
+
+**Il problema.** Il "ML boost" esistente spostava lo score di ±10% solo per i
+mercati con win-rate storico ≥70% o ≤30%, su base FAMIGLIA. Misurato: il 71%
+delle righe storiche stava nel mezzo e non produceva alcun effetto, e ±10% non
+poteva comunque nulla contro euristiche che moltiplicano per 1,35 o 0,45. In
+pratica 5.160 partite non avevano voce in capitolo.
+
+**Cosa c'è ora.**
+- Nuova tabella `scenario_market_scores` (scenario × mercato), popolata dalle
+  5.160 partite storiche: 784 righe, 252.840 osservazioni. Lo scenario è
+  forza della favorita × gol attesi (16 combinazioni), non più le 8 famiglie,
+  che mescolavano partite troppo diverse.
+- Nuova funzione SQL `eval_market_sql` (riproduce `evaluateMarketStrict`) usata
+  per il backfill, e `apply_scenario_result` che aggiorna tutti i 49 mercati in
+  **un solo round-trip** — con 49 chiamate separate il salvataggio multiplo
+  dalla Schedina avrebbe fatto scadere la function.
+- `predict.ts` passa al motore lo storico dello scenario invece di quello della
+  famiglia; `applyResult.ts` aggiorna la tabella a ogni risultato inserito, per
+  **tutti** i mercati e non solo per quelli proposti dall'IA (che darebbe una
+  statistica distorta dalle scelte del sistema).
+- Il correttivo nel motore non è più una soglia secca ma una media pesata:
+  `k = n/(n+80)`, `mista = coverage×(1−k) + storico×k`, `score ×= mista/coverage`.
+  Con poche partite conta il modello, con centinaia conta lo storico. Nessun
+  mercato resta scoperto.
+
+**Verifica su test set vero.** Le statistiche storiche sono state ricalcolate
+**escludendo** le 583 partite di prova (4.602 partite di training), altrimenti
+il correttivo si sarebbe misurato su sé stesso. Trascrizione verificata con
+checksum esatto contro il database.
+
+| Soglia | Senza storico | Con storico | Quota media |
+|---|---|---|---|
+| 1,40 | 62,3% | **63,6%** | 1,56 → 1,58 |
+| 1,50 | 61,6% | **65,0%** | 1,62 → 1,64 |
+| 1,60 | 54,0% | **57,1%** | 1,86 → 1,90 |
+| 1,75 | 49,7% | 49,7% | 2,08 → **2,25** |
+
+Migliora a tre soglie su quattro, e alla quarta lascia la precisione invariata
+alzando la quota. Il risultato **non dipende dalla taratura**: con la costante
+di shrink a 30, 80 o 200 il miglioramento resta, quindi non è un artefatto.
+
+Provata e **scartata** una variante additiva (bonus proporzionale a
+`storico − modello`): crolla a 46-52%, perché premia i mercati su cui storico e
+modello sono in disaccordo, che sono soprattutto quelli a bassa probabilità.
+
+**Non fatto in questa fase**: i pesi della fusione fra i tre sistemi
+(10 / 5 / 8 + concordanza) restano quelli scritti a mano. `system_scorecard` è
+stata creata in Fase 0 ma è ancora vuota: si riempie con le partite vere da qui
+in avanti, e solo allora quei pesi potranno essere misurati invece che scelti.
+
 ### 2026-07-25 (sera) — FASE 2: soglia di quota scelta dall'utente
 
 **Cosa cambia.** La quota minima non è più il `1.4` fisso passato a

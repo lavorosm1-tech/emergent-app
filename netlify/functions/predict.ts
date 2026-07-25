@@ -1,4 +1,4 @@
-import { structuralAnalysis, classifyFamily, type Odds, type MlScoreEntry } from "./lib/clusterEngine";
+import { structuralAnalysis, type Odds, type MlScoreEntry } from "./lib/clusterEngine";
 import { pgGet, pgPatch } from "./lib/supabaseRest";
 import { preHeuristicPick } from "./lib/preHeuristic";
 import { classifyScenario } from "./lib/scenario";
@@ -56,8 +56,12 @@ export default async (req: Request): Promise<Response> => {
     odd_NG: row.odd_ng,
   };
 
-  const family = classifyFamily(odds).family;
-  const mlScores = await buildMlScores(family, row.manifestazione || null);
+  // FASE 3 — lo storico che alimenta il motore non e' piu' quello per FAMIGLIA
+  // ma quello per SCENARIO (forza della favorita x gol attesi). Motivo: le
+  // famiglie sono 8 e mescolano partite molto diverse; gli scenari separano i
+  // casi in cui un mercato regge da quelli in cui non regge.
+  const scenario = classifyScenario(odds);
+  const mlScores = await buildScenarioScores(scenario);
 
   // FASE 2 — la soglia di quota minima è una scelta dell'utente, non più un
   // 1.4 fisso. Il parametro in query ha la precedenza (utile per confronti
@@ -94,39 +98,6 @@ export default async (req: Request): Promise<Response> => {
 };
 
 /**
- * Costruisce la mappa mercato -> statistiche storiche per la famiglia della
- * partita, da passare al motore. Base globale per famiglia (sempre ben
- * popolata), rifinita col dato per-campionato solo se ha almeno 30
- * partite (stessa soglia usata nel correttivo lato fusione, per coerenza —
- * sotto soglia il dato per-campionato è troppo rumoroso).
- */
-async function buildMlScores(family: string, league: string | null): Promise<Record<string, MlScoreEntry>> {
-  const map: Record<string, MlScoreEntry> = {};
-  try {
-    const globalRows = await pgGet(
-      `market_scores?family=eq.${encodeURIComponent(family)}&league=is.null&select=market,wins,total,losses`,
-    );
-    for (const r of globalRows) {
-      if (!r.total) continue;
-      map[r.market] = { win_rate: Math.round((r.wins / r.total) * 1000) / 10, total: r.total, wins: r.wins, losses: r.losses };
-    }
-    if (league) {
-      const leagueRows = await pgGet(
-        `market_scores?family=eq.${encodeURIComponent(family)}&league=eq.${encodeURIComponent(league)}&select=market,wins,total,losses`,
-      );
-      for (const r of leagueRows) {
-        if (!r.total || r.total < 30) continue;
-        map[r.market] = { win_rate: Math.round((r.wins / r.total) * 1000) / 10, total: r.total, wins: r.wins, losses: r.losses };
-      }
-    }
-  } catch {
-    // Se lo storico non è disponibile, il motore funziona comunque senza
-    // ml_adjustment (comportamento identico a prima di questo fix).
-  }
-  return map;
-}
-
-/**
  * Scrive sulla riga della partita il pick strutturale, quello dell'euristica
  * PRE e lo scenario. Non tocca `main_prediction` (che resta il pick dell'IA)
  * né alcun altro campo esistente. Se la partita ha già un risultato non
@@ -150,6 +121,37 @@ async function recordPicks(row: any, odds: Odds, structuralPick: string | null):
   } catch {
     // Best effort: la misurazione non deve mai far fallire un pronostico.
   }
+}
+
+/**
+ * Statistiche storiche reali per lo scenario di questa partita: per ogni
+ * mercato, quante volte ha vinto in partite con lo stesso profilo di quote.
+ * Il motore le mescola con la propria probabilita' pesandole sul numero di
+ * partite viste (vedi il correttivo in clusterEngine.ts).
+ *
+ * Se lo storico non e' raggiungibile il motore lavora senza, esattamente come
+ * prima della Fase 3.
+ */
+async function buildScenarioScores(scenario: string): Promise<Record<string, MlScoreEntry>> {
+  const map: Record<string, MlScoreEntry> = {};
+  if (!scenario || scenario === "sconosciuto") return map;
+  try {
+    const rows = await pgGet(
+      `scenario_market_scores?scenario=eq.${encodeURIComponent(scenario)}&select=market,wins,losses,total`,
+    );
+    for (const r of rows) {
+      if (!r.total) continue;
+      map[r.market] = {
+        win_rate: Math.round((r.wins / r.total) * 1000) / 10,
+        total: r.total,
+        wins: r.wins,
+        losses: r.losses,
+      };
+    }
+  } catch {
+    // Nessuno storico disponibile: il motore funziona comunque.
+  }
+  return map;
 }
 
 function json(body: unknown, status = 200): Response {

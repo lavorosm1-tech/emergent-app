@@ -28,6 +28,7 @@ export async function applyMatchResult(
   // AI", la partita non insegna niente a nessuno. Questo blocco invece conta
   // sempre, anche senza IA.
   await updateSystemScorecard(match, home, away);
+  await updateScenarioScores(match, home, away);
 
   const preds = await pgGet(
     `predictions?match_id=eq.${encodeURIComponent(matchId)}&select=*&order=created_at.desc&limit=1`,
@@ -98,6 +99,33 @@ async function updateSystemScorecard(match: any, home: number, away: number): Pr
         p_win: outcome,
       });
     }
+  } catch {
+    // La misurazione non deve mai bloccare l'inserimento di un risultato.
+  }
+}
+
+/**
+ * FASE 3 — aggiorna lo storico per scenario con TUTTI i mercati standard.
+ *
+ * È il pezzo che rende l'apprendimento davvero incrementale: ogni risultato
+ * inserito sposta le statistiche dello scenario di quella partita, e quindi i
+ * pronostici futuri delle partite con quote simili. Diversamente da
+ * `market_scores`, che si aggiorna solo per i mercati proposti dall'IA, qui si
+ * contano tutti i 49 mercati: la statistica resta imparziale e non riflette
+ * quello che il sistema aveva scelto di proporre.
+ */
+async function updateScenarioScores(match: any, home: number, away: number): Promise<void> {
+  try {
+    const scenario: string = match.scenario || classifyScenario(rowToOdds(match) as any);
+    if (!scenario || scenario === "sconosciuto") return;
+
+    // Una sola chiamata invece di 49: con il salvataggio multiplo dalla
+    // Schedina, 49 round-trip per partita farebbero scadere la function.
+    await pgRpc("apply_scenario_result", {
+      p_scenario: scenario,
+      p_home: home,
+      p_away: away,
+    });
   } catch {
     // La misurazione non deve mai bloccare l'inserimento di un risultato.
   }
