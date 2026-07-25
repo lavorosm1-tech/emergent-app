@@ -131,6 +131,11 @@
   status = 200
 
 [[redirects]]
+  from = "/save-verdict"
+  to = "/.netlify/functions/save-verdict"
+  status = 200
+
+[[redirects]]
   from = "/*"
   to = "/index.html"
   status = 200
