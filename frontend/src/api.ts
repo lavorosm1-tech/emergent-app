@@ -75,6 +75,10 @@ export type StructuralMarketRank = {
   covered_scores: string[];
   broken_by: string[];
   score: number;
+  /** quota del mercato: reale se il bookmaker la fornisce, altrimenti stimata */
+  odd?: number | null;
+  /** true se `odd` è una stima del motore e non un prezzo del bookmaker */
+  odd_estimated?: boolean;
   ml_adjustment?: MLAdjustment;
 };
 
@@ -509,6 +513,7 @@ export type VerdictPick = {
   sources: VerdictSource[];     // sistemi in cui appare
   ranks: Partial<Record<VerdictSource, number>>; // posizione nel rispettivo top-N
   odd?: number;                  // se reperibile da pre-pronostico o quote
+  oddEstimated?: boolean;        // true se la quota è stimata dal motore (mercati senza prezzo, es. multigol)
   coverage?: number;             // dal motore strutturale
   fragility?: number;            // dal motore strutturale
   family?: string;
@@ -669,6 +674,16 @@ export function buildFinalVerdict(
       const computed = getMarketOdd(b.market, odds);
       if (computed) b.odd = computed;
     }
+    // Se il bookmaker non dà un prezzo (tutti i multigol, diverse combo), usiamo
+    // la quota stimata dal motore strutturale. Prima questi mercati restavano
+    // senza quota e sfuggivano a ogni filtro: erano la maggioranza dei pick.
+    if (b.odd === undefined || b.odd === null) {
+      const fromEngine = structural?.ranking?.find((r) => norm(r.market) === norm(b.market));
+      if (fromEngine?.odd) {
+        b.odd = fromEngine.odd;
+        b.oddEstimated = !!fromEngine.odd_estimated;
+      }
+    }
     // La concordanza tra sistemi INDIPENDENTI è il segnale più forte che
     // abbiamo (3 metodi diversi che arrivano alla stessa conclusione):
     // deve pesare più della fiducia di un solo sistema nel proprio pick.
@@ -819,7 +834,10 @@ export function buildFinalVerdict(
   const out: VerdictPick[] = Array.from(buckets.values())
     // Filter out picks below value threshold (sotto soglia = solo rischio, niente valore)
     .filter((b) => {
-      // Se non riesco a determinare la quota → lascio passare (mercati MG non standard)
+      // Ora anche i mercati senza prezzo del bookmaker (multigol e combo) hanno
+      // una quota stimata dal motore, quindi il filtro vale per tutti. Il caso
+      // "nessuna quota nemmeno stimata" resta possibile solo se il motore non è
+      // riuscito a calcolarla: in quel caso lasciamo passare, come prima.
       if (b.odd === undefined || b.odd === null) return true;
       return b.odd >= minOdd;
     })
@@ -833,6 +851,7 @@ export function buildFinalVerdict(
         sources: Array.from(b.sources),
         ranks: b.ranks,
         odd: b.odd,
+        oddEstimated: b.oddEstimated,
         coverage: b.coverage,
         fragility: b.fragility,
         family: b.family,

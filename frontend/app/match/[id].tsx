@@ -378,7 +378,12 @@ export default function MatchDetail() {
                   <Text style={styles.verdictLabel}>GIOCATA CONSIGLIATA</Text>
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 10, flexWrap: "wrap", marginTop: 4 }}>
                     <Text style={styles.verdictMarket}>{top.market}</Text>
-                    {top.odd && top.odd > 0 ? <Text style={styles.verdictOdd}>@ {top.odd.toFixed(2)}</Text> : null}
+                    {top.odd && top.odd > 0 ? (
+                      <Text style={styles.verdictOdd}>
+                        {top.oddEstimated ? "≈ " : "@ "}{top.odd.toFixed(2)}
+                        {top.oddEstimated ? " (stimata)" : ""}
+                      </Text>
+                    ) : null}
                     {pickOutcome === "won" && (
                       <View style={[styles.verdictOutcome, { backgroundColor: "rgba(16,185,129,0.20)", borderColor: colors.success }]}>
                         <Ionicons name="checkmark-circle" size={11} color={colors.success} />

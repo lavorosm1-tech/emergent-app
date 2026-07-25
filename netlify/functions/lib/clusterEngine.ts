@@ -416,7 +416,28 @@ export const CANDIDATE_MARKETS: string[] = [
 // combo odd estimation
 // ============================================================
 
-function estimateComboOddFromCluster(market: string, odds: Odds): number | null {
+/**
+ * Stima teorica della quota di un mercato per cui il bookmaker NON ci ha dato
+ * un prezzo (nel nostro caso: tutti i multigol e diverse combo, che il file
+ * Sisal non contiene).
+ *
+ * Come funziona: probabilità dalla distribuzione di Poisson, quota equa = 1/p,
+ * poi si applica il margine del bookmaker preso DA QUESTA STESSA PARTITA
+ * (la somma delle probabilità implicite di 1/X/2, tipicamente 1,09). Non è un
+ * margine inventato: è quello che il book sta applicando in quel momento.
+ *
+ * Verificato sulle 5.160 partite storiche: la probabilità stimata così
+ * coincide con la frequenza reale entro 1-2 punti
+ * (MG 2-4 totali 60,8% stimato / 59,9% reale; MG 1-2 casa 55,7% / 57,5%;
+ * MG 2-4 ospite 32,0% / 33,2%).
+ *
+ * ATTENZIONE: una quota stimata NON va usata per calcolare l'Expected Value.
+ * Sarebbe circolare — la quota deriva dalla stessa probabilità con cui si
+ * calcolerebbe l'EV, quindi l'EV verrebbe sempre pari al margine cambiato di
+ * segno (circa -9%) per ogni mercato stimato. L'EV resta calcolato solo sulle
+ * quote reali.
+ */
+export function estimateMarketOdd(market: string, odds: Odds): number | null {
   try {
     const [lamH, lamA] = deriveLambdas(odds);
     const maxGoals = 8;
@@ -465,7 +486,7 @@ export function comboOdd(market: string, odds: Odds): number | null {
     if (vals.every((v) => v && v > 0)) {
       return round3(vals[0] * vals[1]);
     }
-    const est = estimateComboOddFromCluster(market, odds);
+    const est = estimateMarketOdd(market, odds);
     if (est) return est;
   }
   return null;
@@ -486,6 +507,8 @@ export type RankedMarket = {
   broken_by: string[];
   score: number;
   odd: number | null;
+  /** true se `odd` è una stima nostra e non un prezzo letto dal bookmaker */
+  odd_estimated?: boolean;
   ev: number | null;
   ml_adjustment?: { type: "boost" | "malus" | "neutral"; win_rate: number; total: number; delta: string };
   opposes_pick?: boolean;
@@ -528,8 +551,13 @@ export function structuralAnalysis(
     if (m === "12" && (num(odds, "odd_12") || 99) > 1.85) continue;
     if (m === "1 + O1.5" && (num(odds, "odd_1") || 99) > 1.85) continue;
     if (m === "2 + O1.5" && (num(odds, "odd_2") || 99) > 1.85) continue;
-    const co = comboOdd(m, odds);
-    if (co !== null && co < minOdd) continue;
+    // Fino a prima di questa modifica i mercati senza quota nota (tutti i
+    // multigol) saltavano il filtro e restavano in gara "per forfait": erano
+    // il 70-90% dei pick proposti. Ora, se il bookmaker non ci dà un prezzo,
+    // lo stimiamo e il filtro vale anche per loro.
+    const realOdd = comboOdd(m, odds);
+    const oddForFilter = realOdd ?? estimateMarketOdd(m, odds);
+    if (oddForFilter !== null && oddForFilter < minOdd) continue;
     validMarkets.push(m);
   }
 
@@ -755,6 +783,12 @@ export function structuralAnalysis(
       else if (ev <= -0.02) score *= 0.8;
     }
 
+    // Se il bookmaker non dà un prezzo, mostriamo la stima — segnalata come
+    // tale, così a schermo si vede che è un valore calcolato e non letto dal
+    // file. L'EV qui sopra resta volutamente null: vedi il commento su
+    // estimateMarketOdd (sarebbe circolare).
+    const estimated = comboOddVal === null ? estimateMarketOdd(m, odds) : null;
+
     ranked.push({
       market: m,
       coverage: cov,
@@ -763,7 +797,8 @@ export function structuralAnalysis(
       covered_scores: covered.slice(0, 6),
       broken_by: broken.slice(0, 5),
       score: round4(score),
-      odd: comboOddVal,
+      odd: comboOddVal ?? estimated,
+      odd_estimated: comboOddVal === null && estimated !== null,
       ev,
     });
   }

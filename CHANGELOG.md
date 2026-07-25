@@ -65,6 +65,54 @@ Altre cose da sapere subito:
 
 ## Log (più recente in cima)
 
+### 2026-07-25 (sera) — Stima della quota per i mercati senza prezzo (multigol)
+
+**Il problema.** Il file Sisal non contiene i multigol, quindi `comboOdd()`
+restituiva `null` per tutti. Il filtro "quota minima" nel motore era scritto
+come `if (co !== null && co < minOdd) continue`, quindi **un mercato senza
+prezzo non veniva mai scartato**: i multigol restavano in gara per forfait ed
+erano il 70% dei pick prima della Fase 1, il 90% dopo.
+
+**La soluzione.** L'estimatore esisteva già (`estimateComboOddFromCluster`) ma
+era raggiungibile solo per i mercati con un `+` nel nome. Rinominato in
+`estimateMarketOdd` e reso raggiungibile per qualsiasi mercato senza prezzo.
+Usa la probabilità di Poisson e applica il margine reale **di quella partita**
+(somma delle implicite di 1/X/2, tipicamente 1,09 — misurato sulle 5.160
+storiche: 8,8% su U/O 2.5, 8,9% su GG/NG, 9,5% su 1X2).
+
+**Trappola evitata, da non reintrodurre**: la quota stimata NON entra nel
+calcolo dell'Expected Value. Sarebbe circolare — la quota deriva dalla stessa
+probabilità con cui si calcolerebbe l'EV, quindi ogni mercato stimato avrebbe
+EV costante pari a circa −9%, facendo scattare su tutti il malus
+`ev <= -0.05 → score *= 0.65`. L'EV resta calcolato solo su quote reali.
+
+**Effetto misurato** (583 partite, soglia di default 1.40):
+| | Precisione | Quota media | Pick con un prezzo |
+|---|---|---|---|
+| Solo Fase 1 | 68,8% | — | 10% |
+| Con stima quota | **62,3%** | 1,56 | **100%** |
+
+La precisione **scende**, ed è corretto così: il 68,8% veniva da mercati come
+`MG 1-4 totali` (85% di riuscita ma quota reale intorno a 1,25), che ora il
+filtro scarta. Per confronto, la stessa simulazione fatta con i soli 10
+mercati base dava 58,4% a soglia 1,40 — quindi i multigol prezzati
+correttamente aggiungono davvero valore.
+
+Curva soglia → precisione, misurata sul motore vero:
+| Soglia | Precisione | Quota media |
+|---|---|---|
+| 1,40 | 62,3% | 1,56 |
+| 1,50 | 61,6% | 1,62 |
+| 1,60 | 54,0% | 1,86 |
+| 1,75 | 49,7% | 2,08 |
+
+Nessuna partita resta senza pick a nessuna soglia. Questa curva è la base della
+Fase 2 (soglia scelta dall'utente).
+
+**Lato interfaccia**: le quote stimate sono marcate `odd_estimated` e mostrate
+con `≈` e la dicitura "(stimata)", per non farle confondere con un prezzo
+reale del bookmaker.
+
 ### 2026-07-25 (sera) — FASE 1: probabilità vere al posto del cluster tagliato
 
 **Cosa cambia.** `coverage` e `fragility` non si calcolano più sugli 8
