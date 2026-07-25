@@ -65,6 +65,18 @@ Altre cose da sapere subito:
 
 ## Log (più recente in cima)
 
+### 2026-07-25 (continua) — Profilo non istantaneo, scroll Schedina
+- **Profilo non aggiornava i numeri subito dopo un salvataggio risultato**:
+  `marketStatsCache`/`mlStatsCache` non avevano un metodo `invalidate()`
+  (TTL 5 minuti stale-while-revalidate). Aggiunto e collegato in tutti i
+  punti che salvano un risultato (Schedina: salva tutti / fetch
+  automatico / applica revisione; dettaglio partita: salva singolo).
+- **Scroll che tornava sempre in cima rientrando dalla Schedina**: l'effetto
+  di reset scroll ai cambi filtro girava anche al primo render dopo un
+  rimontaggio (comportamento normale di React), annullando il ripristino
+  di `savedScrollY`. Aggiunta una guardia "salta il primo run". Commit
+  `bf3a62a`.
+
 ### 2026-07-25 — Correttivi motore + scoperta file-sbagliato + storico
 - **Scoperto e corretto**: i fix "ranking trasparente" del mattino erano
   finiti nel file legacy (`backend/cluster_engine.py`) invece che in quello
