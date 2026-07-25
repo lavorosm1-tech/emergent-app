@@ -122,6 +122,14 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ items }),
     }),
+  // FASE 0 — registra il verdetto finale della fusione, che prima viveva solo
+  // nel browser. Serve sia a ritrovare il pick riaprendo la partita, sia a
+  // misurare la precisione della fusione a risultato inserito.
+  saveVerdict: (matchId: string, market: string, prob?: number) =>
+    netlifyReq<{ ok: boolean }>(`/save-verdict`, {
+      method: "POST",
+      body: JSON.stringify({ matchId, market, prob }),
+    }),
   statsScores: () => netlifyReq<Record<string, any[]>>("/stats-scores"),
   statsReset: () => netlifyReq<{ ok: boolean }>("/stats-reset", { method: "POST" }),
   updateSelection: (ids: string[], selected: boolean) =>

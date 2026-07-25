@@ -65,6 +65,55 @@ Altre cose da sapere subito:
 
 ## Log (più recente in cima)
 
+### 2026-07-25 (sera) — FASE 0: pagella dei tre sistemi (solo misurazione)
+
+Primo passo di una roadmap in 5 fasi decisa con Rossi dopo un audit completo
+del motore. **Questa fase non cambia nessun pronostico**: aggiunge solo la
+misurazione che serve a decidere le fasi successive con i numeri invece che a
+occhio.
+
+**Perché.** L'app fonde tre sistemi (motore Poisson, euristica PRE, IA) con
+pesi scritti a mano (10 / 5 / 8 + bonus concordanza 8) che nessuno ha mai
+verificato. Il motivo per cui non erano verificabili: l'unico pick salvato su
+Supabase era `main_prediction`, che è il pick **dell'IA**. Il pick del motore
+e quello dell'euristica giravano e sparivano; il verdetto finale della fusione
+non veniva salvato affatto.
+
+**Cosa è stato aggiunto**
+- Migration `fase0_pagella_tre_sistemi`: colonne `pick_strutturale`,
+  `pick_pre`, `pick_finale`, `pick_finale_prob`, `scenario` su `matches`;
+  nuova tabella `system_scorecard` + RPC `increment_system_score`.
+  Tutto additivo: nessuna colonna o tabella esistente è stata modificata.
+- `lib/scenario.ts`: classifica la partita per forza della favorita ×
+  gol attesi (12 scenari). Le soglie sono quelle usate nell'analisi storica —
+  cambiarle rende i conteggi vecchi e nuovi non confrontabili.
+- `lib/preHeuristic.ts`: porto lato server di `quickPredictionFamily`, che
+  vive solo nel frontend. **Va tenuto allineato a mano** con
+  `frontend/src/api.ts`, altrimenti la pagella misura un sistema diverso da
+  quello che vota.
+- `predict.ts`: registra pick strutturale + pick PRE + scenario sulla riga
+  della partita (best effort, mai bloccante, mai su partite già concluse).
+- `save-verdict.ts` (nuovo endpoint) + `useEffect` in `app/match/[id].tsx`:
+  salvano il verdetto finale della fusione. Risolve anche la perdita del pick
+  alla riapertura della partita.
+- `lib/applyResult.ts`: aggiorna `system_scorecard` per i tre sistemi
+  **prima** dell'uscita anticipata `if (!preds.length) return`. Oggi, senza
+  un "Pronostico AI", la partita non insegnava niente a nessuno.
+
+**Misurazione già fatta sullo storico** (rigioco del motore vero su 583
+partite reali, campione stratificato verificato con checksum):
+| Sistema | Precisione |
+|---|---|
+| Strutturale attuale | 63,5% |
+| Strutturale con distribuzione completa (Fase 1) | **68,8%** |
+| Euristica PRE | 57,2% |
+
+**Trappola trovata, da risolvere prima della Fase 2**: il 70% dei pick
+attuali — e il 90% di quelli del motore corretto — sono mercati multigol
+**senza quota nota**, quindi non filtrabili dalla soglia di quota minima e non
+valutabili come puntata. La stima teorica della quota MG (Poisson, validata
+sullo storico entro 1-2 punti) va quindi anticipata subito dopo la Fase 1.
+
 ### 2026-07-25 (continua) — Roadmap punti 1, 2, 3 completati
 - **Punto 1**: attivato `ml_adjustment` nel motore (era scritto ma mai
   alimentato). `predict.ts` ora recupera `market_scores` per la famiglia

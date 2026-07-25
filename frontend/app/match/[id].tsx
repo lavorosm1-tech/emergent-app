@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator,
   TextInput, Alert,
@@ -61,6 +61,42 @@ export default function MatchDetail() {
   }, [id]);
 
   useEffect(() => { load(); }, [load]);
+
+  // ============================================================
+  // FASE 0 — salvataggio del verdetto finale.
+  // Il verdetto viene calcolato durante il render (più sotto); qui lo
+  // ricalcoliamo una volta sola, fuori dal render, per poterlo salvare senza
+  // effetti collaterali dentro il JSX.
+  // NOTA: le righe qui sotto devono restare allineate a quelle del blocco
+  // "VERDETTO FINALE" nel render — se un giorno cambia la logica lì, va
+  // cambiata anche qui, altrimenti si salva un pick diverso da quello mostrato.
+  // ============================================================
+  const savedVerdictRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!match || !structural || match.result) return;
+    try {
+      const fam = quickPredictionFamily(match.odds);
+      const llmMarkets = prediction?.playable_markets?.map((p) => p.market)
+        || (prediction?.main_prediction ? [prediction.main_prediction] : []);
+      const preRanked = rankPicks(fam, llmMarkets, marketStats);
+      const verdictRaw = buildFinalVerdict(structural, preRanked, prediction?.playable_markets, match.odds, history);
+      const verdict = verdictRaw.filter((v) => !(structural.structure && violatesStructure(
+        v.market,
+        structural.structure.goal_floor,
+        structural.structure.goal_ceiling,
+        !!structural.structure.goal_ceiling_open,
+      )));
+      const top = verdict[0];
+      if (!top || savedVerdictRef.current === top.market) return;
+      savedVerdictRef.current = top.market;
+      api.saveVerdict(match.id, top.market, top.coverage ?? undefined).catch(() => {
+        // Best effort: se il salvataggio fallisce l'app resta identica.
+        savedVerdictRef.current = null;
+      });
+    } catch {
+      // Nessun impatto sul pronostico mostrato.
+    }
+  }, [match, structural, prediction, marketStats, history]);
 
   // Subscribe to background prediction queue so the UI reflects in-flight requests
   useEffect(() => {

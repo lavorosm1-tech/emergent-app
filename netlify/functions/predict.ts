@@ -1,5 +1,7 @@
 import { structuralAnalysis, classifyFamily, type Odds, type MlScoreEntry } from "./lib/clusterEngine";
-import { pgGet } from "./lib/supabaseRest";
+import { pgGet, pgPatch } from "./lib/supabaseRest";
+import { preHeuristicPick } from "./lib/preHeuristic";
+import { classifyScenario } from "./lib/scenario";
 
 /**
  * GET /predict?matchId=<uuid>
@@ -11,7 +13,11 @@ import { pgGet } from "./lib/supabaseRest";
  * performance storica estrema (win-rate ≥70% o ≤30%, meccanismo
  * "ml_adjustment" già presente nel motore ma prima mai alimentato).
  *
- * Non scrive nulla su `predictions` — è solo lettura.
+ * Non scrive nulla su `predictions`. Da FASE 0 registra però sulla riga della
+ * partita il pick del motore strutturale e quello dell'euristica PRE, per
+ * poterne misurare le prestazioni a risultato inserito. La registrazione è
+ * "best effort": se fallisce, la risposta al frontend resta identica e il
+ * pronostico non cambia in alcun modo.
  */
 export default async (req: Request): Promise<Response> => {
   const url = new URL(req.url);
@@ -53,6 +59,11 @@ export default async (req: Request): Promise<Response> => {
   const mlScores = await buildMlScores(family, row.manifestazione || null);
 
   const result = structuralAnalysis(odds, 1.4, mlScores);
+
+  // FASE 0 — pagella dei tre sistemi. Registriamo cosa avrebbe scelto ciascuno
+  // PRIMA di sapere il risultato, così a risultato inserito si può dire chi
+  // aveva ragione. Non incide sul pronostico restituito qui sotto.
+  await recordPicks(row, odds, result.pick?.market ?? null);
 
   return json({
     structure: result.structure,
@@ -105,6 +116,32 @@ async function buildMlScores(family: string, league: string | null): Promise<Rec
     // ml_adjustment (comportamento identico a prima di questo fix).
   }
   return map;
+}
+
+/**
+ * Scrive sulla riga della partita il pick strutturale, quello dell'euristica
+ * PRE e lo scenario. Non tocca `main_prediction` (che resta il pick dell'IA)
+ * né alcun altro campo esistente. Se la partita ha già un risultato non
+ * riscrive nulla: registrare un pick dopo il fatto falserebbe la pagella.
+ */
+async function recordPicks(row: any, odds: Odds, structuralPick: string | null): Promise<void> {
+  if (row.result) return;
+
+  const prePick = preHeuristicPick(odds);
+  const patch: Record<string, unknown> = {};
+  if (structuralPick && row.pick_strutturale !== structuralPick) patch.pick_strutturale = structuralPick;
+  if (prePick?.market && row.pick_pre !== prePick.market) patch.pick_pre = prePick.market;
+
+  const scenario = classifyScenario(odds);
+  if (scenario !== "sconosciuto" && row.scenario !== scenario) patch.scenario = scenario;
+
+  if (!Object.keys(patch).length) return;
+
+  try {
+    await pgPatch(`matches?id=eq.${encodeURIComponent(row.id)}`, patch);
+  } catch {
+    // Best effort: la misurazione non deve mai far fallire un pronostico.
+  }
 }
 
 function json(body: unknown, status = 200): Response {

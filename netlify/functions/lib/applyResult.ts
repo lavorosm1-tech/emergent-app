@@ -1,5 +1,6 @@
-import { pgGet, pgPatch, pgRpc } from "./supabaseRest";
+import { pgGet, pgPatch, pgRpc, rowToOdds } from "./supabaseRest";
 import { evaluateMarket, STANDARD_MARKETS } from "./marketEval";
+import { classifyScenario } from "./scenario";
 
 /**
  * Applica un risultato a una partita e aggiorna market_scores/family_counters
@@ -21,6 +22,12 @@ export async function applyMatchResult(
     result,
     updated_at: new Date().toISOString(),
   });
+
+  // FASE 0 — pagella dei tre sistemi. Va aggiornata PRIMA dell'uscita
+  // anticipata qui sotto: oggi, se l'utente non ha mai premuto "Pronostico
+  // AI", la partita non insegna niente a nessuno. Questo blocco invece conta
+  // sempre, anche senza IA.
+  await updateSystemScorecard(match, home, away);
 
   const preds = await pgGet(
     `predictions?match_id=eq.${encodeURIComponent(matchId)}&select=*&order=created_at.desc&limit=1`,
@@ -60,4 +67,38 @@ export async function applyMatchResult(
   return mainPred
     ? { applied: true, main_prediction: mainPred, result_ok: evaluateMarket(mainPred, home, away) }
     : { applied: false };
+}
+
+/**
+ * FASE 0 — aggiorna `system_scorecard` con l'esito dei pick registrati dai tre
+ * sistemi per questa partita, separatamente per scenario.
+ *
+ * Registra solo i sistemi che avevano effettivamente espresso un pick prima
+ * del risultato: una casella vuota resta vuota, non viene contata come errore.
+ * Best effort — un problema qui non deve impedire il salvataggio del risultato.
+ */
+async function updateSystemScorecard(match: any, home: number, away: number): Promise<void> {
+  try {
+    const scenario: string = match.scenario || classifyScenario(rowToOdds(match) as any);
+    if (!scenario || scenario === "sconosciuto") return;
+
+    const picks: [string, string | null][] = [
+      ["strutturale", match.pick_strutturale || null],
+      ["pre", match.pick_pre || null],
+      ["fusione", match.pick_finale || null],
+    ];
+
+    for (const [system, market] of picks) {
+      if (!market) continue;
+      const outcome = evaluateMarket(market, home, away);
+      if (outcome === null) continue;
+      await pgRpc("increment_system_score", {
+        p_system: system,
+        p_scenario: scenario,
+        p_win: outcome,
+      });
+    }
+  } catch {
+    // La misurazione non deve mai bloccare l'inserimento di un risultato.
+  }
 }
