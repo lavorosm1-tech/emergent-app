@@ -65,6 +65,27 @@ Altre cose da sapere subito:
 
 ## Log (più recente in cima)
 
+### 2026-07-25 (continua) — Roadmap punti 1, 2, 3 completati
+- **Punto 1**: attivato `ml_adjustment` nel motore (era scritto ma mai
+  alimentato). `predict.ts` ora recupera `market_scores` per la famiglia
+  della partita (globale + per-campionato sopra soglia 30) e lo passa a
+  `structuralAnalysis()`. Commit `975236c`.
+- **Punto 2**: storico esteso da 21 a 49 mercati/combo (`STANDARD_MARKETS`
+  ora importa `CANDIDATE_MARKETS` da `clusterEngine.ts`, unica fonte di
+  verità; `evaluateMarket` generalizzato per qualsiasi range MG X-Y).
+  Backfill esteso alle 5.160 partite storiche per i 28 mercati nuovi
+  (senza ricontare i 21 originali). `market_scores` passato da 17.013 a
+  38.962 righe. Commit `975236c`.
+- **Punto 3**: Distribution Engine leggero, deliberatamente solo
+  informativo per ora — verificato che solo 922/3392 squadre hanno 5+
+  partite (74 con 8+), troppo poco per un correttivo automatico
+  affidabile. Nuova funzione SQL `team_goal_stats()` su Supabase (media
+  gol fatti/subiti per squadra, casa/trasferta separate, unendo
+  `match_results_training` + `matches` così cresce nel tempo).
+  `match-history.ts` la espone (soglia minima 5 partite), mostrata in
+  `match/[id].tsx` come card informativa esplicitamente etichettata "non
+  influenza il pick". Commit `7c9fde3`.
+
 ### 2026-07-25 (continua) — Profilo non istantaneo, scroll Schedina
 - **Profilo non aggiornava i numeri subito dopo un salvataggio risultato**:
   `marketStatsCache`/`mlStatsCache` non avevano un metodo `invalidate()`
