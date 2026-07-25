@@ -322,6 +322,18 @@ export default function MatchDetail() {
                 </View>
               )}
 
+              {(history?.team_form?.home || history?.team_form?.away) && (
+                <View style={{ flexDirection: "row", gap: 6, alignItems: "flex-start", backgroundColor: "rgba(59,130,246,0.12)", borderColor: "#3B82F6", borderWidth: 1, borderRadius: 8, padding: 8, marginTop: 6 }}>
+                  <Ionicons name="stats-chart" size={14} color="#3B82F6" />
+                  <Text style={{ color: "#3B82F6", fontSize: 11, flex: 1 }}>
+                    Forma reale (solo informativa, non influenza il pick):{" "}
+                    {history?.team_form?.home && `${match.squadra1} in casa: ${history.team_form.home.avg_scored} fatti / ${history.team_form.home.avg_conceded} subiti (${history.team_form.home.matches} partite)`}
+                    {history?.team_form?.home && history?.team_form?.away && " · "}
+                    {history?.team_form?.away && `${match.squadra2} in trasferta: ${history.team_form.away.avg_scored} fatti / ${history.team_form.away.avg_conceded} subiti (${history.team_form.away.matches} partite)`}
+                  </Text>
+                </View>
+              )}
+
               <View style={styles.verdictHero}>
                 <View style={styles.verdictMedal}>
                   <Ionicons name="medal" size={22} color="#FFF" />

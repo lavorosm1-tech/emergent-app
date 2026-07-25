@@ -547,10 +547,12 @@ export function getMarketOdd(market: string, odds: any): number | undefined {
 }
 
 export type MatchHistoryStat = { market: string; wins: number; total: number; win_rate: number; missed: number };
+export type TeamForm = { matches: number; avg_scored: number; avg_conceded: number } | null;
 export type MatchHistory = {
   league: string | null;
   global: Record<string, MatchHistoryStat[]>;
   league_specific: Record<string, MatchHistoryStat[]>;
+  team_form?: { home: TeamForm; away: TeamForm };
 };
 
 // Numero minimo di partite perché il dato per-campionato sia considerato
