@@ -446,6 +446,7 @@ export type RankedMarket = {
   odd: number | null;
   ev: number | null;
   ml_adjustment?: { type: "boost" | "malus" | "neutral"; win_rate: number; total: number; delta: string };
+  opposes_pick?: boolean;
 };
 
 export type StructuralAnalysisResult = {
@@ -571,7 +572,9 @@ export function structuralAnalysis(
   for (const m of validMarkets) {
     const { coverage: cov, covered, broken } = coverageForMarket(m, central);
     const frag = fragilityScore(m, central);
-    if (cov < 0.3) continue;
+    // Non scartiamo piu' i mercati con coverage bassa: restano calcolati e
+    // visibili (col loro score reale, quindi in fondo alla classifica) invece
+    // di sparire senza che l'utente possa vedere PERCHE' sono deboli.
 
     let score = cov * (1 - frag * 0.3);
     const rng = m.match(/(\d+)\s*-\s*(\d+)/);
@@ -737,15 +740,22 @@ export function structuralAnalysis(
   ranked.sort((a, b) => b.score - a.score);
 
   const pickMarket = ranked.length ? ranked[0].market : "";
-  const coherent = ranked.length ? [ranked[0], ...filterCoherent(pickMarket, ranked.slice(1))] : [];
+  // Non nascondiamo piu' i mercati incoerenti col pick #1 (es. GG quando NG
+  // e' il pick): l'utente deve poter vedere coverage/fragility di TUTTI i
+  // mercati validi calcolati, anche quelli opposti al pick principale. Li
+  // marchiamo solo per trasparenza (il frontend puo' segnalarli visivamente).
+  for (const r of ranked) {
+    r.opposes_pick = pickMarket ? areIncoherent(pickMarket, r.market) : false;
+  }
+  const top20 = ranked.slice(0, 20);
 
   return {
     structure,
     cluster,
     central_cluster: central,
-    ranking: coherent.slice(0, 10),
+    ranking: top20,
     pick: ranked.length ? ranked[0] : null,
-    explanation: buildExplanation(structure, coherent),
+    explanation: buildExplanation(structure, top20),
   };
 }
 
