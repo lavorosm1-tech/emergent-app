@@ -2,6 +2,7 @@ import { structuralAnalysis, classifyFamily, type Odds, type MlScoreEntry } from
 import { pgGet, pgPatch } from "./lib/supabaseRest";
 import { preHeuristicPick } from "./lib/preHeuristic";
 import { classifyScenario } from "./lib/scenario";
+import { readMinOdd } from "./odd-settings";
 
 /**
  * GET /predict?matchId=<uuid>
@@ -58,7 +59,13 @@ export default async (req: Request): Promise<Response> => {
   const family = classifyFamily(odds).family;
   const mlScores = await buildMlScores(family, row.manifestazione || null);
 
-  const result = structuralAnalysis(odds, 1.4, mlScores);
+  // FASE 2 — la soglia di quota minima è una scelta dell'utente, non più un
+  // 1.4 fisso. Il parametro in query ha la precedenza (utile per confronti
+  // rapidi); altrimenti si usa quella salvata nelle impostazioni.
+  const paramMinOdd = Number(url.searchParams.get("minOdd"));
+  const minOdd = isFinite(paramMinOdd) && paramMinOdd > 1 ? paramMinOdd : await readMinOdd();
+
+  const result = structuralAnalysis(odds, minOdd, mlScores);
 
   // FASE 0 — pagella dei tre sistemi. Registriamo cosa avrebbe scelto ciascuno
   // PRIMA di sapere il risultato, così a risultato inserito si può dire chi
@@ -66,6 +73,7 @@ export default async (req: Request): Promise<Response> => {
   await recordPicks(row, odds, result.pick?.market ?? null);
 
   return json({
+    min_odd: minOdd,
     structure: result.structure,
     cluster: result.cluster,
     central_cluster: result.central_cluster,

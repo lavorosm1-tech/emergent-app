@@ -65,6 +65,48 @@ Altre cose da sapere subito:
 
 ## Log (più recente in cima)
 
+### 2026-07-25 (sera) — FASE 2: soglia di quota scelta dall'utente
+
+**Cosa cambia.** La quota minima non è più il `1.4` fisso passato a
+`structuralAnalysis`. Nuovo endpoint `odd-settings` (GET/POST, chiave
+`min_odd` nella tabella `settings` già esistente), `predict.ts` la legge (o
+accetta `?minOdd=` in query per confronti rapidi) e la restituisce nella
+risposta; il frontend la passa anche a `buildFinalVerdict` e mostra un
+selettore 1,40 / 1,50 / 1,60 / 1,75 sopra la giocata consigliata.
+
+Curva misurata sul motore vero, 583 partite storiche:
+| Soglia | Precisione | Quota media |
+|---|---|---|
+| 1,40 | 62,3% | 1,56 |
+| 1,50 | 61,6% | 1,62 |
+| 1,60 | 54,0% | 1,86 |
+| 1,75 | 49,7% | 2,08 |
+
+Il gradino vero è fra 1,50 e 1,60: −7,6 punti di precisione per +24 centesimi
+di quota. Nessuna partita resta senza pick a nessuna soglia.
+
+**Cosa NON è stato cambiato, e perché.** La scaletta prevedeva anche di
+sostituire il criterio di scelta con "massima probabilità sopra la soglia".
+Provato e misurato prima di scriverlo:
+
+| Soglia | Punteggio attuale | Massima probabilità pura |
+|---|---|---|
+| 1,40 | **62,3%** | 57,1% |
+| 1,50 | **61,6%** | 60,5% |
+| 1,60 | 54,0% | **55,2%** (quota media 1,67 contro 1,86) |
+| 1,75 | 49,7% | **53,2%** (quota media 1,84 contro 2,08) |
+
+Non c'è un vincitore: alle soglie basse perde nettamente, a quelle alte vince
+di poco (1-3 punti, dentro il rumore su 583 partite) ma **abbassando la quota
+media** — cioè dando all'utente meno di quello che ha chiesto alzando la
+soglia. Criterio lasciato invariato. Da riesaminare in Fase 3 con i pesi
+misurati invece che scelti a mano.
+
+Nota metodologica emersa dal test: ordinare per `coverage` o per
+`coverage − 0.5×fragility` dà **risultati identici**, perché per i mercati
+sempre decidibili `fragility = 1 − coverage`, quindi il secondo criterio è
+monotono nel primo. Non è un vero tie-break: non serve reintrodurlo.
+
 ### 2026-07-25 (sera) — Stima della quota per i mercati senza prezzo (multigol)
 
 **Il problema.** Il file Sisal non contiene i multigol, quindi `comboOdd()`

@@ -96,6 +96,8 @@ export type StructuralStructure = {
 };
 
 export type StructuralAnalysis = {
+  /** soglia di quota minima con cui è stato costruito questo ranking (Fase 2) */
+  min_odd?: number;
   structure: StructuralStructure;
   cluster: StructuralCluster[];
   central_cluster: StructuralCluster[];
@@ -157,7 +159,17 @@ export const api = {
   applyResultManual: (id: string, score: string) => netlifyReq<{ ok: boolean; result: string }>("/results-apply", { method: "POST", body: JSON.stringify({ id, score }) }),
   matchCandidates: (id: string) => netlifyReq<{ candidates: { market: string; family: string; missed: number; family_total: number; miss_rate: number }[]; family: string | null; family_total: number }>(`/match-candidates?id=${encodeURIComponent(id)}`),
   matchHistory: (id: string) => netlifyReq<MatchHistory>(`/match-history?id=${encodeURIComponent(id)}`),
-  matchStructural: (id: string) => netlifyReq<StructuralAnalysis>(`/predict?matchId=${encodeURIComponent(id)}`),
+  matchStructural: (id: string, minOdd?: number) =>
+    netlifyReq<StructuralAnalysis>(
+      `/predict?matchId=${encodeURIComponent(id)}${minOdd ? `&minOdd=${minOdd}` : ""}`,
+    ),
+  // FASE 2 — soglia di quota minima scelta dall'utente
+  getMinOdd: () => netlifyReq<{ min_odd: number; options: number[] }>("/odd-settings"),
+  setMinOdd: (minOdd: number) =>
+    netlifyReq<{ ok: boolean; min_odd: number }>("/odd-settings", {
+      method: "POST",
+      body: JSON.stringify({ min_odd: minOdd }),
+    }),
   uploadExcel: async (uri: string, name: string, mimeType?: string) => {
     const form = new FormData();
     if (typeof window !== "undefined" && window.fetch && uri.startsWith("blob:")) {

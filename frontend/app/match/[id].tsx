@@ -36,6 +36,11 @@ export default function MatchDetail() {
   const [structural, setStructural] = useState<StructuralAnalysis | null>(null);
   const [showClusterAll, setShowClusterAll] = useState(false);
   const [history, setHistory] = useState<MatchHistory | null>(null);
+  // FASE 2 — soglia di quota minima scelta dall'utente. Alzandola si compra
+  // quota pagandola in precisione: misurato su 583 partite storiche,
+  // 1,40 -> 62,3% | 1,50 -> 61,6% | 1,60 -> 54,0% | 1,75 -> 49,7%.
+  const [minOdd, setMinOdd] = useState<number>(1.40);
+  const [minOddOptions, setMinOddOptions] = useState<number[]>([1.40, 1.50, 1.60, 1.75]);
 
   const load = useCallback(async () => {
     try {
@@ -43,7 +48,7 @@ export default function MatchDetail() {
         api.match(id!),
         api.marketStats().catch(() => ({ markets: [], family_totals: {} })),
         api.matchCandidates(id!).catch(() => ({ candidates: [], family: null, family_total: 0 })),
-        api.matchStructural(id!).catch(() => null),
+        api.matchStructural(id!, minOdd).catch(() => null),
         api.matchHistory(id!).catch(() => null),
       ]);
       setMatch(m);
@@ -58,9 +63,24 @@ export default function MatchDetail() {
     } finally {
       setLoading(false);
     }
-  }, [id]);
+  }, [id, minOdd]);
 
   useEffect(() => { load(); }, [load]);
+
+  // Soglia salvata nelle impostazioni: la leggiamo una volta all'apertura.
+  useEffect(() => {
+    api.getMinOdd()
+      .then((r) => {
+        if (r?.options?.length) setMinOddOptions(r.options);
+        if (r?.min_odd) setMinOdd(r.min_odd);
+      })
+      .catch(() => { /* si resta sul default 1.40 */ });
+  }, []);
+
+  const changeMinOdd = useCallback((value: number) => {
+    setMinOdd(value);                 // il ricalcolo parte da solo: `load` dipende da minOdd
+    api.setMinOdd(value).catch(() => { /* la scelta vale comunque per questa sessione */ });
+  }, []);
 
   // ============================================================
   // FASE 0 — salvataggio del verdetto finale.
@@ -79,7 +99,7 @@ export default function MatchDetail() {
       const llmMarkets = prediction?.playable_markets?.map((p) => p.market)
         || (prediction?.main_prediction ? [prediction.main_prediction] : []);
       const preRanked = rankPicks(fam, llmMarkets, marketStats);
-      const verdictRaw = buildFinalVerdict(structural, preRanked, prediction?.playable_markets, match.odds, history);
+      const verdictRaw = buildFinalVerdict(structural, preRanked, prediction?.playable_markets, match.odds, history, { minOdd });
       const verdict = verdictRaw.filter((v) => !(structural.structure && violatesStructure(
         v.market,
         structural.structure.goal_floor,
@@ -96,7 +116,7 @@ export default function MatchDetail() {
     } catch {
       // Nessun impatto sul pronostico mostrato.
     }
-  }, [match, structural, prediction, marketStats, history]);
+  }, [match, structural, prediction, marketStats, history, minOdd]);
 
   // Subscribe to background prediction queue so the UI reflects in-flight requests
   useEffect(() => {
@@ -247,7 +267,7 @@ export default function MatchDetail() {
           const fam = quickPredictionFamily(match.odds);
           const llmMarkets = prediction?.playable_markets?.map((p) => p.market) || (prediction?.main_prediction ? [prediction.main_prediction] : []);
           const preRanked = rankPicks(fam, llmMarkets, marketStats);
-          const verdictRaw = buildFinalVerdict(structural, preRanked, prediction?.playable_markets, match.odds, history);
+          const verdictRaw = buildFinalVerdict(structural, preRanked, prediction?.playable_markets, match.odds, history, { minOdd });
           if (verdictRaw.length === 0) return null;
           // ============================================================
           // FILTRO STRUTTURALE: scarta picks che violano floor/ceiling
@@ -369,6 +389,24 @@ export default function MatchDetail() {
                   </Text>
                 </View>
               )}
+
+              {/* FASE 2 — soglia di quota minima: la scelta e' dell'utente */}
+              <View style={styles.minOddRow}>
+                <Text style={styles.minOddLabel}>Quota minima</Text>
+                <View style={styles.minOddChips}>
+                  {minOddOptions.map((v) => (
+                    <TouchableOpacity
+                      key={v}
+                      onPress={() => changeMinOdd(v)}
+                      style={[styles.minOddChip, minOdd === v && styles.minOddChipOn]}
+                    >
+                      <Text style={[styles.minOddChipTxt, minOdd === v && styles.minOddChipTxtOn]}>
+                        {v.toFixed(2)}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
 
               <View style={styles.verdictHero}>
                 <View style={styles.verdictMedal}>
@@ -1142,6 +1180,35 @@ const styles = StyleSheet.create({
   verdictConcTag: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6, borderWidth: 1 },
   verdictConcTxt: { fontSize: 9, fontWeight: "900", letterSpacing: 0.5 },
   verdictHint: { color: colors.textMuted, fontSize: 10, lineHeight: 14, fontStyle: "italic" },
+  minOddRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+    marginBottom: 10,
+    flexWrap: "wrap",
+  },
+  minOddLabel: {
+    color: colors.textDim,
+    fontSize: 11,
+    fontWeight: "700",
+    letterSpacing: 0.4,
+    textTransform: "uppercase",
+  },
+  minOddChips: { flexDirection: "row", gap: 6 },
+  minOddChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.14)",
+  },
+  minOddChipOn: {
+    backgroundColor: "rgba(255,140,66,0.20)",
+    borderColor: colors.primary,
+  },
+  minOddChipTxt: { color: colors.textDim, fontSize: 12, fontWeight: "700" },
+  minOddChipTxtOn: { color: "#FFF" },
   verdictHero: {
     flexDirection: "row", gap: 12, alignItems: "center",
     backgroundColor: "rgba(255,215,0,0.10)", borderWidth: 1, borderColor: "rgba(255,215,0,0.40)",
