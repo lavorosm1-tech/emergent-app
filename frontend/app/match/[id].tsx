@@ -9,6 +9,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 
 import { api, Match, Prediction, MARKET_FAMILIES, ODD_LABELS, OddsKey, quickPredictionFamily, rankPicks, StructuralAnalysis, buildFinalVerdict, VerdictPick, getMarketOdd, filterCoherentAlternatives, violatesStructure, getMatchCautionWarning, MatchHistory } from "@/src/api";
+import { marketStatsCache, mlStatsCache } from "@/src/utils/cache";
 import { useScrollMemory } from "@/src/utils/scrollMemory";
 import { colors } from "@/src/theme";
 import { ScoreInput } from "@/src/components/ScoreInput";
@@ -122,6 +123,8 @@ export default function MatchDetail() {
     if (!id || !result.trim()) return;
     try {
       const out = await api.setResult(id, result.trim());
+      marketStatsCache.invalidate();
+      mlStatsCache.invalidate();
       if (out.learning?.applied) {
         const ok = out.learning.result_ok;
         Alert.alert(

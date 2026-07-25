@@ -60,6 +60,9 @@ export const marketStatsCache = {
   set(stats: any[]) {
     marketStatsSnapshot = { stats, ts: Date.now() };
   },
+  invalidate() {
+    marketStatsSnapshot = null;
+  },
 };
 
 let mlStatsSnapshot: { data: any; ts: number } | null = null;
@@ -72,6 +75,7 @@ export const mlStatsCache = {
     return Date.now() - mlStatsSnapshot.ts > FRESH_TTL_MS;
   },
   set(data: any) { mlStatsSnapshot = { data, ts: Date.now() }; },
+  invalidate() { mlStatsSnapshot = null; },
 };
 
 export const selectedListCache = {

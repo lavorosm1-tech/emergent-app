@@ -16,7 +16,7 @@ import { Platform } from "react-native";
 import { parseLeagueCode } from "@/src/utils/leagues";
 import { useBottomNav } from "@/src/components/BottomNavContext";
 import { useToast } from "@/src/components/Toast";
-import { selectedListCache, matchesCache } from "@/src/utils/cache";
+import { selectedListCache, matchesCache, marketStatsCache, mlStatsCache } from "@/src/utils/cache";
 import BottomNav from "@/src/components/BottomNav";
 
 export default function Selected() {
@@ -57,6 +57,8 @@ export default function Selected() {
       const summary = `Applicati ${res.applied} · Da verificare ${res.results.filter((r) => r.status === "review").length} · Non trovati ${res.not_found}`;
       const reviews = res.results.filter((r: any) => r.status === "review");
       setReviewList(reviews);
+      marketStatsCache.invalidate();
+      mlStatsCache.invalidate();
       await load();
       if (reviews.length > 0) {
         Alert.alert("Auto-fetch completato", `${summary}\n\nAlcune partite hanno confidence bassa e richiedono conferma manuale.`);
@@ -74,6 +76,8 @@ export default function Selected() {
     try {
       await api.applyResultManual(item.id, item.score);
       setReviewList(reviewList.filter((x) => x.id !== item.id));
+      marketStatsCache.invalidate();
+      mlStatsCache.invalidate();
       await load();
     } catch (e: any) {
       Alert.alert("Errore", e?.message || "Errore");
@@ -125,6 +129,12 @@ export default function Selected() {
         const m = items.find((x) => x.id === id);
         if (m?.day) matchesCache.invalidate(m.day);
       }
+      // Ogni risultato salvato aggiorna anche market_scores/family_counters
+      // (lo storico usato dal Profilo e dal correttivo del motore): senza
+      // invalidare queste cache, il Profilo potrebbe mostrare numeri vecchi
+      // fino a 5 minuti dopo il salvataggio.
+      marketStatsCache.invalidate();
+      mlStatsCache.invalidate();
       await load();
       Alert.alert("Salvato", `${out.updated} risultati aggiornati`);
     } catch (e: any) {

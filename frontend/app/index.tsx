@@ -332,8 +332,17 @@ export default function Home() {
   });
   const goToToday = () => { const d = nearestDay(days); setSelectedDay(d); setCountryFilter(null); setAreaFilter(null); setQuery(""); setTierFilter(null); };
 
-  // Reset scroll when user actively changes filters or day (NOT when returning from match detail)
+  // Reset scroll when user actively changes filters or day (NOT when returning
+  // from match detail o dalla Schedina). Questo effetto gira anche al primo
+  // render dopo un rimontaggio del componente (React esegue sempre gli effetti
+  // al mount, a prescindere dalle dipendenze) - senza la guardia qui sotto,
+  // tornando dalla Schedina lo scroll salvato veniva subito riazzerato.
+  const isFirstFilterRun = useRef(true);
   useEffect(() => {
+    if (isFirstFilterRun.current) {
+      isFirstFilterRun.current = false;
+      return;
+    }
     savedScrollY = 0;
     scrollRef.current?.scrollTo({ y: 0, animated: false });
   }, [selectedDay, query, tierFilter, areaFilter, countryFilter, sortByTime]);
