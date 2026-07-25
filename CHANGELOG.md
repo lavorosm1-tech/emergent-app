@@ -65,6 +65,42 @@ Altre cose da sapere subito:
 
 ## Log (più recente in cima)
 
+### 2026-07-25 (sera) — FASE 1: probabilità vere al posto del cluster tagliato
+
+**Cosa cambia.** `coverage` e `fragility` non si calcolano più sugli 8
+risultati del cluster centrale ma sulla distribuzione completa
+(`fullDistribution`, 49 celle). Il cluster centrale resta esattamente com'era
+per la parte mostrata a schermo, comprese le liste "coperto da" / "rotto da"
+(sulla distribuzione completa sarebbero elenchi di 40+ punteggi, illeggibili).
+
+**Perché.** Gli 8 risultati coprivano in media il 60-75% della probabilità
+totale, e il pezzo tagliato non era neutro: i risultati con uno zero sono
+pochi e concentrati e finivano quasi tutti dentro il taglio, quelli da GG/Over
+sono tanti e piccoli e restavano fuori. Misurato sulle 5.160 partite storiche:
+NG dato al 55,6% contro un 46,2% reale, O2.5 dato al 34,8% contro un 51,2%
+reale. Sulla distribuzione completa lo stesso modello dà 49,5% e 51,0%.
+
+**Effetto misurato** (rigioco su 583 partite reali, campione stratificato):
+| | Precisione del pick #1 | 
+|---|---|
+| Prima | 63,5% (370/583) |
+| Dopo | **68,8% (401/583)** |
+
+Il pick cambia sul **72%** delle partite. Mix dei mercati scelti:
+`Under 17% → 0%`, `NG 4% → 2%`, `Over 0% → 8%`, `MG 70% → 90%`.
+
+**Da tenere d'occhio (due effetti collaterali noti, non risolti qui)**
+1. `MG 70% → 90%`: senza quota nota i multigol non sono filtrabili e vincono
+   per forfait. È il motivo per cui la stima teorica della quota MG è il
+   prossimo passo, prima della Fase 2.
+2. In `buildFinalVerdict` la soglia `robust` (`coverage >= 0.60 &&
+   fragility <= 0.35`) prima scattava nell'**87%** delle partite — cioè era di
+   fatto sempre vera e non distingueva niente. Con i numeri onesti scatta nel
+   **51%**. Le soglie sono state lasciate come sono perché ora dicono la
+   verità; la ricalibratura dei pesi della fusione è materia della Fase 3, dove
+   verranno misurati invece che scelti a mano. Stesso discorso per
+   `COVERAGE_WEIGHT = 30`: il contributo medio passa da 7,80 a 4,95.
+
 ### 2026-07-25 (sera) — FASE 0: pagella dei tre sistemi (solo misurazione)
 
 Primo passo di una roadmap in 5 fasi decisa con Rossi dopo un audit completo

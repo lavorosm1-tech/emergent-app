@@ -127,6 +127,48 @@ export function simulateCluster(odds: Odds, maxGoals = 6, topK = 12): ClusterEnt
 }
 
 // ============================================================
+// full_distribution — FASE 1
+// ============================================================
+
+/**
+ * Restituisce TUTTA la distribuzione dei risultati (49 celle con maxGoals=6),
+ * normalizzata, senza tagli.
+ *
+ * Perché esiste. `simulateCluster` restituisce solo i primi K risultati: è
+ * giusto per MOSTRARE all'utente i punteggi più probabili, ma è sbagliato per
+ * CALCOLARE la probabilità di un mercato. Gli 8 risultati del cluster centrale
+ * coprono in media il 60-75% della probabilità totale, e il pezzo tagliato non
+ * è neutro: i risultati con uno zero (1-0, 2-0, 0-1) sono pochi e concentrati,
+ * quindi finiscono quasi tutti dentro il taglio, mentre i risultati da GG/Over
+ * sono tanti e piccoli e restano quasi tutti fuori.
+ *
+ * L'effetto misurato sulle 5.160 partite storiche era una distorsione
+ * sistematica: NG dato al 55,6% quando la realtà era il 46,2%, O2.5 dato al
+ * 34,8% quando la realtà era il 51,2%. Sulla distribuzione completa lo stesso
+ * modello dà 49,5% e 51,0% — praticamente centrato.
+ */
+export function fullDistribution(odds: Odds, maxGoals = 6): ClusterEntry[] {
+  const [lamH, lamA] = deriveLambdas(odds);
+  const cells: [number, number, number][] = [];
+  let total = 0;
+  for (let h = 0; h <= maxGoals; h++) {
+    for (let a = 0; a <= maxGoals; a++) {
+      const p = poisson(h, lamH) * poisson(a, lamA);
+      cells.push([h, a, p]);
+      total += p;
+    }
+  }
+  if (total <= 0) return [];
+  return cells.map(([h, a, p]) => ({
+    score: `${h}-${a}`,
+    home: h,
+    away: a,
+    p: p / total,
+    compatibility: (p / total >= 0.1 ? "high" : p / total >= 0.06 ? "medium" : "low") as ClusterEntry["compatibility"],
+  }));
+}
+
+// ============================================================
 // evaluate_market_strict
 // ============================================================
 
@@ -466,6 +508,10 @@ export function structuralAnalysis(
   const structure = classifyFamily(odds);
   const cluster = simulateCluster(odds, 6, 12);
   const central = cluster.slice(0, 8);
+  // FASE 1 — `central` resta la vista da mostrare all'utente (i risultati più
+  // probabili). Il CALCOLO di coverage e fragilità usa invece la distribuzione
+  // completa: vedi il commento su `fullDistribution` per il perché.
+  const distribution = fullDistribution(odds, 6);
   const lamH = structure.lambda_home;
   const lamA = structure.lambda_away;
   const lamMin = Math.min(lamH, lamA);
@@ -570,8 +616,13 @@ export function structuralAnalysis(
 
   const ranked: RankedMarket[] = [];
   for (const m of validMarkets) {
-    const { coverage: cov, covered, broken } = coverageForMarket(m, central);
-    const frag = fragilityScore(m, central);
+    const { coverage: cov } = coverageForMarket(m, distribution);
+    const frag = fragilityScore(m, distribution);
+    // Le liste mostrate a schermo ("coperto da" / "rotto da") restano quelle
+    // del cluster centrale: sulla distribuzione completa sarebbero elenchi di
+    // 40+ punteggi, illeggibili e inutili. I NUMERI (coverage e fragilità)
+    // vengono invece dalla distribuzione completa, che è il punto della Fase 1.
+    const { covered, broken } = coverageForMarket(m, central);
     // Non scartiamo piu' i mercati con coverage bassa: restano calcolati e
     // visibili (col loro score reale, quindi in fondo alla classifica) invece
     // di sparire senza che l'utente possa vedere PERCHE' sono deboli.
