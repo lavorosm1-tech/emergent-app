@@ -65,6 +65,38 @@ Altre cose da sapere subito:
 
 ## Log (più recente in cima)
 
+### 2026-07-26 — A+C: via le combo miste, ranking ordinato per probabilita'
+
+Decise da Rossi dopo aver visto i numeri.
+
+**A — Combo "miste" escluse.** Sono quelle che uniscono un segno / doppia
+chance / GG a un Over-Under (`DC 12 + O2.5`, `1 + O2.5`, `GG + O2.5`...). Non
+hanno un prezzo nel file Sisal e Rossi non le gioca. Le combo di soli multigol
+restano: quelle le aveva chieste lui.
+Costo misurato: **zero**. A nessuna soglia la precisione cambia di un decimo,
+perche' non vincevano quasi mai il primo posto.
+
+**C — Il ranking non e' piu' ordinato per punteggio ma per probabilita' vera.**
+Il punteggio mescolava coverage, fragilita', bonus strutturali e correttivo
+storico, e finiva per mettere primo un mercato meno probabile di quello sotto.
+Su Hjk - Tps era primo `MG 2-4 casa` al 59% con quota stimata, mentre `1` stava
+secondo al **69% con quota reale 1,48** — ed e' finita 1-0.
+Il punteggio resta calcolato e resta nel campo `score`: cambia solo il criterio
+di ordinamento, quindi tornare indietro e' una riga.
+
+**Effetto misurato** (583 partite di test):
+
+| Soglia | Prima | Dopo |
+|---|---|---|
+| 1,40 | 62,3% | **57,3%** |
+| 1,50 | 61,6% | **63,3%** |
+| 1,60 | 54,0% | **55,9%** |
+| 1,75 | 49,7% | **55,1%** |
+
+Migliora dove Rossi gioca davvero e peggiora di 5 punti a 1,40. Il nuovo punto
+migliore della curva e' **1,50 → 63,3% a quota media 1,54**: la soglia 1,40 e'
+ora da evitare.
+
 ### 2026-07-26 — Le quote delle combo erano il PRODOTTO delle due quote
 
 Seconda parte dello stesso problema di stamattina, in un punto diverso del

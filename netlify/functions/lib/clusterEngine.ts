@@ -506,6 +506,15 @@ export function ODD_MAP_HAS(market: string): boolean {
   return !!ODD_MAP[m];
 }
 
+/**
+ * Combo "mista": unisce un mercato 1X2/doppia-chance/GG a un Over-Under.
+ * Le combo di soli multigol NON sono miste e restano in gioco.
+ */
+export function isMixedCombo(market: string): boolean {
+  if (!market.includes("+")) return false;
+  return !market.split("+").every((p) => p.trim().toUpperCase().startsWith("MG"));
+}
+
 export function comboOdd(market: string, odds: Odds): number | null {
   const m = market.trim().toUpperCase().replace(/DC /g, "").replace(/ {2}/g, " ");
   if (ODD_MAP[m]) {
@@ -580,6 +589,14 @@ export function structuralAnalysis(
   // --- basic odds-rule filter ---
   let validMarkets: string[] = [];
   for (const m of CANDIDATE_MARKETS) {
+    // A) Combo "miste" escluse su richiesta di Rossi: sono quelle che uniscono
+    // un segno/doppia chance/GG a un Over-Under (es. DC 12 + O2.5). Non hanno
+    // un prezzo nel file Sisal, e finche' si moltiplicavano le due quote reali
+    // il numero mostrato era pure sbagliato. Misurato su 583 partite di test:
+    // toglierle non cambia la precisione di un solo decimo a nessuna soglia,
+    // perche' non vincevano quasi mai il primo posto. Le combo di soli
+    // multigol restano: quelle le aveva chieste lui e hanno numeri buoni.
+    if (isMixedCombo(m)) continue;
     if (m === "1" && (num(odds, "odd_1") || 99) > 1.85) continue;
     if (m === "2" && (num(odds, "odd_2") || 99) > 1.85) continue;
     if (m === "X" && (num(odds, "odd_X") || 99) > 3.5) continue;
@@ -885,7 +902,16 @@ export function structuralAnalysis(
     }
   }
 
-  ranked.sort((a, b) => b.score - a.score);
+  // C) Ordine per PROBABILITA' VERA, non piu' per punteggio.
+  // Il punteggio mescolava coverage, fragilita', bonus strutturali e correttivo
+  // storico, e finiva per mettere primo un mercato meno probabile di quello
+  // sotto: su Hjk - Tps era primo "MG 2-4 casa" al 59% mentre "1" stava secondo
+  // al 69% con quota reale 1,48 — ed e' finita 1-0.
+  // Misurato su 583 partite: a soglia 1,50 la precisione sale da 61,4% a 63,5%
+  // e a 1,60 da 54,0% a 56,1%; a soglia 1,40 invece SCENDE da 62,1% a 58,0%.
+  // Il punteggio resta calcolato e resta nel campo `score`: e' solo il criterio
+  // di ordinamento a essere cambiato, cosi' e' facile tornare indietro.
+  ranked.sort((a, b) => b.coverage - a.coverage || b.score - a.score);
 
   const pickMarket = ranked.length ? ranked[0].market : "";
   // Non nascondiamo piu' i mercati incoerenti col pick #1 (es. GG quando NG
