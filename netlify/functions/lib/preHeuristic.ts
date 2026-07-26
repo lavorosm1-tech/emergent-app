@@ -56,21 +56,32 @@ export function preEligibleMarkets(odds: Odds): string[] {
 }
 
 /**
- * Quota REALE del mercato: quella letta dal file del bookmaker, oppure — per
- * le combo — quella ricavata dai componenti se TUTTI hanno un prezzo reale.
- * Restituisce null appena un pezzo manca: non usa mai stime nostre.
+ * Quota REALE del mercato, cioe' quella LETTA dal file del bookmaker.
+ * Restituisce null per tutto il resto — combo comprese.
+ *
+ * BUG CORRETTO (26/07/2026). Prima questa funzione ricavava la quota di una
+ * combo prendendo il MASSIMO fra i componenti. E' sbagliato di netto: su
+ * New York RB - Charlotte dava "GG + O2.5 @ 1.40" quando la quota vera e'
+ * 1.90, "DC 1X + O2.5 @ 1.40" invece di 1.96, "1 + O2.5 @ 2.20" invece di
+ * 3.08. Il massimo fra due quote e' la quota dell'evento PIU' PROBABILE dei
+ * due, mentre una combo richiede che si verifichino ENTRAMBI: la sua quota e'
+ * sempre piu' alta di tutti i componenti, mai uguale al maggiore.
+ * (La formula sbagliata veniva dall'euristica originale nel frontend, dove il
+ * numero serviva solo a ordinare una lista; da quando alimenta anche la quota
+ * mostrata sulla giocata consigliata e il filtro di quota minima, l'errore e'
+ * diventato visibile e dannoso.)
+ *
+ * Per le combo la quota corretta la calcola gia' il motore con
+ * `estimateMarketOdd` sulla distribuzione di Poisson, che tiene conto della
+ * correlazione fra i due eventi. Qui non si stima niente: se il bookmaker non
+ * da' un prezzo, l'euristica si astiene, ed e' anche cio' che le lascia la sua
+ * indipendenza dal motore.
  */
 function realOddFor(market: string, odds: Odds): number | null {
-  const parts = market.split("+").map((p) => p.trim()).filter(Boolean);
-  let product = 1;
-  for (const part of parts) {
-    const key = SINGLE_MARKET_ODD_KEY[part.replace(/^DC /, "").toUpperCase()];
-    if (!key) return null;
-    const v = odds[key];
-    if (typeof v !== "number" || !isFinite(v) || v <= 1) return null;
-    product = Math.max(product, v);
-  }
-  return parts.length ? Math.round(product * 100) / 100 : null;
+  const key = SINGLE_MARKET_ODD_KEY[market.trim().toUpperCase()];
+  if (!key) return null;
+  const v = odds[key];
+  return typeof v === "number" && isFinite(v) && v > 1 ? v : null;
 }
 
 const SINGLE_MARKET_ODD_KEY: Record<string, keyof Odds> = {

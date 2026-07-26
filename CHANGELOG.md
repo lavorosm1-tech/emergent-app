@@ -65,6 +65,49 @@ Altre cose da sapere subito:
 
 ## Log (più recente in cima)
 
+### 2026-07-26 — BUG GRAVE: le quote delle combo erano sbagliate
+
+Segnalato da Rossi guardando New York RB - Charlotte. Nella lista del
+pre-pronostico comparivano `GG + O2.5 @ 1.40`, `DC 1X + O2.5 @ 1.40`,
+`1 + O2.5 @ 2.20` — e la stessa quota sbagliata finiva sulla GIOCATA
+CONSIGLIATA.
+
+**Causa.** `realOddFor()` ricavava la quota di una combo prendendo il
+**massimo fra i componenti**. E' sbagliato di netto: il massimo fra due quote
+e' la quota dell'evento piu' probabile dei due, mentre una combo richiede che
+si verifichino ENTRAMBI — la sua quota e' sempre piu' alta di tutti i
+componenti, mai uguale al maggiore. Valori reali su quella partita:
+
+| Mercato | Mostrato | Corretto |
+|---|---|---|
+| GG + O2.5 | 1,40 | **1,90** |
+| DC 1X + O2.5 | 1,40 | **1,96** |
+| DC 12 + O2.5 | 1,40 | **1,82** |
+| 1 + O2.5 | 2,20 | **3,08** |
+| DC 1X + GG | 1,40 | **1,90** |
+
+**Da dove veniva.** Dall'euristica originale nel frontend
+(`quickPredictionFamily`), dove `Math.max(o1X, oO15)` serviva solo a ordinare
+una lista e nessuno guardava il numero. Portandola lato server e collegandola
+alla fusione, quel numero ha iniziato a fare tre cose per cui non era adatto:
+comparire come quota della giocata consigliata, passare il filtro di quota
+minima, e ordinare i voti del pre-pronostico. Un errore innocuo e' diventato
+dannoso cambiando contesto.
+
+**Correzione.** `realOddFor()` ora restituisce solo la quota LETTA dal file
+del bookmaker, per i singoli. Sulle combo l'euristica si astiene — che e'
+anche cio' che le lascia la sua indipendenza dal motore. Per le combo la quota
+corretta la calcola gia' `estimateMarketOdd` sulla distribuzione di Poisson,
+che tiene conto della correlazione fra i due eventi.
+
+L'euristica passa da ~26 mercati valutati a **14** (i soli con prezzo vero),
+di cui ne promuove una decina. Meno mercati, ma nessun numero inventato.
+
+**Nota su cosa NON era rotto**: le quote stimate dei multigol sono corrette e
+verificate sulle 5.160 partite storiche entro 1-2 punti (MG 2-4 totali 60,8%
+stimato contro 59,9% reale). Le due cose viaggiavano su strade diverse: la
+stima del motore era giusta, il massimo-fra-componenti del pre-pronostico no.
+
 ### 2026-07-26 — L'IA vede tutti i 54 mercati con i numeri gia' calcolati
 
 Ultimo pezzo del lavoro sulla fusione. Prima l'IA proponeva 3-5 mercati
