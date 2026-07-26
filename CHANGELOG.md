@@ -65,6 +65,14 @@ Altre cose da sapere subito:
 
 ## Log (più recente in cima)
 
+### 2026-07-26 — La lista del pre-pronostico non mostra piu' i mercati dell'IA
+
+La didascalia diceva "questa lista NON tiene conto del pronostico AI", ma in
+cima compariva ancora `MG 1-4 totali` marcato `AI_ONLY`: `rankPicks` unisce i
+mercati dell'IA alla lista. Dal voto erano gia' stati esclusi; ora spariscono
+anche dalla vista, cosi' la sezione mostra il parere del pre-pronostico e
+basta. I mercati dell'IA hanno gia' la loro sezione piu' sotto.
+
 ### 2026-07-26 — Pick senza quota e falsa concordanza: tre buchi chiusi
 
 Segnalato da Rossi: su Vasco Da Gama - Mirassol la giocata consigliata era

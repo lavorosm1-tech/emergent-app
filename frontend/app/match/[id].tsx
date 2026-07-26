@@ -689,7 +689,12 @@ export default function MatchDetail() {
             : quickPredictionFamily(match.odds);
           if (fam.length === 0) return null;
           const llmMarkets = match.playable_markets?.map((p) => p.market) || (match.main_prediction ? [match.main_prediction] : []);
-          const rankedRaw = rankPicks(fam, llmMarkets, marketStats);
+          // Solo i mercati che il pre-pronostico ha davvero in classifica:
+          // rankPicks unisce anche quelli proposti dall'IA (marcati AI_ONLY), ma
+          // mostrarli qui contraddice la didascalia — questa lista deve essere
+          // il parere del pre-pronostico e basta. I mercati dell'IA hanno gia'
+          // la loro sezione piu' sotto.
+          const rankedRaw = rankPicks(fam, llmMarkets, marketStats).filter((r) => r.source !== "ai");
           // ============================================================
           // FILTRO STRUTTURALE: scarta mercati che violano floor/ceiling
           // (es. MG 2-4 quando floor=0, MG 1-3 quando floor=2-tetto=4,
