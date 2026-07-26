@@ -65,6 +65,34 @@ Altre cose da sapere subito:
 
 ## Log (più recente in cima)
 
+### 2026-07-26 — L'IA vede tutti i 54 mercati con i numeri gia' calcolati
+
+Ultimo pezzo del lavoro sulla fusione. Prima l'IA proponeva 3-5 mercati
+scegliendoli a memoria, quindi i multigol non li nominava quasi mai: nella
+fusione risultavano "poco condivisi" non perche' fossero deboli, ma perche'
+nessuno li aveva mai messi sul tavolo.
+
+Ora nel prompt entra il **catalogo completo**: tutti e 54 i mercati con
+probabilita' calcolata dal motore sulla distribuzione completa, quota (reale, o
+stimata e marcata con `~`) e percentuale storica dello scenario. Circa 500
+token in piu' per chiamata, trascurabili.
+
+Il compito dell'IA cambia di natura: non stima piu' probabilita' — cosa che un
+modello linguistico non sa fare in modo affidabile — ma **giudica** numeri gia'
+calcolati, che e' esattamente cio' in cui e' bravo. E deve scegliere copiando i
+nomi dalla lista, quindi non puo' piu' inventare mercati fuori catalogo.
+
+Modificata anche la regola 4 del PIN strutturale: prima diceva di proporre solo
+mercati coerenti col PIN, il che avrebbe escluso a priori meta' del catalogo
+appena aggiunto. Ora il PIN serve a giudicare la coerenza, mentre l'elenco di
+cosa e' proponibile e' il catalogo.
+
+**Da verificare sul campo**: come risponde il modello a una lista di 54 voci non
+e' verificabile offline. Il parsing della risposta resta invariato
+(`playable_markets` + `main_prediction`), quindi se il modello ignorasse le
+nuove istruzioni il comportamento tornerebbe semplicemente quello di prima,
+senza rotture.
+
 ### 2026-07-26 — Concordanza consapevole delle astensioni; euristica PRE lato server
 
 **Il problema.** Il bonus di concordanza contava quanti sistemi avevano scelto

@@ -1,5 +1,9 @@
 import { pgGet, pgPost, pgPatch, jsonResponse, rowToOdds } from "./lib/supabaseRest";
-import { structuralAnalysis } from "./lib/clusterEngine";
+import {
+  structuralAnalysis, CANDIDATE_MARKETS, fullDistribution, coverageForMarket,
+  comboOdd, estimateMarketOdd, type Odds,
+} from "./lib/clusterEngine";
+import { classifyScenario } from "./lib/scenario";
 import { buildMatchPrompt, PREDICTION_SYSTEM, parseAiJson } from "./lib/predictionPrompt";
 import { LLM_OPTIONS, DEFAULT_LLM, callLlm, type LlmOption } from "./lib/llmProviders";
 
@@ -79,11 +83,25 @@ REGOLE OBBLIGATORIE basate sul PIN:
    - Se TETTO=4 e PAVIMENTO=2 → NON proporre "MG 1-3" (lo=1≠2 VIETATO)
    - MG range valido: lo ≤ pavimento+1 AND (aperto: hi≥6 ; chiuso: hi≥tetto)
 3. Nel campo "analysis" devi SCRIVERE LETTERALMENTE: "PAVIMENTO: ${s.goal_floor} gol | TETTO: ${ceilingStr} gol | RANGE: ${rangeStr}"
-4. Nei "playable_markets" PROPONI SOLO mercati coerenti con questo PIN.
+4. Il PIN serve a giudicare la COERENZA di un mercato, non a escluderlo a
+   priori: l'elenco di cosa e' proponibile e' il CATALOGO COMPLETO piu' sotto.
+   Se un mercato del catalogo ha numeri ottimi ma sembra in contrasto col PIN,
+   puoi comunque proporlo spiegando il perche' nel "reasoning".
 ============================================================\n`;
     prompt = prompt + pin;
   } catch {
     // se il PIN fallisce, procediamo comunque senza (come nell'originale)
+  }
+
+  // Catalogo completo con i numeri gia' calcolati.
+  // Prima l'IA proponeva 3-5 mercati scegliendoli a memoria: i multigol non li
+  // nominava quasi mai, e nella fusione risultavano "poco condivisi" solo
+  // perche' nessuno li aveva mai messi sul tavolo. Ora li vede tutti e 54, con
+  // probabilita', quota e storico dello scenario, e sceglie da quella lista.
+  try {
+    prompt = prompt + buildMarketTable(rowToOdds(match), await scenarioRates(rowToOdds(match)));
+  } catch {
+    // se la tabella fallisce si procede senza: il pronostico resta possibile
   }
 
   let prediction;
@@ -188,4 +206,70 @@ async function getAllFamiliesStats(league?: string): Promise<string> {
   }
 
   return blocks.join("\n\n");
+}
+
+/** Percentuali storiche dello scenario di questa partita, mercato per mercato. */
+async function scenarioRates(odds: Odds): Promise<Record<string, { rate: number; total: number }>> {
+  const out: Record<string, { rate: number; total: number }> = {};
+  const scenario = classifyScenario(odds);
+  if (!scenario || scenario === "sconosciuto") return out;
+  try {
+    const rows = await pgGet(
+      `scenario_market_scores?scenario=eq.${encodeURIComponent(scenario)}&select=market,wins,total`,
+    );
+    for (const r of rows) {
+      if (r.total > 0) out[r.market] = { rate: Math.round((r.wins / r.total) * 100), total: r.total };
+    }
+  } catch {
+    /* senza storico si procede lo stesso */
+  }
+  return out;
+}
+
+/**
+ * Tabella di tutti i mercati del catalogo con i numeri gia' calcolati dal
+ * motore, cosi' l'IA non deve stimarli (cosa che non sa fare) ma solo
+ * giudicarli (cosa che sa fare).
+ */
+function buildMarketTable(
+  odds: Odds,
+  hist: Record<string, { rate: number; total: number }>,
+): string {
+  const dist = fullDistribution(odds, 6);
+  const righe: string[] = [];
+
+  for (const m of CANDIDATE_MARKETS) {
+    const p = Math.round(coverageForMarket(m, dist).coverage * 100);
+    const reale = comboOdd(m, odds);
+    const quota = reale ?? estimateMarketOdd(m, odds);
+    const h = hist[m];
+    righe.push(
+      `${m} | prob ${p}% | quota ${quota ? quota.toFixed(2) + (reale ? "" : "~") : "n/d"}` +
+      (h ? ` | storico ${h.rate}% su ${h.total} partite simili` : ""),
+    );
+  }
+
+  return `
+
+============================================================
+📊 CATALOGO COMPLETO — tutti i ${CANDIDATE_MARKETS.length} mercati con i numeri gia' calcolati
+============================================================
+Legenda: "prob" e' la probabilita' calcolata dal motore Poisson sulla
+distribuzione completa dei risultati. "quota" con la tilde (~) e' stimata da
+noi perche' il bookmaker non la fornisce. "storico" e' quante volte quel
+mercato ha vinto in partite con lo stesso profilo di quote.
+
+${righe.join("\n")}
+
+REGOLE PER LA SCELTA:
+1. Scegli i "playable_markets" ESCLUSIVAMENTE da questa lista, copiando il nome
+   del mercato ESATTAMENTE come scritto sopra.
+2. NON stimare probabilita' tue: quelle sopra sono gia' calcolate. Il tuo
+   compito e' giudicare quali conviene giocare, non ricalcolarle.
+3. Considera tutti e ${CANDIDATE_MARKETS.length}, multigol e combo compresi. Sono giocabili quanto
+   gli altri: se hanno i numeri migliori, proponili senza esitare.
+4. Quando probabilita' e storico divergono molto, spiega nel "reasoning" a
+   quale dei due dai piu' peso e perche'.
+============================================================
+`;
 }
