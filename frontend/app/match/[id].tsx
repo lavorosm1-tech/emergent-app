@@ -95,7 +95,11 @@ export default function MatchDetail() {
   useEffect(() => {
     if (!match || !structural || match.result) return;
     try {
-      const fam = quickPredictionFamily(match.odds);
+      // FASE 5 — se il backend manda la sua classifica PRE la usiamo: è una
+      // sola implementazione invece di due copie da tenere allineate a mano.
+      const fam = structural?.pre_ranking?.length
+        ? structural.pre_ranking.map((c) => ({ market: c.market, odd: c.odd, family: "" }))
+        : quickPredictionFamily(match.odds);
       const llmMarkets = prediction?.playable_markets?.map((p) => p.market)
         || (prediction?.main_prediction ? [prediction.main_prediction] : []);
       const preRanked = rankPicks(fam, llmMarkets, marketStats);
@@ -264,7 +268,11 @@ export default function MatchDetail() {
         {/* ============ VERDETTO FINALE (fusione 3 sistemi) ============ */}
         {(() => {
           if (!structural) return null;
-          const fam = quickPredictionFamily(match.odds);
+          // FASE 5 — se il backend manda la sua classifica PRE la usiamo: è una
+          // sola implementazione invece di due copie da tenere allineate a mano.
+          const fam = structural?.pre_ranking?.length
+            ? structural.pre_ranking.map((c) => ({ market: c.market, odd: c.odd, family: "" }))
+            : quickPredictionFamily(match.odds);
           const llmMarkets = prediction?.playable_markets?.map((p) => p.market) || (prediction?.main_prediction ? [prediction.main_prediction] : []);
           const preRanked = rankPicks(fam, llmMarkets, marketStats);
           const verdictRaw = buildFinalVerdict(structural, preRanked, prediction?.playable_markets, match.odds, history, { minOdd });
@@ -674,7 +682,11 @@ export default function MatchDetail() {
 
         {/* Pre-pronostic family — local heuristic */}
         {(() => {
-          const fam = quickPredictionFamily(match.odds);
+          // FASE 5 — se il backend manda la sua classifica PRE la usiamo: è una
+          // sola implementazione invece di due copie da tenere allineate a mano.
+          const fam = structural?.pre_ranking?.length
+            ? structural.pre_ranking.map((c) => ({ market: c.market, odd: c.odd, family: "" }))
+            : quickPredictionFamily(match.odds);
           if (fam.length === 0) return null;
           const llmMarkets = match.playable_markets?.map((p) => p.market) || (match.main_prediction ? [match.main_prediction] : []);
           const rankedRaw = rankPicks(fam, llmMarkets, marketStats);

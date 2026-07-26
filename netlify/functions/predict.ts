@@ -1,6 +1,6 @@
 import { structuralAnalysis, type Odds, type MlScoreEntry } from "./lib/clusterEngine";
 import { pgGet, pgPatch } from "./lib/supabaseRest";
-import { preHeuristicPick } from "./lib/preHeuristic";
+import { preHeuristicPick, preHeuristicRanking, preEligibleMarkets } from "./lib/preHeuristic";
 import { classifyScenario } from "./lib/scenario";
 import { readMinOdd } from "./odd-settings";
 
@@ -78,6 +78,14 @@ export default async (req: Request): Promise<Response> => {
 
   return json({
     min_odd: minOdd,
+    // FASE 5 — l'euristica PRE viene calcolata QUI e non piu' nel browser:
+    // un'unica implementazione invece di due copie da tenere allineate a mano.
+    // `pre_ranking` sono i mercati che l'euristica promuove, `pre_eligible`
+    // quelli su cui ha potuto esprimersi (hanno un prezzo vero del
+    // bookmaker). La differenza fra i due serve alla fusione per distinguere
+    // "bocciato" da "non pertinente".
+    pre_ranking: preHeuristicRanking(odds).map((c) => ({ market: c.market, odd: c.odd })),
+    pre_eligible: preEligibleMarkets(odds),
     structure: result.structure,
     cluster: result.cluster,
     central_cluster: result.central_cluster,

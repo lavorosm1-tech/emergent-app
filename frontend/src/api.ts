@@ -98,6 +98,10 @@ export type StructuralStructure = {
 export type StructuralAnalysis = {
   /** soglia di quota minima con cui è stato costruito questo ranking (Fase 2) */
   min_odd?: number;
+  /** classifica dell'euristica PRE, calcolata lato server su tutto il catalogo */
+  pre_ranking?: { market: string; odd: number }[];
+  /** mercati su cui l'euristica PRE ha potuto esprimersi (hanno un prezzo reale) */
+  pre_eligible?: string[];
   structure: StructuralStructure;
   cluster: StructuralCluster[];
   central_cluster: StructuralCluster[];
@@ -624,6 +628,9 @@ export function buildFinalVerdict(
     coverage?: number;
     fragility?: number;
     family?: string;
+    oddEstimated?: boolean;
+    /** quanti sistemi potevano esprimersi su questo mercato (2 o 3) */
+    eligibleSystems?: number;
   };
   const buckets = new Map<string, Bucket>();
 
@@ -681,6 +688,13 @@ export function buildFinalVerdict(
     structural.ranking.forEach((r) => structuralWhitelist.add(norm(r.market)));
   }
 
+  // Mercati su cui l'euristica PRE ha potuto esprimersi. Se il backend non
+  // manda la lista (versione vecchia), si assume che potesse su tutto: il
+  // comportamento torna quello di prima, senza sorprese.
+  const preEligible: Set<string> | null = structural?.pre_eligible
+    ? new Set(structural.pre_eligible.map((m) => norm(m)))
+    : null;
+
   for (const b of buckets.values()) {
     if (odds && (b.odd === undefined || b.odd === null)) {
       const computed = getMarketOdd(b.market, odds);
@@ -696,11 +710,24 @@ export function buildFinalVerdict(
         b.oddEstimated = !!fromEngine.odd_estimated;
       }
     }
-    // La concordanza tra sistemi INDIPENDENTI è il segnale più forte che
-    // abbiamo (3 metodi diversi che arrivano alla stessa conclusione):
-    // deve pesare più della fiducia di un solo sistema nel proprio pick.
-    if (b.sources.size === 3) b.score += 8;        // piena
-    else if (b.sources.size === 2) b.score += 2.5; // forte
+    // La concordanza fra sistemi INDIPENDENTI è il segnale più forte che
+    // abbiamo (metodi diversi che arrivano alla stessa conclusione).
+    //
+    // CORREZIONE: prima si contavano i sistemi che avevano scelto quel
+    // mercato, senza chiedersi se gli altri POTEVANO sceglierlo. L'euristica
+    // PRE ragiona sulle quote reali del bookmaker, e per i 16 multigol
+    // semplici un prezzo non esiste: quei mercati risultavano "poco condivisi"
+    // non perché l'euristica li bocciasse, ma perché non aveva modo di
+    // esprimersi. Era una penalità sistematica contro i multigol.
+    //
+    // Ora la concordanza si misura solo fra i sistemi che potevano votare.
+    // Unanimità fra tre vale più di unanimità fra due: nel secondo caso i
+    // pareri indipendenti sono comunque meno.
+    const eligible = eligibleSystemsFor(b.market, preEligible);
+    const agree = b.sources.size;
+    if (agree >= 2 && agree >= eligible) b.score += eligible >= 3 ? 8 : 4;
+    else if (agree === 2) b.score += 2.5;
+    b.eligibleSystems = eligible;
   }
 
   // === Segnale strutturale debole: lieve penalità (non veto) per i mercati
@@ -855,8 +882,9 @@ export function buildFinalVerdict(
     })
     .map((b) => {
       const c = b.sources.size;
+      const eligible = b.eligibleSystems ?? 3;
       const agreementLabel: VerdictPick["agreementLabel"] =
-        c === 3 ? "piena" : c === 2 ? "forte" : c === 1 ? "parziale" : "divergente";
+        c >= 2 && c >= eligible ? "piena" : c === 2 ? "forte" : c === 1 ? "parziale" : "divergente";
       return {
         market: b.market,
         score: Math.round(b.score * 100) / 100,
@@ -1165,3 +1193,16 @@ export function filterCoherentAlternatives(
   return accepted;
 }
 
+
+/**
+ * Quanti sistemi POTEVANO esprimersi su questo mercato.
+ *
+ * Il motore strutturale e l'IA ricevono l'intero catalogo, quindi valutano
+ * tutto. L'euristica PRE no: ragiona sulle quote reali del bookmaker, e per i
+ * multigol semplici un prezzo non esiste. Su quei mercati si astiene, e non
+ * deve pesare come un voto contrario.
+ */
+function eligibleSystemsFor(market: string, preEligible: Set<string> | null): number {
+  if (!preEligible) return 3;                       // nessuna informazione: come prima
+  return preEligible.has(normalizeMarket(market)) ? 3 : 2;
+}

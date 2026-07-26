@@ -42,6 +42,20 @@ export function preHeuristicRanking(odds: Odds): PreCandidate[] {
 }
 
 /**
+ * Mercati su cui l'euristica PRE PUO' esprimersi, cioe' quelli con un prezzo
+ * reale del bookmaker — a prescindere dal fatto che poi li scarti perche' la
+ * quota e' troppo bassa.
+ *
+ * Serve a distinguere "l'euristica lo boccia" da "l'euristica non ha modo di
+ * dire niente": la concordanza fra sistemi va calcolata solo fra chi poteva
+ * davvero votare, altrimenti i multigol vengono puniti per un voto che non
+ * poteva esistere.
+ */
+export function preEligibleMarkets(odds: Odds): string[] {
+  return CANDIDATE_MARKETS.filter((m) => realOddFor(m, odds) !== null);
+}
+
+/**
  * Quota REALE del mercato: quella letta dal file del bookmaker, oppure — per
  * le combo — quella ricavata dai componenti se TUTTI hanno un prezzo reale.
  * Restituisce null appena un pezzo manca: non usa mai stime nostre.

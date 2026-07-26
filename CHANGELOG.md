@@ -65,6 +65,46 @@ Altre cose da sapere subito:
 
 ## Log (più recente in cima)
 
+### 2026-07-26 — Concordanza consapevole delle astensioni; euristica PRE lato server
+
+**Il problema.** Il bonus di concordanza contava quanti sistemi avevano scelto
+un mercato, senza chiedersi se gli altri POTESSERO sceglierlo. L'euristica PRE
+ragiona sulle quote reali del bookmaker, e per i **16 multigol semplici** un
+prezzo non esiste nel file Sisal: quei mercati risultavano "poco condivisi" non
+perché l'euristica li bocciasse, ma perché non aveva modo di esprimersi.
+Penalità sistematica contro i multigol — ed è il motivo per cui in
+Atletico Pr–Internacional il verdetto ha scelto NG (coverage 53%) invece di
+MG 1-2 casa, che nel ranking strutturale era primo con 59%.
+
+**Cosa è cambiato**
+- `preHeuristicRanking()` valuta l'intero catalogo invece di una lista fissa di
+  ~18 candidati: ogni mercato, combo comprese, per cui **tutti** i componenti
+  hanno una quota vera. In pratica da ~18 a ~26 mercati.
+- `preEligibleMarkets()` distingue "l'euristica lo boccia" da "l'euristica non
+  può dire niente".
+- `predict.ts` restituisce `pre_ranking` e `pre_eligible`. Il frontend usa
+  quelli invece di ricalcolare l'euristica nel browser: **una sola
+  implementazione** al posto di due copie da tenere allineate a mano (il rischio
+  segnalato in Fase 0 sparisce).
+- La concordanza si misura solo fra i sistemi che potevano votare. Unanimità
+  fra tre vale +8, unanimità fra due (perché il terzo si è astenuto) vale +4,
+  due su tre resta +2,5.
+
+**Perché l'euristica NON è stata estesa anche ai multigol.** Sarebbe stato
+facile: basta usare la quota che stimiamo noi. Ma quella stima deriva dalla
+distribuzione di Poisson, cioè dalla stessa probabilità con cui ragiona il
+motore strutturale: ordinare i multigol con quella significa fabbricare un
+secondo voto identico al primo. La concordanza "2 su 3" diventerebbe automatica
+e priva di significato — e visto che è il bonus di concordanza a decidere il
+pick, avremmo peggiorato la fusione credendo di renderla più equa.
+L'indipendenza dell'euristica PRE viene esattamente dal fatto che guarda solo
+prezzi veri. Su quello che non ha prezzo, si astiene.
+
+**Non ancora fatto**: mandare all'IA tutti i 54 mercati con la probabilità già
+calcolata, chiedendole *approvo / neutro / respingo* su ciascuno invece di farle
+proporre 3-5 mercati liberamente. Va provato con una chiamata vera al modello,
+quindi aspetta lo sblocco dei deploy.
+
 ### 2026-07-26 — Calendario ancora bloccato: seconda causa
 
 La correzione precedente (funzione SQL `matches_distinct_days`) era giusta ma
