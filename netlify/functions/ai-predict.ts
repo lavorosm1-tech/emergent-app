@@ -4,6 +4,7 @@ import {
   comboOdd, estimateMarketOdd, type Odds,
 } from "./lib/clusterEngine";
 import { classifyScenario } from "./lib/scenario";
+import { readMinOdd } from "./odd-settings";
 import { buildMatchPrompt, PREDICTION_SYSTEM, parseAiJson } from "./lib/predictionPrompt";
 import { LLM_OPTIONS, DEFAULT_LLM, callLlm, type LlmOption } from "./lib/llmProviders";
 
@@ -99,7 +100,11 @@ REGOLE OBBLIGATORIE basate sul PIN:
   // perche' nessuno li aveva mai messi sul tavolo. Ora li vede tutti e 54, con
   // probabilita', quota e storico dello scenario, e sceglie da quella lista.
   try {
-    prompt = prompt + buildMarketTable(rowToOdds(match), await scenarioRates(rowToOdds(match)));
+    prompt = prompt + buildMarketTable(
+      rowToOdds(match),
+      await scenarioRates(rowToOdds(match)),
+      await readMinOdd(),
+    );
   } catch {
     // se la tabella fallisce si procede senza: il pronostico resta possibile
   }
@@ -234,20 +239,33 @@ async function scenarioRates(odds: Odds): Promise<Record<string, { rate: number;
 function buildMarketTable(
   odds: Odds,
   hist: Record<string, { rate: number; total: number }>,
+  minOdd: number,
 ): string {
   const dist = fullDistribution(odds, 6);
-  const righe: string[] = [];
 
-  for (const m of CANDIDATE_MARKETS) {
-    const p = Math.round(coverageForMarket(m, dist).coverage * 100);
+  // Ordinati per probabilita' decrescente, non in ordine di catalogo: cosi' i
+  // mercati migliori stanno in cima e non finiscono sepolti a meta' elenco.
+  // Prima, con l'ordine di catalogo, i multigol restavano nel mezzo e l'IA
+  // continuava a proporre i soliti Over/GG anche quando avevano numeri peggiori.
+  const voci = CANDIDATE_MARKETS.map((m) => {
     const reale = comboOdd(m, odds);
     const quota = reale ?? estimateMarketOdd(m, odds);
-    const h = hist[m];
-    righe.push(
-      `${m} | prob ${p}% | quota ${quota ? quota.toFixed(2) + (reale ? "" : "~") : "n/d"}` +
-      (h ? ` | storico ${h.rate}% su ${h.total} partite simili` : ""),
+    return { m, p: coverageForMarket(m, dist).coverage, quota, stimata: reale === null };
+  }).sort((a, b) => b.p - a.p);
+
+  const righe = voci.map((v) => {
+    const h = hist[v.m];
+    // Sotto la soglia scelta dall'utente il mercato verrebbe scartato a valle:
+    // segnalarlo evita che l'IA sprechi la sua prima scelta su qualcosa che
+    // non arrivera' mai allo schermo (successo con O1.5 @1.33 su Vasco-Mirassol).
+    const fuori = v.quota !== null && v.quota < minOdd;
+    return (
+      `${v.m} | prob ${Math.round(v.p * 100)}% | ` +
+      `quota ${v.quota ? v.quota.toFixed(2) + (v.stimata ? "~" : "") : "n/d"}` +
+      (h ? ` | storico ${h.rate}% su ${h.total} partite simili` : "") +
+      (fuori ? "  ⛔ SOTTO LA SOGLIA, NON SELEZIONABILE" : "")
     );
-  }
+  });
 
   return `
 
@@ -263,7 +281,9 @@ ${righe.join("\n")}
 
 REGOLE PER LA SCELTA:
 1. Scegli i "playable_markets" ESCLUSIVAMENTE da questa lista, copiando il nome
-   del mercato ESATTAMENTE come scritto sopra.
+   del mercato ESATTAMENTE come scritto sopra. NON proporre mai i mercati
+   marcati "SOTTO LA SOGLIA": verrebbero scartati e la tua scelta andrebbe persa.
+   La soglia di quota minima impostata dall'utente e' ${minOdd.toFixed(2)}.
 2. NON stimare probabilita' tue: quelle sopra sono gia' calcolate. Il tuo
    compito e' giudicare quali conviene giocare, non ricalcolarle.
 3. Considera tutti e ${CANDIDATE_MARKETS.length}, multigol e combo compresi. Sono giocabili quanto

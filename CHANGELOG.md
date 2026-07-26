@@ -65,6 +65,27 @@ Altre cose da sapere subito:
 
 ## Log (più recente in cima)
 
+### 2026-07-26 — Tabella per l'IA: ordinata per probabilita' e con la soglia segnalata
+
+Due rifiniture emerse dalla prima prova sul campo (Vasco Da Gama - Mirassol).
+
+**1. La lista era in ordine di catalogo**, quindi i multigol finivano sepolti a
+meta' elenco e l'IA continuava a proporre i soliti Over/GG anche quando avevano
+numeri peggiori. Su quella partita `MG 1-3 totali` aveva la probabilita' piu'
+alta fra i mercati selezionabili (67%) e l'IA non l'ha nemmeno nominato. Ora la
+tabella e' ordinata per probabilita' decrescente.
+
+**2. L'IA sprecava la prima scelta su mercati non selezionabili.** Il suo
+pronostico principale era `O1.5`, che a quota 1,33 sta sotto la soglia minima
+dell'utente e viene scartato a valle: infatti sullo schermo e' arrivato GG, non
+O1.5. Ora ogni voce sotto soglia e' marcata `⛔ SOTTO LA SOGLIA, NON
+SELEZIONABILE` e la regola glielo vieta esplicitamente.
+
+**Conferma che il lavoro precedente funziona**: nelle sue motivazioni l'IA ha
+citato "Probabilita' 73%" per O1.5 e "50%" per GG — che sono esattamente i
+valori calcolati dal motore e passati nella tabella, non stime sue. Prima li
+inventava.
+
 ### 2026-07-26 — BUG GRAVE: le quote delle combo erano sbagliate
 
 Segnalato da Rossi guardando New York RB - Charlotte. Nella lista del
