@@ -65,6 +65,35 @@ Altre cose da sapere subito:
 
 ## Log (più recente in cima)
 
+### 2026-07-26 — Le quote delle combo erano il PRODOTTO delle due quote
+
+Seconda parte dello stesso problema di stamattina, in un punto diverso del
+codice. `comboOdd()` per i mercati con `+` moltiplicava le due quote reali:
+`DC 12 + O2.5` diventava 1,18 x 1,48 = **1,746**, e veniva mostrato con la `@`
+come se fosse un prezzo letto dal file Sisal — dove quella combo non esiste.
+
+Moltiplicare vale solo per eventi **indipendenti**. "Non finisce in pareggio" e
+"almeno 3 gol" non lo sono: crescono insieme. Il prodotto sovrastima la quota.
+La stima di Poisson tiene conto della correlazione perche' conta i risultati
+esatti in cui entrambi gli eventi si verificano: sulla stessa partita da
+**1,66** invece di 1,746.
+
+Corretto anche il flag: `odd_estimated` era true solo quando `comboOdd`
+restituiva null, quindi le combo passavano per prezzi reali. Ora una quota e'
+marcata reale **solo** se il bookmaker la fornisce per quel mercato esatto —
+14 mercati su 54.
+
+**Misurato prima di decidere** (583 partite di test, tre cataloghi a confronto):
+
+| Soglia | Tutti i 54 | Senza le combo `+` | Solo quote reali (14) |
+|---|---|---|---|
+| 1,40 | 62,3% | **62,1%** | 53,9% |
+| 1,50 | 61,6% | **61,4%** | 54,0% |
+| 1,60 | 54,4% | **53,5%** | 49,1% |
+
+Togliere le combo costa **quasi nulla**. Togliere anche i multigol costa
+**8 punti**: sono loro a reggere la precisione, non le combo.
+
 ### 2026-07-26 — Correggere un risultato non avvelena piu' lo storico
 
 Emerso da Rossi: su Mariehamn - Ac Oulu aveva salvato `1-0`, ma la partita era

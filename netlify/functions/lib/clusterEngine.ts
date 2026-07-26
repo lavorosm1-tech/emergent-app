@@ -500,6 +500,12 @@ const ODD_MAP: Record<string, string> = {
   GG: "odd_GG", NG: "odd_NG",
 };
 
+/** true se il bookmaker fornisce davvero un prezzo per QUESTO mercato esatto. */
+export function ODD_MAP_HAS(market: string): boolean {
+  const m = market.trim().toUpperCase().replace(/DC /g, "").replace(/ {2}/g, " ");
+  return !!ODD_MAP[m];
+}
+
 export function comboOdd(market: string, odds: Odds): number | null {
   const m = market.trim().toUpperCase().replace(/DC /g, "").replace(/ {2}/g, " ");
   if (ODD_MAP[m]) {
@@ -507,11 +513,16 @@ export function comboOdd(market: string, odds: Odds): number | null {
     return v || null;
   }
   if (m.includes("+")) {
-    const parts = m.split("+").map((p) => p.trim());
-    const vals = parts.map((p) => num(odds, ODD_MAP[p] || ""));
-    if (vals.every((v) => v && v > 0)) {
-      return round3(vals[0] * vals[1]);
-    }
+    // BUG CORRETTO (26/07/2026). Qui si moltiplicavano le due quote:
+    // `DC 12 + O2.5` diventava 1,18 x 1,48 = 1,746. Moltiplicare vale solo per
+    // eventi INDIPENDENTI, e "non finisce in pareggio" e "almeno 3 gol" non lo
+    // sono affatto: crescono insieme. Il prodotto sovrastima quindi la quota,
+    // e il numero veniva anche mostrato con la "@" come se fosse un prezzo
+    // letto dal bookmaker, mentre nel file Sisal quella combo non esiste.
+    //
+    // La stima di Poisson tiene conto della correlazione perche' conta i
+    // risultati esatti in cui ENTRAMBI gli eventi si verificano: sulla stessa
+    // partita da 1,66 invece di 1,746.
     const est = estimateMarketOdd(market, odds);
     if (est) return est;
   }
@@ -813,6 +824,10 @@ export function structuralAnalysis(
     // tale, così a schermo si vede che è un valore calcolato e non letto dal
     // file. L'EV qui sopra resta volutamente null: vedi il commento su
     // estimateMarketOdd (sarebbe circolare).
+    // Una quota e' "reale" solo se il bookmaker la fornisce per quel mercato
+    // esatto: le combo non ci sono nel file, quindi vanno sempre marcate come
+    // stimate anche quando comboOdd restituisce un numero.
+    const soloReale = ODD_MAP_HAS(m);
     const estimated = comboOddVal === null ? estimateMarketOdd(m, odds) : null;
 
     ranked.push({
@@ -824,7 +839,7 @@ export function structuralAnalysis(
       broken_by: broken.slice(0, 5),
       score: round4(score),
       odd: comboOddVal ?? estimated,
-      odd_estimated: comboOddVal === null && estimated !== null,
+      odd_estimated: !soloReale,
       ev,
     });
   }
