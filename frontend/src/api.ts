@@ -468,7 +468,18 @@ export function rankPicks(
   const out: RankedPick[] = [];
   for (const p of map.values()) {
     let score = 0;
-    if (p.source === "pre+ai") score += 0.30;
+    // NIENTE bonus per la concordanza con l'IA (era `+= 0.30` quando
+    // source === "pre+ai"). Motivo: la fusione conta il pre-pronostico come
+    // TERZO parere indipendente, ma con quel bonus la sua classifica veniva
+    // riordinata dai mercati proposti dall'IA — cioe' in parte ne era un'eco.
+    // Risultato: "CONCORDANZA 2/3 = AI + PRE" contava spesso due volte lo
+    // stesso parere. Si vedeva a occhio nudo: su Vasco Da Gama - Mirassol il
+    // pick PRE era X2 prima del click sul Pronostico AI e diventava GG dopo,
+    // pur non essendo cambiata nessuna quota.
+    // L'etichetta "pre+ai" resta, come informazione a schermo: e' solo
+    // l'ORDINAMENTO che non deve piu' dipenderne. Il pre-pronostico ora si
+    // regge unicamente sulle quote reali del bookmaker e sullo storico —
+    // l'unica cosa che sa davvero, e l'unica che il motore Poisson non guarda.
     if (p.win_rate !== null && p.total >= MIN_RELIABLE_SAMPLE) {
       // Sample-size weighted confidence
       const weight = 1 - 1 / Math.sqrt(p.total);

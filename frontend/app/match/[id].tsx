@@ -713,7 +713,7 @@ export default function MatchDetail() {
                   <Ionicons name="help-circle-outline" size={18} color={colors.primary} />
                 </TouchableOpacity>
               </View>
-              <Text style={styles.preHint}>Mercati validi ordinati per affidabilità (concordanza AI + win-rate). Solo quote ≥ 1.40 e nessun segno 1/2/X se la quota corrispondente è &gt; 1.85.</Text>
+              <Text style={styles.preHint}>Mercati validi ordinati per quota reale del bookmaker e win-rate storico. Questa lista NON tiene conto del pronostico AI: resta un parere indipendente, così la concordanza fra i tre sistemi è reale e non un'eco.</Text>
 
               {/* RANK #1 - HIGHLIGHTED PICK */}
               {ranked[0] && (() => {

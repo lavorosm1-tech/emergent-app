@@ -65,6 +65,38 @@ Altre cose da sapere subito:
 
 ## Log (più recente in cima)
 
+### 2026-07-26 — Il pre-pronostico smette di fare eco all'IA
+
+Trovato rispondendo a una domanda di Rossi: perche' su Vasco Da Gama - Mirassol
+il pick del pre-pronostico era `X2` prima di premere "Pronostico AI" e
+diventava `GG` dopo, senza che fosse cambiata nessuna quota?
+
+**Causa.** In `rankPicks` c'era `if (p.source === "pre+ai") score += 0.30`: i
+mercati nominati dall'IA salivano nella classifica del pre-pronostico. Quindi
+il pre-pronostico veniva **riordinato dall'IA**, e la fusione lo contava
+comunque come TERZO parere indipendente. Una "CONCORDANZA 2/3 = AI + PRE" era
+spesso lo stesso parere contato due volte.
+
+E' lo stesso errore evitato in mattinata sui multigol: due sistemi che si
+copiano non sono due conferme.
+
+**Correzione.** Tolto il bonus. L'etichetta `pre+ai` resta come informazione a
+schermo, ma non influenza piu' l'ordinamento: il pre-pronostico si regge ora
+solo sulle quote reali del bookmaker e sul win-rate storico — l'unica cosa che
+sa davvero, e l'unica che il motore Poisson non guarda.
+
+**Cosa aspettarsi**: la lista del pre-pronostico non cambia piu' dopo il click
+sul Pronostico AI, e alcune concordanze scenderanno da "2 su 3" a "1 su 3".
+E' corretto: erano gonfiate.
+
+**Non misurabile offline**: la fusione vive nel frontend e non e' rigiocabile
+sulle partite storiche come il motore. Va verificata sul campo.
+
+**Nota sull'X2 di quella partita**: non era favorito. Con lambda 1,56 / 1,01 la
+probabilita' vera di X2 e' 49,9% (vittoria casa 50,1%), quindi la quota equa
+sarebbe 2,00 mentre il book dava 1,67. Il motore lo teneva fuori dai primi
+venti a ragione: sopra c'era una dozzina di multigol fra il 55% e il 67%.
+
 ### 2026-07-26 — Tabella per l'IA: ordinata per probabilita' e con la soglia segnalata
 
 Due rifiniture emerse dalla prima prova sul campo (Vasco Da Gama - Mirassol).
