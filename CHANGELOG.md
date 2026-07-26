@@ -65,6 +65,32 @@ Altre cose da sapere subito:
 
 ## Log (più recente in cima)
 
+### 2026-07-26 — Calendario ancora bloccato: seconda causa
+
+La correzione precedente (funzione SQL `matches_distinct_days`) era giusta ma
+non bastava: **PostgREST tiene una cache dello schema**, e finché non la
+ricarica una funzione appena creata con una migration risponde 404. Le RPC
+nuove (`matches_distinct_days`, `increment_system_score`,
+`apply_scenario_result`) erano quindi invisibili al codice.
+
+Prova del fatto: `system_scorecard` era rimasta **vuota** anche dopo che erano
+stati salvati dei risultati su partite che avevano i tre pick registrati — le
+chiamate RPC fallivano e venivano assorbite dai `try/catch` best-effort, in
+silenzio. Stessa sorte per l'aggiornamento incrementale dello storico.
+
+Fatto: `notify pgrst, 'reload schema'`.
+
+E soprattutto: `matches-days` non dipende più da una strada sola. Se la RPC non
+risponde, ricade su due letture con `limit` ESPLICITO (una dal giorno più
+vecchio, una dal più recente) e le unisce, così i giorni in coda — le partite
+future, quelle che servono — arrivano comunque.
+
+*Lezione da ricordare*: dopo una migration che crea funzioni, va ricaricata la
+cache di PostgREST, altrimenti le RPC nuove falliscono in silenzio. E un
+`try/catch` best-effort nasconde proprio questo tipo di guasto: se una scrittura
+è "opzionale", il suo mancato funzionamento non si vede finché non si va a
+controllare la tabella.
+
 ### 2026-07-25 (notte) — Calendario bloccato, bug combo, combo multigol simmetriche
 
 **1. BUG GRAVE: il calendario si fermava al 25 luglio.** Caricando un Excel
