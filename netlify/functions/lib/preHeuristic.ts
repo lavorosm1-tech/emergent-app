@@ -1,4 +1,4 @@
-import type { Odds } from "./clusterEngine";
+import { CANDIDATE_MARKETS, type Odds } from "./clusterEngine";
 
 export type PreCandidate = { market: string; odd: number; family: string };
 
@@ -15,6 +15,59 @@ export type PreCandidate = { market: string; odd: number; family: string };
  * Se un giorno si toccano le regole, vanno cambiate in entrambi i posti,
  * altrimenti la pagella misura un sistema diverso da quello che vota.
  */
+/**
+ * Valuta TUTTI i mercati del catalogo per cui il bookmaker fornisce un prezzo
+ * reale, e restituisce la classifica dell'euristica.
+ *
+ * Perche' solo quelli con prezzo reale. L'euristica PRE serve nella fusione
+ * come voce INDIPENDENTE dal motore Poisson: guarda quanto il bookmaker fa
+ * pagare un esito, che e' informazione che il motore non ha. Sui mercati senza
+ * prezzo (i multigol semplici) l'unica quota disponibile e' quella che
+ * stimiamo noi dalla distribuzione di Poisson: ordinarli con quella
+ * significherebbe riordinarli per la stessa probabilita' del motore, cioe'
+ * fabbricare un secondo voto identico al primo. La concordanza diventerebbe
+ * finta. Su quei mercati l'euristica ASTIENE, e chi calcola la concordanza
+ * deve contare solo i sistemi che potevano davvero esprimersi.
+ */
+export function preHeuristicRanking(odds: Odds): PreCandidate[] {
+  const out: PreCandidate[] = [];
+  for (const market of CANDIDATE_MARKETS) {
+    const odd = realOddFor(market, odds);
+    if (odd === null) continue;          // astensione: nessun prezzo indipendente
+    if (odd < 1.40) continue;            // sotto 1.40 e' solo rischio, niente valore
+    out.push({ market, odd, family: "" });
+  }
+  out.sort((a, b) => a.odd - b.odd);
+  return out;
+}
+
+/**
+ * Quota REALE del mercato: quella letta dal file del bookmaker, oppure — per
+ * le combo — quella ricavata dai componenti se TUTTI hanno un prezzo reale.
+ * Restituisce null appena un pezzo manca: non usa mai stime nostre.
+ */
+function realOddFor(market: string, odds: Odds): number | null {
+  const parts = market.split("+").map((p) => p.trim()).filter(Boolean);
+  let product = 1;
+  for (const part of parts) {
+    const key = SINGLE_MARKET_ODD_KEY[part.replace(/^DC /, "").toUpperCase()];
+    if (!key) return null;
+    const v = odds[key];
+    if (typeof v !== "number" || !isFinite(v) || v <= 1) return null;
+    product = Math.max(product, v);
+  }
+  return parts.length ? Math.round(product * 100) / 100 : null;
+}
+
+const SINGLE_MARKET_ODD_KEY: Record<string, keyof Odds> = {
+  "1": "odd_1", "X": "odd_X", "2": "odd_2",
+  "1X": "odd_1X", "X2": "odd_X2", "12": "odd_12",
+  "O1.5": "odd_O15", "U1.5": "odd_U15",
+  "O2.5": "odd_O25", "U2.5": "odd_U25",
+  "O3.5": "odd_O35", "U3.5": "odd_U35",
+  "GG": "odd_GG", "NG": "odd_NG",
+};
+
 export function preHeuristicPick(odds: Odds): PreCandidate | null {
   const get = (k: keyof Odds, def = Infinity) => (odds[k] ?? def) as number;
   const o1 = get("odd_1"), o2 = get("odd_2");
