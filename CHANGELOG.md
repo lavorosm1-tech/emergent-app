@@ -65,6 +65,65 @@ Altre cose da sapere subito:
 
 ## Log (più recente in cima)
 
+### 2026-07-25 (notte) — Calendario bloccato, bug combo, combo multigol simmetriche
+
+**1. BUG GRAVE: il calendario si fermava al 25 luglio.** Caricando un Excel
+nuovo le partite entravano nel database ma i giorni successivi non comparivano
+fra quelli selezionabili.
+
+Causa: `matches-days` scaricava TUTTE le righe di `matches` (`select=day`) per
+poi ricavarne i giorni distinti in JavaScript. **PostgREST tronca la risposta a
+1000 righe.** Con 1.739 partite ordinate per giorno crescente, la millesima
+cadeva esattamente sul 2026-07-25 — quindi i 29 giorni successivi non
+arrivavano mai al frontend. Nessun messaggio di errore: la lista arrivava,
+semplicemente incompleta.
+
+Correzione: nuova funzione SQL `matches_distinct_days()`, il calcolo lo fa il
+database e tornano 61 righe invece di 1.739. Il tetto non è più raggiungibile
+nemmeno con anni di partite.
+
+*Classe di bug da ricordare*: qualsiasi `pgGet` senza `limit` esplicito su una
+tabella che può superare le 1000 righe è a rischio, e fallisce **in silenzio**.
+L'unico altro punto simile (`results-fetch`) filtra per lista di id, quindi è
+al sicuro.
+
+**2. BUG: le combo con multigol venivano valutate male.**
+`evaluateMarketStrict` controllava i multigol PRIMA di spezzare le combo sul
+`+`. Risultato: `MG 1-2 casa + MG 0-2 ospite` su un **2-4** rispondeva
+"vinto" — prendeva il primo range (1-2), vedeva la parola CASA e ignorava
+tutto quello che seguiva il `+`. Lo split sul `+` è stato spostato in cima,
+prima di ogni altro controllo. `marketEval.ts` era invece già corretto.
+
+Corretto PRIMA di aggiungere le combo nuove: lasciandolo, lo storico per
+scenario avrebbe imparato risultati falsi su tutta la famiglia — cioè avrebbe
+disfatto la Fase 3 invece di sfruttarla.
+
+**3. Catalogo da 49 a 54 mercati: le combo multigol casa + ospite.**
+Aggiunte **simmetriche**, come richiesto: per ogni combinazione esiste il suo
+specchio, così una partita dominata dall'ospite è coperta come una dominata
+dalla casa.
+
+| Combo | Vince | Quota stimata |
+|---|---|---|
+| MG 1-3 casa + MG 0-2 ospite | 59,9% | 1,53 |
+| MG 1-2 casa + MG 0-3 ospite | 55,2% | 1,66 |
+| MG 0-2 casa + MG 1-3 ospite | 53,9% | 1,70 |
+| MG 0-3 casa + MG 1-2 ospite | 53,0% | 1,73 |
+| MG 1-2 casa + MG 0-2 ospite | 50,0% | 1,83 |
+
+Scartate le altre 7 combinazioni proposte: `0-3 + 0-3` vale 1,03 e `0-3 + 0-2`
+vale 1,14 (non superano mai nessuna soglia, sarebbero peso morto), mentre
+`1-3+1-2`, `2-4+0-3`, `2-4+0-2`, `1-2+1-2`, `2-4+1-2` stanno tutte sotto il 40%
+di riuscita.
+
+`scenario_market_scores` ribackfillata per i 5 mercati nuovi (864 righe, 54
+mercati) e `apply_scenario_result` aggiornata perché l'apprendimento
+incrementale li includa.
+
+**Effetto sul test set** (583 partite): 1,60 da 54,0% a 54,4% senza storico e
+da 57,1% a 57,5% con storico; 1,75 da 49,7% a 50,1%. Miglioramenti piccoli,
+dovuti quasi tutti alla correzione del bug 2.
+
 ### 2026-07-25 (sera) — FASE 3: lo storico entra davvero nel motore
 
 **Il problema.** Il "ML boost" esistente spostava lo score di ±10% solo per i

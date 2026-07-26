@@ -175,6 +175,24 @@ export function fullDistribution(odds: Odds, maxGoals = 6): ClusterEntry[] {
 export function evaluateMarketStrict(market: string, home: number, away: number): boolean | null {
   const total = home + away;
   const m = market.trim().toUpperCase().replace(/ {2}/g, " ");
+
+  // BUG CORRETTO (25/07/2026): questo blocco stava IN FONDO alla funzione,
+  // dopo il controllo sui multigol. Risultato: "MG 1-2 casa + MG 0-2 ospite"
+  // veniva intercettato da `m.includes("MG")`, che prendeva il primo range
+  // trovato (1-2) e, trovando la parola CASA nella stringa, valutava solo i
+  // gol di casa ignorando tutto quello che veniva dopo il "+". Su un 2-4
+  // rispondeva "vinto" quando l'ospite era fuori range.
+  // Le combo vanno spezzate PRIMA di qualunque controllo su un singolo
+  // mercato, altrimenti ogni combo che contiene un multigol è sbagliata.
+  if (m.includes("+")) {
+    const parts = market.split("+").map((p) => p.trim()).filter(Boolean);
+    if (parts.length > 1) {
+      const results = parts.map((p) => evaluateMarketStrict(p, home, away));
+      if (results.some((r) => r === null)) return null;
+      return results.every((r) => r === true);
+    }
+  }
+
   if (m === "1") return home > away;
   if (m === "X") return home === away;
   if (m === "2") return away > home;
@@ -200,12 +218,6 @@ export function evaluateMarketStrict(market: string, home: number, away: number)
     }
   }
 
-  if (market.includes("+")) {
-    const parts = market.split("+").map((p) => p.trim());
-    const results = parts.map((p) => evaluateMarketStrict(p, home, away));
-    if (results.some((r) => r === null)) return null;
-    return results.every((r) => r === true);
-  }
   return null;
 }
 
@@ -403,6 +415,20 @@ export const CANDIDATE_MARKETS: string[] = [
   "MG 3-4 totali", "MG 3-5 totali",
   "MG 1-2 casa", "MG 1-3 casa", "MG 2-3 casa", "MG 2-4 casa",
   "MG 1-2 ospite", "MG 1-3 ospite", "MG 2-3 ospite", "MG 2-4 ospite",
+  // Combo multigol casa + ospite. Aggiunte SIMMETRICHE: per ogni combinazione
+  // esiste il suo specchio, così una partita dove domina l'ospite è coperta
+  // esattamente come una dove domina la casa.
+  // Frequenze reali sulle 5.160 partite storiche (quota stimata col margine
+  // medio del book): 1-3+0-2 59,9% @1,53 | 1-2+0-3 55,2% @1,66 |
+  // 0-2+1-3 53,9% @1,70 | 0-3+1-2 53,0% @1,73 | 1-2+0-2 50,0% @1,83.
+  // Le altre combinazioni proposte sono state scartate: o non superano mai la
+  // soglia di quota (0-3 + 0-3 vale 1,03), o stanno sotto il 40% di riuscita
+  // (2-4 casa + 1-2 ospite: 23,4%).
+  "MG 1-3 casa + MG 0-2 ospite",
+  "MG 0-2 casa + MG 1-3 ospite",
+  "MG 1-2 casa + MG 0-3 ospite",
+  "MG 0-3 casa + MG 1-2 ospite",
+  "MG 1-2 casa + MG 0-2 ospite",
   "1 + O1.5", "2 + O1.5", "1 + O2.5", "2 + O2.5",
   "1 + U4.5", "2 + U4.5",
   "GG + O2.5",
