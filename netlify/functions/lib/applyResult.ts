@@ -18,6 +18,24 @@ export async function applyMatchResult(
   if (!matches.length) throw new Error("Match not found");
   const match = matches[0];
 
+  // CORREZIONE DI UN RISULTATO GIA' SALVATO.
+  // Prima non c'era nessun controllo: risalvare la stessa partita contava
+  // tutto una seconda volta, e correggere un risultato sbagliato lasciava i
+  // conteggi vecchi al loro posto sommandoci sopra quelli nuovi. Con
+  // l'apprendimento per scenario attivo (Fase 3) questo avvelena i pronostici
+  // futuri di tutte le partite con quote simili.
+  const precedente: string | null = match.result || null;
+  if (precedente === result) {
+    // Stesso risultato risalvato: la partita e' gia' stata contata.
+    return { applied: false, result_ok: null };
+  }
+  if (precedente) {
+    // Risultato diverso da quello gia' registrato: prima si ANNULLANO i
+    // conteggi del vecchio, poi si applicano quelli del nuovo.
+    const m = precedente.replace(/\s/g, "").match(/^(\d+)-(\d+)$/);
+    if (m) await revertCounters(match, parseInt(m[1], 10), parseInt(m[2], 10));
+  }
+
   await pgPatch(`matches?id=eq.${encodeURIComponent(matchId)}`, {
     result,
     updated_at: new Date().toISOString(),
@@ -128,5 +146,38 @@ async function updateScenarioScores(match: any, home: number, away: number): Pro
     });
   } catch {
     // La misurazione non deve mai bloccare l'inserimento di un risultato.
+  }
+}
+
+/**
+ * Annulla i conteggi di un risultato precedente (stessa logica di
+ * updateSystemScorecard + updateScenarioScores, ma con segno -1).
+ * Serve quando si corregge un risultato inserito per errore: senza questo,
+ * quello sbagliato resterebbe nello storico per sempre.
+ */
+async function revertCounters(match: any, home: number, away: number): Promise<void> {
+  try {
+    const scenario: string = match.scenario || classifyScenario(rowToOdds(match) as any);
+    if (!scenario || scenario === "sconosciuto") return;
+
+    const picks: [string, string | null][] = [
+      ["strutturale", match.pick_strutturale || null],
+      ["pre", match.pick_pre || null],
+      ["fusione", match.pick_finale || null],
+    ];
+    for (const [system, market] of picks) {
+      if (!market) continue;
+      const outcome = evaluateMarket(market, home, away);
+      if (outcome === null) continue;
+      await pgRpc("increment_system_score", {
+        p_system: system, p_scenario: scenario, p_win: outcome, p_sign: -1,
+      });
+    }
+
+    await pgRpc("apply_scenario_result", {
+      p_scenario: scenario, p_home: home, p_away: away, p_sign: -1,
+    });
+  } catch {
+    // Best effort: non deve impedire la correzione del risultato.
   }
 }

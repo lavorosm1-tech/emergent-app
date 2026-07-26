@@ -65,6 +65,35 @@ Altre cose da sapere subito:
 
 ## Log (più recente in cima)
 
+### 2026-07-26 — Correggere un risultato non avvelena piu' lo storico
+
+Emerso da Rossi: su Mariehamn - Ac Oulu aveva salvato `1-0`, ma la partita era
+finita `1-1`.
+
+**Il problema.** `applyMatchResult` non aveva nessun controllo su un risultato
+gia' presente. Conseguenze:
+- **risalvare la stessa partita** contava tutto una seconda volta;
+- **correggere** un risultato sbagliato lasciava i conteggi vecchi al loro
+  posto e ci sommava sopra quelli nuovi.
+
+Con l'apprendimento per scenario attivo (Fase 3) non e' un dettaglio: quei
+numeri finiscono nei pronostici di tutte le partite con quote simili. Nel caso
+concreto la differenza e' grossa — il pick era `MG 2-4 totali`, che su un 1-0
+risulta PERSO e su un 1-1 risulta VINTO.
+
+**Correzione.**
+- Stesso risultato risalvato -> non si conta niente (idempotente).
+- Risultato diverso -> si **annullano** prima i conteggi del vecchio, poi si
+  applicano quelli del nuovo.
+- `apply_scenario_result` e `increment_system_score` hanno ora un parametro di
+  segno (`p_sign`: +1 applica, -1 annulla), con `greatest(0, ...)` per non
+  andare mai sotto zero.
+
+**Resta scoperto**: `market_scores` e `family_counters` (il ramo che si
+aggiorna solo quando esiste un pronostico AI) non hanno ancora l'annullamento.
+Alimentano il prompt dell'IA, non il motore, quindi l'impatto e' minore — ma va
+fatto.
+
 ### 2026-07-26 — La lista del pre-pronostico non mostra piu' i mercati dell'IA
 
 La didascalia diceva "questa lista NON tiene conto del pronostico AI", ma in
