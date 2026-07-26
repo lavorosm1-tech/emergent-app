@@ -251,19 +251,24 @@ function buildMarketTable(
     const reale = comboOdd(m, odds);
     const quota = reale ?? estimateMarketOdd(m, odds);
     return { m, p: coverageForMarket(m, dist).coverage, quota, stimata: reale === null };
-  }).sort((a, b) => b.p - a.p);
+  })
+    // I mercati sotto la soglia dell'utente vengono TOLTI, non marcati.
+    // Marcarli non bastava: su Vasco Da Gama - Mirassol l'IA ha scelto lo
+    // stesso "MG 1-4 totali" (quota stimata 1,17) ignorando l'avviso. Se un
+    // mercato non e' selezionabile, il modo sicuro per non farlo scegliere e'
+    // non mostrarglielo.
+    .filter((v) => v.quota !== null && v.quota >= minOdd)
+    .sort((a, b) => b.p - a.p);
 
   const righe = voci.map((v) => {
     const h = hist[v.m];
     // Sotto la soglia scelta dall'utente il mercato verrebbe scartato a valle:
     // segnalarlo evita che l'IA sprechi la sua prima scelta su qualcosa che
     // non arrivera' mai allo schermo (successo con O1.5 @1.33 su Vasco-Mirassol).
-    const fuori = v.quota !== null && v.quota < minOdd;
     return (
       `${v.m} | prob ${Math.round(v.p * 100)}% | ` +
       `quota ${v.quota ? v.quota.toFixed(2) + (v.stimata ? "~" : "") : "n/d"}` +
-      (h ? ` | storico ${h.rate}% su ${h.total} partite simili` : "") +
-      (fuori ? "  ⛔ SOTTO LA SOGLIA, NON SELEZIONABILE" : "")
+      (h ? ` | storico ${h.rate}% su ${h.total} partite simili` : "")
     );
   });
 
@@ -281,9 +286,10 @@ ${righe.join("\n")}
 
 REGOLE PER LA SCELTA:
 1. Scegli i "playable_markets" ESCLUSIVAMENTE da questa lista, copiando il nome
-   del mercato ESATTAMENTE come scritto sopra. NON proporre mai i mercati
-   marcati "SOTTO LA SOGLIA": verrebbero scartati e la tua scelta andrebbe persa.
-   La soglia di quota minima impostata dall'utente e' ${minOdd.toFixed(2)}.
+   del mercato ESATTAMENTE come scritto sopra. Questa lista contiene GIA' solo
+   i mercati selezionabili: quelli sotto la soglia di quota dell'utente
+   (${minOdd.toFixed(2)}) sono stati tolti, quindi qualsiasi cosa scegli fuori da qui
+   verrebbe scartata e la tua scelta andrebbe persa.
 2. NON stimare probabilita' tue: quelle sopra sono gia' calcolate. Il tuo
    compito e' giudicare quali conviene giocare, non ricalcolarle.
 3. Considera tutti e ${CANDIDATE_MARKETS.length}, multigol e combo compresi. Sono giocabili quanto

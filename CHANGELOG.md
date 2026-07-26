@@ -65,6 +65,38 @@ Altre cose da sapere subito:
 
 ## Log (più recente in cima)
 
+### 2026-07-26 — Pick senza quota e falsa concordanza: tre buchi chiusi
+
+Segnalato da Rossi: su Vasco Da Gama - Mirassol la giocata consigliata era
+diventata `MG 1-4 totali`, **senza nessuna quota accanto**, con "CONCORDANZA
+FORTE 2/3 — AI #1, PRE #1". Tre difetti distinti, tutti veri.
+
+**1. Un mercato proposto solo dall'IA veniva contato anche come voto del
+pre-pronostico.** `rankPicks` unisce i mercati dell'IA alla lista PRE
+(`source: "ai"`), e la fusione contava tutta la lista come voto "pre". Cosi'
+`MG 1-4 totali`, proposto da UN sistema solo, risultava "2 su 3". E' lo stesso
+doppio conteggio corretto poco prima con il bonus `pre+ai`: era rimasta l'altra
+meta'. Ora gli elementi `source === "ai"` non danno il voto "pre".
+
+**2. Un pick senza prezzo passava il filtro.** Il controllo era
+`if (b.odd === undefined || b.odd === null) return true` — lasciava passare
+proprio i mercati di cui non si conosceva la quota. `MG 1-4 totali` ha quota
+stimata **1,17**, sotto qualsiasi soglia: sarebbe dovuto sparire, invece e'
+arrivato in cima proprio perche' non aveva prezzo. Ora un pick senza quota
+determinabile viene scartato: se non si sa quanto paga, non e' giocabile.
+
+**3. La quota di riserva si cercava solo nel top 20.** I mercati che il motore
+scarta restavano senza prezzo. `predict.ts` ora restituisce `market_odds` con
+la quota di **tutti** i 54 mercati, reale o stimata.
+
+**In piu'**: nella tabella mandata all'IA i mercati sotto la soglia dell'utente
+ora vengono **tolti**, non marcati. Marcarli non era bastato — l'IA ha scelto
+`MG 1-4 totali` ignorando l'avviso `⛔ SOTTO LA SOGLIA`. Se un mercato non e'
+selezionabile, il modo sicuro per non farlo scegliere e' non mostrarglielo.
+
+*Lezione*: le istruzioni al modello sono un suggerimento, non una garanzia.
+Quando un vincolo deve valere sempre, va imposto dal codice.
+
 ### 2026-07-26 — Il pre-pronostico smette di fare eco all'IA
 
 Trovato rispondendo a una domanda di Rossi: perche' su Vasco Da Gama - Mirassol

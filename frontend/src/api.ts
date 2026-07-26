@@ -102,6 +102,8 @@ export type StructuralAnalysis = {
   pre_ranking?: { market: string; odd: number }[];
   /** mercati su cui l'euristica PRE ha potuto esprimersi (hanno un prezzo reale) */
   pre_eligible?: string[];
+  /** quota di OGNI mercato del catalogo, reale o stimata: serve a non lasciare mai un pick senza prezzo */
+  market_odds?: Record<string, { odd: number; estimated: boolean }>;
   structure: StructuralStructure;
   cluster: StructuralCluster[];
   central_cluster: StructuralCluster[];
@@ -681,7 +683,13 @@ export function buildFinalVerdict(
   });
 
   // === Source 3: Pre-pronostico rankPicks (top 6) ===
-  preRanked.slice(0, 6).forEach((p, i) => {
+  // `preRanked` contiene anche i mercati proposti SOLO dall'IA (rankPicks li
+  // unisce alla lista). Contarli come voto del pre-pronostico significa contare
+  // due volte lo stesso parere: e' cosi' che "MG 1-4 totali" e' arrivato a
+  // "AI #1 + PRE #1 = concordanza 2/3" pur essendo stato proposto da un sistema
+  // solo. Qui li saltiamo: il voto "pre" lo danno solo i mercati che il
+  // pre-pronostico ha davvero in classifica per conto suo.
+  preRanked.filter((p) => p.source !== "ai").slice(0, 6).forEach((p, i) => {
     const b = ensure(p.market);
     const w = SRC_WEIGHTS.pre;
     b.score += Math.max(w.top - i * w.decay, 0);
@@ -715,10 +723,20 @@ export function buildFinalVerdict(
     // la quota stimata dal motore strutturale. Prima questi mercati restavano
     // senza quota e sfuggivano a ogni filtro: erano la maggioranza dei pick.
     if (b.odd === undefined || b.odd === null) {
-      const fromEngine = structural?.ranking?.find((r) => norm(r.market) === norm(b.market));
-      if (fromEngine?.odd) {
-        b.odd = fromEngine.odd;
-        b.oddEstimated = !!fromEngine.odd_estimated;
+      // Prima si cercava solo dentro `ranking`, che e' il TOP 20: i mercati
+      // scartati dal motore restavano senza prezzo e sfuggivano al filtro.
+      // `market_odds` copre invece l'intero catalogo.
+      const fromMap = structural?.market_odds?.[norm(b.market)]
+        || structural?.market_odds?.[b.market];
+      if (fromMap?.odd) {
+        b.odd = fromMap.odd;
+        b.oddEstimated = !!fromMap.estimated;
+      } else {
+        const fromEngine = structural?.ranking?.find((r) => norm(r.market) === norm(b.market));
+        if (fromEngine?.odd) {
+          b.odd = fromEngine.odd;
+          b.oddEstimated = !!fromEngine.odd_estimated;
+        }
       }
     }
     // La concordanza fra sistemi INDIPENDENTI è il segnale più forte che
@@ -884,11 +902,12 @@ export function buildFinalVerdict(
   const out: VerdictPick[] = Array.from(buckets.values())
     // Filter out picks below value threshold (sotto soglia = solo rischio, niente valore)
     .filter((b) => {
-      // Ora anche i mercati senza prezzo del bookmaker (multigol e combo) hanno
-      // una quota stimata dal motore, quindi il filtro vale per tutti. Il caso
-      // "nessuna quota nemmeno stimata" resta possibile solo se il motore non è
-      // riuscito a calcolarla: in quel caso lasciamo passare, come prima.
-      if (b.odd === undefined || b.odd === null) return true;
+      // Nessun pick senza prezzo. Prima i mercati di cui non si riusciva a
+      // determinare la quota passavano il filtro: e' cosi' che "MG 1-4 totali"
+      // (quota stimata 1,17, sotto qualsiasi soglia) e' finito come giocata
+      // consigliata senza nemmeno una quota accanto. Un pick che non si sa
+      // quanto paga non e' giocabile, quindi non deve arrivare a schermo.
+      if (b.odd === undefined || b.odd === null || !(b.odd > 0)) return false;
       return b.odd >= minOdd;
     })
     .map((b) => {

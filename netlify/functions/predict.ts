@@ -1,4 +1,7 @@
-import { structuralAnalysis, type Odds, type MlScoreEntry } from "./lib/clusterEngine";
+import {
+  structuralAnalysis, CANDIDATE_MARKETS, comboOdd, estimateMarketOdd,
+  type Odds, type MlScoreEntry,
+} from "./lib/clusterEngine";
 import { pgGet, pgPatch } from "./lib/supabaseRest";
 import { preHeuristicPick, preHeuristicRanking, preEligibleMarkets } from "./lib/preHeuristic";
 import { classifyScenario } from "./lib/scenario";
@@ -86,6 +89,11 @@ export default async (req: Request): Promise<Response> => {
     // "bocciato" da "non pertinente".
     pre_ranking: preHeuristicRanking(odds).map((c) => ({ market: c.market, odd: c.odd })),
     pre_eligible: preEligibleMarkets(odds),
+    // Quota di OGNI mercato del catalogo, non solo di quelli in classifica.
+    // Serve al frontend per non lasciare mai un pick senza prezzo: un mercato
+    // senza quota sfuggiva al filtro di soglia e finiva a schermo senza che si
+    // sapesse quanto paga.
+    market_odds: allMarketOdds(odds),
     structure: result.structure,
     cluster: result.cluster,
     central_cluster: result.central_cluster,
@@ -167,4 +175,15 @@ function json(body: unknown, status = 200): Response {
     status,
     headers: { "content-type": "application/json; charset=utf-8" },
   });
+}
+
+/** Quota di ogni mercato del catalogo: reale se il bookmaker la fornisce, altrimenti stimata. */
+function allMarketOdds(odds: Odds): Record<string, { odd: number; estimated: boolean }> {
+  const out: Record<string, { odd: number; estimated: boolean }> = {};
+  for (const m of CANDIDATE_MARKETS) {
+    const reale = comboOdd(m, odds);
+    const q = reale ?? estimateMarketOdd(m, odds);
+    if (q && q > 1) out[m] = { odd: Math.round(q * 100) / 100, estimated: reale === null };
+  }
+  return out;
 }
