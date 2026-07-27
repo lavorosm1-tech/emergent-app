@@ -547,10 +547,11 @@ export function pickFinal(ranked: RankedPick[], aiMarkets: string[] = []): {
  * Deve restare allineata a VERDICT_WHITELIST in netlify/functions/lib/clusterEngine.ts.
  */
 const VERDICT_WHITELIST = new Set([
+  "1", "2",
   "1x", "x2",
   "gg", "ng",
-  "o1.5", "u3.5",
-  "1 + o2.5", "2 + o2.5",
+  "o2.5",
+  "mg 2-4 totali", "mg 3-6 totali",
   "gg + o2.5",
   "dc 1x + o1.5", "dc x2 + o1.5",
   "dc 1x + o2.5", "dc x2 + o2.5",
@@ -981,7 +982,17 @@ export function buildFinalVerdict(
   out.sort((a, b) => {
     const pa = probDi(a), pb = probDi(b);
     if (Math.abs(pa - pb) > 0.05) return pb - pa;   // divario netto: vince la probabilita'
-    return b.score - a.score;                        // quasi pari: decide la fusione
+
+    // QUASI PARI — qui decide il BOOKMAKER, non il nostro punteggio.
+    // Il caso che lo ha reso necessario: il modello dava GG e NG entrambi al
+    // 50%, ma il book li prezzava 1,57 e 2,20. A parita' di stima nostra, la
+    // quota piu' bassa e' l'evento che il mercato ritiene piu' probabile, e il
+    // mercato ha molte piu' informazioni di noi (formazioni, infortuni, notizie
+    // dell'ultima ora). Proporre il piu' caro dei due equivarrebbe a dichiarare
+    // una value bet, e non e' quello che stiamo facendo qui.
+    const qa = a.odd ?? 99, qb = b.odd ?? 99;
+    if (Math.abs(qa - qb) > 0.02) return qa - qb;   // quota piu' bassa = piu' probabile
+    return b.score - a.score;                       // davvero pari: decide la fusione
   });
 
   // === Mercati opposti ravvicinati (es. NG vs GG testa a testa) ===

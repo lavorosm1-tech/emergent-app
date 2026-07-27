@@ -88,6 +88,32 @@ codice + `.md` insieme -> costruisce.
 
 ## Log (più recente in cima)
 
+### 2026-07-27 — Whitelist definitiva (18 mercati) e spareggio affidato al book
+
+**Lista finale del verdetto**, decisa da Rossi:
+`1`, `2`, `1X`, `X2`, `GG`, `NG`, `O2.5`, `MG 2-4 totali`, `MG 3-6 totali`,
+`GG + O2.5`, e le combo `DC 1X/X2` con `O1.5`, `O2.5`, `U3.5`, `GG`.
+
+Rispetto alla versione precedente rientrano `1`, `2`, `O2.5` (che erano fuori
+pur essendo sempre piu' probabili delle combo `1 + O2.5` / `2 + O2.5`, ora
+uscite) e i due multigol totali che il book prezza in fascia giocabile
+(`2-4` intorno a 1,48-1,55 e `3-6` intorno a 1,50-1,78). Escono `O1.5` e `U3.5`
+secchi. Tutti gli altri multigol — casa, ospite, combo di multigol — restano
+**visibili nel ranking strutturale** ma non possono diventare la giocata.
+
+**Spareggio: a parita' di probabilita' decide il bookmaker, non il nostro
+punteggio.** Il caso che lo ha reso necessario: il modello dava `GG` e `NG`
+entrambi al 50%, ma il book li prezzava 1,57 e 2,20. Con due nostre stime
+uguali, la quota piu' bassa e' l'evento che il mercato ritiene piu' probabile —
+e il mercato ha informazioni che noi non abbiamo (formazioni, infortuni,
+notizie dell'ultima ora). Proporre il piu' caro dei due equivarrebbe a
+dichiarare una value bet, che non e' quello che l'app sta facendo.
+
+Ordine finale: **probabilita'** se il divario supera 5 punti → **quota del
+book** se sono vicini → punteggio della fusione solo se anche le quote sono
+pari.
+
+
 ### 2026-07-27 — `MG 3-6 totali` al posto di `O3.5`
 
 Chiesto da Rossi. Stesso territorio — partita da molti gol — ma con un tetto

@@ -530,10 +530,11 @@ export function isMixedCombo(market: string): boolean {
  * il segno secco, U1.5/U2.5/O3.5.
  */
 export const VERDICT_WHITELIST = [
+  "1", "2",
   "1X", "X2",
   "GG", "NG",
-  "O1.5", "U3.5",
-  "1 + O2.5", "2 + O2.5",
+  "O2.5",
+  "MG 2-4 totali", "MG 3-6 totali",
   "GG + O2.5",
   "DC 1X + O1.5", "DC X2 + O1.5",
   "DC 1X + O2.5", "DC X2 + O2.5",
