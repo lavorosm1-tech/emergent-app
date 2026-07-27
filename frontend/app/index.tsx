@@ -42,6 +42,26 @@ function fmtDateBadge(d: string) { const dt = parseISO(d); return `${dt.getDate(
 
 function predLabel(m: Match, stats: { market: string; win_rate: number; total: number; missed?: number; family: string }[] = []): { label: string; isAi: boolean; isConcord: boolean; isCandidate: boolean; isNoBet: boolean; isCorrect: boolean | null } {
   // Build pre-pronostic family + LLM markets list, compute final ranking.
+  // La card mostra il VERDETTO FINALE salvato, lo stesso che si vede aprendo la
+  // partita. Prima ricalcolava un pick per conto suo con una logica diversa da
+  // buildFinalVerdict, e le due schermate finivano per consigliare mercati
+  // diversi sulla stessa partita (visto su Sandnes - Kongsvinger: la card
+  // diceva "DC X2 + O1.5", il dettaglio "GG + O2.5").
+  if (m.pick_finale) {
+    const mapFin: Record<string, string> = { "O1.5": "Ov1.5", "O2.5": "Ov2.5", "U1.5": "Un1.5", "U2.5": "Un2.5", "U3.5": "Un3.5" };
+    let corretto: boolean | null = null;
+    if (m.result) {
+      const parts = m.result.split("-").map((x) => parseInt(x, 10));
+      if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
+        corretto = evalLocal(m.pick_finale, parts[0], parts[1]);
+      }
+    }
+    return {
+      label: mapFin[m.pick_finale] || m.pick_finale,
+      isAi: false, isConcord: true, isCandidate: false, isNoBet: false, isCorrect: corretto,
+    };
+  }
+
   const fam = quickPredictionFamily(m.odds);
   const llmMarkets: string[] = m.playable_markets?.map((p) => p.market) || (m.main_prediction ? [m.main_prediction] : []);
   const ranked = rankPicks(fam, llmMarkets, stats);

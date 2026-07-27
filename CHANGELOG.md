@@ -88,6 +88,46 @@ codice + `.md` insieme -> costruisce.
 
 ## Log (più recente in cima)
 
+### 2026-07-27 — La soglia filtra la scelta, non l'analisi
+
+Sei punti chiariti da Rossi, tutti implementati.
+
+**1. Il ranking non cambia piu' con la soglia.** Prima i mercati sotto la quota
+minima venivano scartati nella costruzione della classifica, quindi spostando
+il selettore cambiavano posizioni, bonus e pick. Ma la lettura della partita non
+cambia perche' l'utente vuole una quota piu' alta. Ora il ranking e' sempre lo
+stesso; la soglia entra solo nella selezione finale.
+
+**2. I mercati opposti non si sostituiscono mai.** Coppie riconosciute:
+`1`↔`2`, `1`↔`X2`, `2`↔`1X`, `1X`↔`X2`, `GG`↔`NG`, `O2.5`↔`U2.5`,
+`O1.5`↔`U1.5`, `O2.5`↔`NG`. Il confronto vale anche dentro le combo: con
+direzione `1X`, `DC X2 + GG` e' escluso. Alzare la soglia non puo' piu'
+ribaltare la lettura della partita.
+
+**3. Un pick sotto soglia si recupera RAFFORZANDOLO, non capovolgendolo.**
+Se `1X` e' il piu' probabile ma paga 1,35, si cercano `DC 1X + O1.5`,
+`DC 1X + O2.5`, `DC 1X + GG`, `DC 1X + U3.5`: aggiungere una condizione alza la
+quota senza cambiare direzione. Solo se nessuna combo basta si scende nel
+ranking, sempre saltando cio' che contraddice la direzione.
+
+**4. Astensione.** Se non resta nulla di coerente sopra soglia, valore nullo e
+nessuna giocata. Meglio non proporre niente che proporre contro la propria
+analisi.
+
+**5.** I 18 mercati restano gli unici candidati al verdetto. Gli altri si
+vedono nel ranking con COV, FRAG e punteggio, ma non entrano mai nella scelta.
+
+**6. Card e dettaglio allineati.** La card nell'elenco partite ricalcolava un
+pick per conto suo con una logica diversa da `buildFinalVerdict`: su
+Sandnes - Kongsvinger diceva `DC X2 + O1.5` mentre il dettaglio diceva
+`GG + O2.5`. Ora legge `pick_finale`, il verdetto salvato — stessa partita,
+stesso pronostico ovunque, Schedina compresa.
+
+Verificato su Sandnes - Kongsvinger: ranking identico a 1,40 e a 1,75, e il
+pick passa da `GG + O2.5` @1,59 a `DC X2 + GG` @1,85 alzando la soglia — due
+mercati coerenti fra loro, nessun ribaltamento.
+
+
 ### 2026-07-27 — Whitelist definitiva (18 mercati) e spareggio affidato al book
 
 **Lista finale del verdetto**, decisa da Rossi:

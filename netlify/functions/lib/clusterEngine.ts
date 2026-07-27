@@ -645,8 +645,13 @@ export function structuralAnalysis(
     // il 70-90% dei pick proposti. Ora, se il bookmaker non ci dà un prezzo,
     // lo stimiamo e il filtro vale anche per loro.
     const realOdd = comboOdd(m, odds);
-    const oddForFilter = realOdd ?? estimateMarketOdd(m, odds);
-    if (oddForFilter !== null && oddForFilter < minOdd) continue;
+    // IL RANKING NON DIPENDE PIU' DALLA SOGLIA.
+    // Prima i mercati sotto la quota minima venivano scartati qui, quindi
+    // spostando il selettore da 1,40 a 1,75 cambiava l'intera classifica e con
+    // essa le posizioni, i bonus e il pick. Ma la lettura della partita non
+    // cambia perche' l'utente vuole una quota piu' alta: il ranking e' l'analisi,
+    // la soglia e' solo un filtro sulla SCELTA finale (vedi selezionaPick).
+    void realOdd;
     validMarkets.push(m);
   }
 
@@ -963,7 +968,7 @@ export function structuralAnalysis(
     cluster,
     central_cluster: central,
     ranking: top20,
-    pick: ranked.length ? ranked[0] : null,
+    pick: selezionaPick(ranked, odds, minOdd),
     explanation: buildExplanation(structure, top20),
   };
 }
@@ -981,4 +986,81 @@ function buildExplanation(structure: FamilyStructure, ranking: RankedMarket[]): 
     `PICK: ${pick} con coverage ${cov}% sul cluster centrale. ` +
     `Fragility ${p.fragility_label} (${Math.round(p.fragility * 100)}% del cluster lo batte).`
   );
+}
+
+// ============================================================
+// selezione del pick — regole decise con Rossi il 27/07/2026
+// ============================================================
+
+/**
+ * Mercati che raccontano la partita in modo OPPOSTO l'uno all'altro.
+ * Non devono mai sostituirsi a vicenda solo perche' uno e' sotto soglia:
+ * sarebbe ribaltare la lettura della partita per una ragione di prezzo.
+ */
+const OPPOSTI: [string, string][] = [
+  ["1", "2"], ["1", "X2"], ["2", "1X"], ["1X", "X2"],
+  ["GG", "NG"],
+  ["O2.5", "U2.5"], ["O1.5", "U1.5"], ["O2.5", "NG"],
+];
+
+/** Componenti di un mercato, combo spezzate e "DC " tolto. */
+function pezzi(market: string): string[] {
+  return market.split("+").map((p) => p.trim().replace(/^DC /i, "").toUpperCase());
+}
+
+/** true se `candidato` contraddice la lettura espressa da `direzione`. */
+export function contraddice(direzione: string, candidato: string): boolean {
+  const a = pezzi(direzione), b = pezzi(candidato);
+  for (const x of a) {
+    for (const y of b) {
+      if (OPPOSTI.some(([p, q]) =>
+        (p.toUpperCase() === x && q.toUpperCase() === y) ||
+        (q.toUpperCase() === x && p.toUpperCase() === y))) return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Sceglie la giocata da proporre.
+ *
+ * 1. La direzione della partita e' il mercato ammesso piu' probabile, quota o
+ *    non quota: e' la lettura del motore e non si tocca.
+ * 2. Se quel mercato paga abbastanza, e' lui.
+ * 3. Altrimenti si prova a RAFFORZARLO con una combo coerente (1X -> 1X+O1.5,
+ *    1X+O2.5, 1X+GG, 1X+U3.5...). Aggiungere una condizione alza la quota senza
+ *    cambiare lettura.
+ * 4. Altrimenti si scende nella classifica, saltando tutto cio' che contraddice
+ *    la direzione.
+ * 5. Se non resta niente, si dichiara valore nullo e non si propone nulla.
+ *    Meglio nessuna giocata che una giocata contro la propria analisi.
+ */
+export function selezionaPick(
+  ranked: RankedMarket[],
+  odds: Odds,
+  minOdd: number,
+): RankedMarket | null {
+  const ammessi = ranked.filter((r) => isVerdictMarket(r.market));
+  if (!ammessi.length) return null;
+
+  const sopraSoglia = (r: RankedMarket) => (r.odd ?? 0) >= minOdd;
+
+  const direzione = ammessi[0];
+  if (sopraSoglia(direzione)) return direzione;
+
+  // 3 — rafforzare la direzione con una combo coerente
+  const combo = ammessi.find(
+    (r) => r.market !== direzione.market && r.market.includes("+") &&
+      !contraddice(direzione.market, r.market) && sopraSoglia(r),
+  );
+  if (combo) return combo;
+
+  // 4 — scendere, ma senza mai ribaltare la lettura
+  const coerente = ammessi.find(
+    (r) => !contraddice(direzione.market, r.market) && sopraSoglia(r),
+  );
+  if (coerente) return coerente;
+
+  // 5 — valore nullo
+  return null;
 }

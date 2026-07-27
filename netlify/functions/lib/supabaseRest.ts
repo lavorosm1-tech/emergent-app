@@ -119,6 +119,10 @@ export function rowToMatch(row: any) {
     result: row.result,
     family: row.family,
     main_prediction: row.main_prediction,
+    // Verdetto della fusione salvato: e' quello che deve comparire anche sulla
+    // card nell'elenco partite, altrimenti card e dettaglio mostrano due pick
+    // diversi per la stessa partita.
+    pick_finale: row.pick_finale,
     selected: row.selected,
     created_at: row.created_at,
     updated_at: row.updated_at,

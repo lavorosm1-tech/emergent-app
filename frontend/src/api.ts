@@ -36,6 +36,8 @@ export type Match = {
   result?: string | null;
   family?: string | null;
   main_prediction?: string | null;
+  /** verdetto finale della fusione, salvato su Supabase: card e dettaglio devono mostrarlo entrambi */
+  pick_finale?: string | null;
   playable_markets?: { market: string; reasoning?: string }[] | null;
   selected?: boolean;
 };
@@ -559,6 +561,29 @@ const VERDICT_WHITELIST = new Set([
   "dc 1x + gg", "dc x2 + gg",
 ]);
 
+/**
+ * Mercati che raccontano la partita in modo OPPOSTO. Non devono mai
+ * sostituirsi a vicenda solo perche' uno e' sotto soglia: sarebbe ribaltare la
+ * lettura della partita per una ragione di prezzo.
+ * Deve restare allineata a OPPOSTI in netlify/functions/lib/clusterEngine.ts.
+ */
+const OPPOSTI: [string, string][] = [
+  ["1", "2"], ["1", "x2"], ["2", "1x"], ["1x", "x2"],
+  ["gg", "ng"],
+  ["o2.5", "u2.5"], ["o1.5", "u1.5"], ["o2.5", "ng"],
+];
+
+function pezzi(market: string): string[] {
+  return market.split("+").map((p) => p.trim().replace(/^dc /i, "").toLowerCase());
+}
+
+/** true se `candidato` contraddice la lettura espressa da `direzione`. */
+function contraddice(direzione: string, candidato: string): boolean {
+  const a = pezzi(direzione), b = pezzi(candidato);
+  return a.some((x) => b.some((y) =>
+    OPPOSTI.some(([p, q]) => (p === x && q === y) || (q === x && p === y))));
+}
+
 function isVerdictMarket(market: string): boolean {
   return VERDICT_WHITELIST.has(market.trim().toLowerCase().replace(/\s{2,}/g, " "));
 }
@@ -928,7 +953,7 @@ export function buildFinalVerdict(
   }
 
   // === Build output ===
-  const out: VerdictPick[] = Array.from(buckets.values())
+  const tutti: VerdictPick[] = Array.from(buckets.values())
     // Filter out picks below value threshold (sotto soglia = solo rischio, niente valore)
     // Solo i mercati che Rossi gioca davvero (vedi VERDICT_WHITELIST).
     .filter((b) => isVerdictMarket(b.market))
@@ -938,8 +963,11 @@ export function buildFinalVerdict(
       // (quota stimata 1,17, sotto qualsiasi soglia) e' finito come giocata
       // consigliata senza nemmeno una quota accanto. Un pick che non si sa
       // quanto paga non e' giocabile, quindi non deve arrivare a schermo.
-      if (b.odd === undefined || b.odd === null || !(b.odd > 0)) return false;
-      return b.odd >= minOdd;
+      // La soglia NON si applica qui: se togliessimo subito i mercati sotto
+      // soglia perderemmo la "direzione" della partita, che e' il mercato piu'
+      // probabile a prescindere dal prezzo. La soglia entra dopo, nella
+      // selezione finale.
+      return b.odd !== undefined && b.odd !== null && b.odd > 0;
     })
     .map((b) => {
       const c = b.sources.size;
@@ -1020,7 +1048,28 @@ export function buildFinalVerdict(
     }
   }
 
-  return out;
+  // ============================================================
+  // SELEZIONE FINALE — regole decise con Rossi il 27/07/2026
+  // ============================================================
+  // 1. La direzione della partita e' il mercato ammesso piu' probabile, quota o
+  //    non quota: e' la lettura del motore e non si tocca.
+  // 2. Se paga abbastanza, e' lui.
+  // 3. Altrimenti si prova a RAFFORZARLO con una combo coerente: aggiungere una
+  //    condizione alza la quota senza cambiare lettura.
+  // 4. Altrimenti si scende, saltando tutto cio' che contraddice la direzione.
+  // 5. Se non resta niente si dichiara valore nullo: meglio nessuna giocata che
+  //    una giocata contro la propria analisi.
+  if (!out.length) return out;
+  const direzione = out[0];
+  const sopra = (b: VerdictPick) => (b.odd ?? 0) >= minOdd;
+  if (sopra(direzione)) return out.filter(sopra);
+
+  const coerenti = out.filter((b) => !contraddice(direzione.market, b.market));
+  const combo = coerenti.find((b) => b.market !== direzione.market && b.market.includes("+") && sopra(b));
+  const ripiego = combo || coerenti.find(sopra);
+  if (!ripiego) return [];                    // valore nullo: nessuna giocata
+
+  return [ripiego, ...coerenti.filter((b) => sopra(b) && b.market !== ripiego.market)];
 }
 
 // ============================================================
