@@ -408,11 +408,14 @@ export function filterCoherent<T extends { market?: string }>(pick: string, cand
 
 export const CANDIDATE_MARKETS: string[] = [
   "1", "X", "2", "1X", "X2", "12",
-  "O1.5", "U1.5", "O2.5", "U2.5", "O3.5", "U3.5",
+  "O1.5", "U1.5", "O2.5", "U2.5", "U3.5",
   "GG", "NG",
   "MG 1-2 totali", "MG 1-3 totali", "MG 1-4 totali",
   "MG 2-3 totali", "MG 2-4 totali", "MG 2-5 totali",
   "MG 3-4 totali", "MG 3-5 totali",
+  // Sostituisce O3.5 su richiesta di Rossi: stesso territorio (partita da molti
+  // gol) ma con un tetto sopra, quindi non si perde su una goleada da 7+.
+  "MG 3-6 totali",
   "MG 1-2 casa", "MG 1-3 casa", "MG 2-3 casa", "MG 2-4 casa",
   "MG 1-2 ospite", "MG 1-3 ospite", "MG 2-3 ospite", "MG 2-4 ospite",
   // Combo multigol casa + ospite. Aggiunte SIMMETRICHE: per ogni combinazione

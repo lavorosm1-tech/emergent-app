@@ -88,6 +88,22 @@ codice + `.md` insieme -> costruisce.
 
 ## Log (più recente in cima)
 
+### 2026-07-27 — `MG 3-6 totali` al posto di `O3.5`
+
+Chiesto da Rossi. Stesso territorio — partita da molti gol — ma con un tetto
+sopra: `O3.5` si perde solo se la partita finisce sotto i 4 gol, `MG 3-6` copre
+il tratto centrale senza dipendere dalle goleade estreme.
+
+Catalogo sempre a 54 mercati. `O3.5` esce, `MG 3-6 totali` entra. Allineati
+anche l'elenco dentro `apply_scenario_result` e lo storico per scenario, che e'
+stato ribackfillato per il mercato nuovo sulle 5.160 partite.
+
+Nessun effetto sul verdetto finale: ne' `O3.5` ne' i multigol sono nella
+whitelist. Cambia solo cosa vede il ranking strutturale — che e' esattamente
+quello che Rossi ha chiesto ("nel ranking possono rimanere tutti, nel verdetto
+non devono comparire").
+
+
 ### 2026-07-27 — Il verdetto finale esce solo dai mercati che Rossi gioca
 
 Lista decisa da lui, 17 mercati:
