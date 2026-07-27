@@ -1082,14 +1082,11 @@ export function buildFinalVerdict(
   if (!out.length) return out;
   const direzione = out[0];
   const sopra = (b: VerdictPick) => (b.odd ?? 0) >= minOdd;
-  if (sopra(direzione)) return out.filter(sopra);
-
   const coerenti = out.filter((b) => !contraddice(direzione.market, b.market));
-  const combo = coerenti.find((b) => b.market !== direzione.market && b.market.includes("+") && sopra(b));
-  const ripiego = combo || coerenti.find(sopra);
-  if (!ripiego) return [];                    // valore nullo: nessuna giocata
+  const scelto = coerenti.find(sopra);
+  if (!scelto) return [];                    // valore nullo: nessuna giocata
+  return [scelto, ...coerenti.filter((b) => sopra(b) && b.market !== scelto.market)];
 
-  return [ripiego, ...coerenti.filter((b) => sopra(b) && b.market !== ripiego.market)];
 }
 
 // ============================================================

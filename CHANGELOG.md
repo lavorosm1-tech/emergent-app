@@ -88,6 +88,36 @@ codice + `.md` insieme -> costruisce.
 
 ## Log (più recente in cima)
 
+### 2026-07-27 — Regola di selezione semplificata: si scorre il ranking
+
+Rossi l'ha formulata cosi', ed e' piu' semplice di quella che avevo scritto:
+**si scorre il ranking strutturale dall'alto e si prende il primo dei 18
+mercati ammessi che paga almeno la soglia scelta**, saltando quelli che
+raccontano la partita al contrario.
+
+Via la preferenza esplicita per le combo: se un mercato sta piu' in alto, ha
+coverage migliore e quota sufficiente, e' lui — combo o no. Le combo vengono
+scelte quando se lo meritano per posizione, non per una regola apposta.
+
+Verificato eseguendo la fusione su New York RB - Crown Legacy (finita 0-3):
+
+| Soglia | Pick | Esito |
+|---|---|---|
+| 1,40 | `MG 3-6 totali` @1,49 (61%) | vinto |
+| 1,50 | `MG 2-4 totali` @1,55 (60%) | vinto |
+| 1,60 | `GG + O2.5` @1,73 (55%) | perso |
+| 1,75 | `1` @1,75 (55%) | perso |
+
+Muovendo il selettore il pick ora cambia davvero, scendendo lungo il ranking.
+`O2.5` (66%) e `GG` (64%) restano in cima ma pagano 1,30 e 1,33: sotto ogni
+soglia, quindi saltati. `NG` resta escluso perche' contraddice la direzione.
+
+**Annotato per il futuro** (osservazione di Rossi, non ancora implementata):
+`MG 3-6 totali` sul book ufficiale paga tipicamente **dal 3% all'8% in piu'** di
+`O2.5`. La nostra stima si puo' tarare su quel rapporto invece di partire solo
+da Poisson.
+
+
 ### 2026-07-27 — La fusione vedeva meno mercati del motore
 
 Segnalato da Rossi su Colo Colo - Deportes Limache (finita 3-1): a soglia 1,60

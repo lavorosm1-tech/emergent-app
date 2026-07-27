@@ -1048,24 +1048,20 @@ export function selezionaPick(
   const ammessi = ranked.filter((r) => isVerdictMarket(r.market));
   if (!ammessi.length) return null;
 
-  const sopraSoglia = (r: RankedMarket) => (r.odd ?? 0) >= minOdd;
-
+  // La DIREZIONE della partita e' il primo mercato ammesso del ranking, quota o
+  // non quota: e' la lettura del motore e non si tocca.
   const direzione = ammessi[0];
-  if (sopraSoglia(direzione)) return direzione;
 
-  // 3 — rafforzare la direzione con una combo coerente
-  const combo = ammessi.find(
-    (r) => r.market !== direzione.market && r.market.includes("+") &&
-      !contraddice(direzione.market, r.market) && sopraSoglia(r),
-  );
-  if (combo) return combo;
+  // Poi si scorre il ranking DALL'ALTO e si prende il primo che paga abbastanza,
+  // saltando tutto cio' che racconta la partita al contrario. Niente scorciatoie
+  // e niente preferenze per le combo: se un mercato sta piu' in alto, ha
+  // coverage migliore e quota sufficiente, e' lui.
+  for (const r of ammessi) {
+    if (contraddice(direzione.market, r.market)) continue;
+    if ((r.odd ?? 0) >= minOdd) return r;
+  }
 
-  // 4 — scendere, ma senza mai ribaltare la lettura
-  const coerente = ammessi.find(
-    (r) => !contraddice(direzione.market, r.market) && sopraSoglia(r),
-  );
-  if (coerente) return coerente;
-
-  // 5 — valore nullo
+  // Niente di coerente sopra soglia: valore nullo, nessuna giocata.
   return null;
 }
+
