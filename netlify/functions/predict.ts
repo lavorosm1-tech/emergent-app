@@ -94,6 +94,8 @@ export default async (req: Request): Promise<Response> => {
     // senza quota sfuggiva al filtro di soglia e finiva a schermo senza che si
     // sapesse quanto paga.
     market_odds: allMarketOdds(odds),
+    // Fino a che soglia conviene spingersi SU QUESTA partita (vedi sotto).
+    ...sogliaConsigliata(odds, mlScores),
     structure: result.structure,
     cluster: result.cluster,
     central_cluster: result.central_cluster,
@@ -186,4 +188,41 @@ function allMarketOdds(odds: Odds): Record<string, { odd: number; estimated: boo
     if (q && q > 1) out[m] = { odd: Math.round(q * 100) / 100, estimated: reale === null };
   }
   return out;
+}
+
+/** Soglie che l'utente puo' scegliere nell'app. */
+const SOGLIE = [1.40, 1.50, 1.60, 1.75];
+
+/**
+ * Fino a che quota minima conviene spingersi su QUESTA partita.
+ *
+ * Il muro non e' uguale per tutte: in una partita con una favorita netta si
+ * trovano mercati al 65% anche a quota 1,60, in una equilibrata gia' a 1,50 il
+ * meglio disponibile scende sotto la monetina. Alzare la soglia oltre quel
+ * punto non compra quota: compra rischio.
+ *
+ * Regola: la soglia piu' alta a cui il pick ha ancora una probabilita' >= 58%.
+ * Il 58% non e' scelto a occhio — misurato su 583 partite di test, giocando
+ * dentro il consiglio si vince il 59,7%, andando oltre il 55,7%. Con la soglia
+ * a 55% o a 60% la separazione fra le due e' peggiore.
+ */
+function sogliaConsigliata(
+  odds: Odds,
+  mlScores: Record<string, MlScoreEntry>,
+): { soglia_consigliata: number | null; soglie_dettaglio: { soglia: number; market: string; prob: number }[] } {
+  const MIN_PROB = 0.58;
+  const dettaglio: { soglia: number; market: string; prob: number }[] = [];
+  let consigliata: number | null = null;
+
+  for (const s of SOGLIE) {
+    try {
+      const pick = structuralAnalysis(odds, s, mlScores).pick;
+      if (!pick) continue;
+      dettaglio.push({ soglia: s, market: pick.market, prob: Math.round(pick.coverage * 100) });
+      if (pick.coverage >= MIN_PROB) consigliata = s;
+    } catch {
+      // se una soglia non e' calcolabile si salta: il resto resta valido
+    }
+  }
+  return { soglia_consigliata: consigliata, soglie_dettaglio: dettaglio };
 }

@@ -88,6 +88,39 @@ codice + `.md` insieme -> costruisce.
 
 ## Log (più recente in cima)
 
+### 2026-07-26 — Avviso sulla soglia massima consigliata, partita per partita
+
+Chiesto da Rossi. Il "muro" oltre il quale alzare la soglia compra solo rischio
+**non e' uguale per tutte le partite**: dove c'e' una favorita netta si trovano
+mercati al 65% anche a 1,60, in una equilibrata gia' a 1,50 il meglio
+disponibile scende sotto la monetina.
+
+`predict.ts` calcola ora il pick a tutte e quattro le soglie e restituisce
+`soglia_consigliata` + `soglie_dettaglio`. Il frontend mostra un avviso giallo
+quando la soglia scelta la supera, dicendo cosa uscirebbe e con che
+probabilita', e marca con ⚠ le soglie oltre il consiglio. **Non blocca niente**:
+la scelta resta dell'utente.
+
+**Regola**: la soglia piu' alta a cui il pick ha ancora probabilita' >= 58%.
+Il 58% e' misurato, non scelto a occhio — su 583 partite di test:
+
+| Soglia della regola | Dentro il consiglio | Oltre il consiglio |
+|---|---|---|
+| 55% | 59,1% | 54,6% |
+| **58%** | **59,7%** | **55,7%** |
+| 60% | 58,8% | 57,2% |
+
+Il 58% da' la separazione migliore con una distribuzione sensata dei consigli
+(1,50 nella maggior parte dei casi, 1,60 dove la partita lo permette).
+
+**Nota che merita attenzione**: nella stessa analisi i pick con probabilita'
+dichiarata **>= 65% riescono solo il 54,4% delle volte**, peggio della fascia
+60-65% (60,1%) e 55-60% (59,4%). C'e' overconfidence in cima alla scala, su 217
+casi. Vale la pena capire da dove viene — sospetto i multigol con range molto
+larghi, dove l'indipendenza fra gol casa e gol ospite assunta da Poisson regge
+meno.
+
+
 ### 2026-07-26 — A+C: via le combo miste, ranking ordinato per probabilita'
 
 Decise da Rossi dopo aver visto i numeri.

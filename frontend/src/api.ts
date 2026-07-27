@@ -104,6 +104,10 @@ export type StructuralAnalysis = {
   pre_eligible?: string[];
   /** quota di OGNI mercato del catalogo, reale o stimata: serve a non lasciare mai un pick senza prezzo */
   market_odds?: Record<string, { odd: number; estimated: boolean }>;
+  /** fino a che soglia di quota conviene spingersi SU QUESTA partita (null = nemmeno la piu' bassa) */
+  soglia_consigliata?: number | null;
+  /** cosa uscirebbe a ogni soglia: serve a spiegare il consiglio invece di imporlo */
+  soglie_dettaglio?: { soglia: number; market: string; prob: number }[];
   structure: StructuralStructure;
   cluster: StructuralCluster[];
   central_cluster: StructuralCluster[];

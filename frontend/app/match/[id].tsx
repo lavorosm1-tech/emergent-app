@@ -398,6 +398,29 @@ export default function MatchDetail() {
                 </View>
               )}
 
+              {/* Avviso: fino a che soglia conviene spingersi SU QUESTA partita.
+                  Non blocca niente — la scelta resta dell'utente — ma dice
+                  quando alzare la soglia smette di comprare quota e inizia a
+                  comprare solo rischio. */}
+              {structural?.soglia_consigliata !== undefined && minOdd > (structural?.soglia_consigliata ?? 0) ? (
+                <View style={styles.sogliaWarn}>
+                  <Text style={styles.sogliaWarnTitle}>
+                    {structural?.soglia_consigliata
+                      ? `Su questa partita non conviene superare ${structural.soglia_consigliata.toFixed(2)}`
+                      : "Su questa partita nessuna soglia offre un pick solido"}
+                  </Text>
+                  <Text style={styles.sogliaWarnBody}>
+                    {(() => {
+                      const d = structural?.soglie_dettaglio?.find((x) => Math.abs(x.soglia - minOdd) < 0.01);
+                      return d
+                        ? `A ${minOdd.toFixed(2)} il meglio disponibile è ${d.market} al ${d.prob}%.`
+                        : `A ${minOdd.toFixed(2)} il meglio disponibile scende sotto il 58%.`;
+                    })()}
+                    {" "}Oltre il consiglio la riuscita misurata cala dal 59,7% al 55,7%.
+                  </Text>
+                </View>
+              ) : null}
+
               {/* FASE 2 — soglia di quota minima: la scelta e' dell'utente */}
               <View style={styles.minOddRow}>
                 <Text style={styles.minOddLabel}>Quota minima</Text>
@@ -406,10 +429,15 @@ export default function MatchDetail() {
                     <TouchableOpacity
                       key={v}
                       onPress={() => changeMinOdd(v)}
-                      style={[styles.minOddChip, minOdd === v && styles.minOddChipOn]}
+                      style={[
+                        styles.minOddChip,
+                        minOdd === v && styles.minOddChipOn,
+                        structural?.soglia_consigliata != null && v > structural.soglia_consigliata && styles.minOddChipOltre,
+                      ]}
                     >
                       <Text style={[styles.minOddChipTxt, minOdd === v && styles.minOddChipTxtOn]}>
                         {v.toFixed(2)}
+                        {structural?.soglia_consigliata != null && v > structural.soglia_consigliata ? " ⚠" : ""}
                       </Text>
                     </TouchableOpacity>
                   ))}
@@ -1197,6 +1225,18 @@ const styles = StyleSheet.create({
   verdictConcTag: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6, borderWidth: 1 },
   verdictConcTxt: { fontSize: 9, fontWeight: "900", letterSpacing: 0.5 },
   verdictHint: { color: colors.textMuted, fontSize: 10, lineHeight: 14, fontStyle: "italic" },
+  sogliaWarn: {
+    backgroundColor: "rgba(245,158,11,0.12)",
+    borderWidth: 1,
+    borderColor: "rgba(245,158,11,0.45)",
+    borderRadius: 10,
+    padding: 10,
+    marginBottom: 10,
+    gap: 3,
+  },
+  sogliaWarnTitle: { color: colors.warning, fontSize: 13, fontWeight: "800" },
+  sogliaWarnBody: { color: colors.textMuted, fontSize: 12, lineHeight: 17 },
+  minOddChipOltre: { borderColor: "rgba(245,158,11,0.55)" },
   minOddRow: {
     flexDirection: "row",
     alignItems: "center",
