@@ -88,6 +88,27 @@ codice + `.md` insieme -> costruisce.
 
 ## Log (più recente in cima)
 
+### 2026-07-27 — HOTFIX: schermata bianca aprendo una partita
+
+`Uncaught ReferenceError: out is not defined` in `buildFinalVerdict`. Nel commit
+precedente avevo rinominato `const out` in `const tutti` senza aggiornare le
+dieci righe successive che ancora usavano `out`. La schermata di dettaglio
+crashava e restava bianca.
+
+**Perche' non l'ho intercettato**: `esbuild` compila senza lamentarsi, perche'
+una variabile non definita e' JavaScript sintatticamente valido — esplode solo
+a runtime. Il controllo che facevo (compila / non compila) non poteva vederlo.
+
+**Da fare d'ora in poi su ogni modifica a `buildFinalVerdict`**: impacchettare
+`api.ts` con esbuild ed ESEGUIRE davvero la funzione con dati finti a tutte e
+quattro le soglie, non limitarsi a compilare. Comando che ho usato:
+
+    npx esbuild frontend/src/api.ts --bundle --format=esm --platform=neutral \
+      --outfile=/tmp/api.mjs --external:react --external:react-native \
+      --external:expo* --external:@*
+    node /tmp/smoke.mjs   # chiama buildFinalVerdict a 1.40 / 1.50 / 1.60 / 1.75
+
+
 ### 2026-07-27 — La soglia filtra la scelta, non l'analisi
 
 Sei punti chiariti da Rossi, tutti implementati.

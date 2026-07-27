@@ -953,7 +953,7 @@ export function buildFinalVerdict(
   }
 
   // === Build output ===
-  const tutti: VerdictPick[] = Array.from(buckets.values())
+  const out: VerdictPick[] = Array.from(buckets.values())
     // Filter out picks below value threshold (sotto soglia = solo rischio, niente valore)
     // Solo i mercati che Rossi gioca davvero (vedi VERDICT_WHITELIST).
     .filter((b) => isVerdictMarket(b.market))
