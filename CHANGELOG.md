@@ -63,6 +63,29 @@ Altre cose da sapere subito:
 
 ---
 
+## Regole per chi lavora su questo repo
+
+**Risparmio crediti di build.** Ogni deploy di produzione costa ~15 crediti e il
+piano ne da' 1.000 al mese: circa 66 build. Sul vecchio account 73 deploy hanno
+esaurito il ciclo. Quindi:
+
+1. **`[skip ci]` in fondo al messaggio di commit** per tutto cio' che non deve
+   andare online subito: correzioni minori, refactoring parziali, testi,
+   commenti, aggiornamenti di questo CHANGELOG. Il deploy vero si fa quando una
+   funzionalita' e' completa — accorpando piu' commit in una sola pubblicazione.
+2. **Ignore command in `netlify.toml`**: se un commit tocca solo file `.md`,
+   `docs/`, `.gitignore` o `LICENSE`, la build viene annullata da sola. E' una
+   rete di sicurezza per quando ci si dimentica del punto 1, non un sostituto.
+
+Logica dell'ignore: e' un comando di shell, **exit 0 = build annullata**,
+**exit 1 = build eseguita**. `git diff --quiet` esce 0 quando non trova
+differenze, quindi confrontando i due commit ed escludendo la documentazione,
+"nessuna differenza vera" significa "non serve costruire". Se
+`CACHED_COMMIT_REF` e' vuoto (prima build, o cache svuotata) si costruisce
+sempre, per non rischiare di saltare un deploy necessario.
+Verificato su un repo di prova: solo `.md` -> annulla; codice -> costruisce;
+codice + `.md` insieme -> costruisce.
+
 ## Log (più recente in cima)
 
 ### 2026-07-26 — A+C: via le combo miste, ranking ordinato per probabilita'
