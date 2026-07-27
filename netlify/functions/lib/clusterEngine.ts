@@ -515,6 +515,35 @@ export function isMixedCombo(market: string): boolean {
   return !market.split("+").every((p) => p.trim().toUpperCase().startsWith("MG"));
 }
 
+/**
+ * Mercati ammessi nel VERDETTO FINALE, decisi da Rossi.
+ *
+ * Il ranking strutturale continua a mostrare tutto: serve a capire cosa pensa
+ * il motore. Ma la giocata consigliata deve uscire solo da questa lista, che e'
+ * quella che lui gioca davvero.
+ *
+ * Fuori per scelta esplicita: tutte le combo con **DC 12** (copre due esiti su
+ * tre e non ha senso come giocata), i multigol semplici e le combo di multigol,
+ * il segno secco, U1.5/U2.5/O3.5.
+ */
+export const VERDICT_WHITELIST = [
+  "1X", "X2",
+  "GG", "NG",
+  "O1.5", "U3.5",
+  "1 + O2.5", "2 + O2.5",
+  "GG + O2.5",
+  "DC 1X + O1.5", "DC X2 + O1.5",
+  "DC 1X + O2.5", "DC X2 + O2.5",
+  "DC 1X + U3.5", "DC X2 + U3.5",
+  "DC 1X + GG", "DC X2 + GG",
+];
+
+/** true se il mercato puo' comparire come giocata consigliata. */
+export function isVerdictMarket(market: string): boolean {
+  const n = market.trim().toUpperCase().replace(/ {2,}/g, " ");
+  return VERDICT_WHITELIST.some((m) => m.toUpperCase() === n);
+}
+
 export function comboOdd(market: string, odds: Odds): number | null {
   const m = market.trim().toUpperCase().replace(/DC /g, "").replace(/ {2}/g, " ");
   if (ODD_MAP[m]) {
@@ -596,7 +625,9 @@ export function structuralAnalysis(
     // toglierle non cambia la precisione di un solo decimo a nessuna soglia,
     // perche' non vincevano quasi mai il primo posto. Le combo di soli
     // multigol restano: quelle le aveva chieste lui e hanno numeri buoni.
-    if (isMixedCombo(m)) continue;
+    // Fuori solo le combo costruite sul DC 12: coprono due esiti su tre e
+    // Rossi non le gioca. Le combo con 1X / X2 restano (le ha chieste lui).
+    if (/\b12\b/.test(m) && m.includes("+")) continue;
     if (m === "1" && (num(odds, "odd_1") || 99) > 1.85) continue;
     if (m === "2" && (num(odds, "odd_2") || 99) > 1.85) continue;
     if (m === "X" && (num(odds, "odd_X") || 99) > 3.5) continue;

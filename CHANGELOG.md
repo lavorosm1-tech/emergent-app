@@ -88,6 +88,42 @@ codice + `.md` insieme -> costruisce.
 
 ## Log (più recente in cima)
 
+### 2026-07-27 — Il verdetto finale esce solo dai mercati che Rossi gioca
+
+Lista decisa da lui, 17 mercati:
+`1X`, `X2`, `GG`, `NG`, `O1.5`, `U3.5`, `1 + O2.5`, `2 + O2.5`, `GG + O2.5`,
+e le combo `DC 1X/X2` con `O1.5`, `O2.5`, `U3.5`, `GG`.
+
+**Fuori**: tutte le combo con **DC 12** (copre due esiti su tre), i multigol
+semplici e le combo di multigol, il segno secco, `U1.5` / `U2.5` / `O3.5`.
+Il ranking strutturale continua a mostrarli tutti — serve a capire cosa pensa
+il motore — ma la giocata consigliata esce solo dalla lista.
+
+Rivista di conseguenza l'esclusione decisa ieri (punto A): non piu' tutte le
+combo "miste", ma solo quelle costruite sul `DC 12`. Le combo con `1X` / `X2`
+rientrano, perche' Rossi le gioca.
+
+**Costo misurato** (583 partite, pick = mercato piu' probabile fra quelli
+ammessi):
+
+| Soglia | Tutto il catalogo | Solo la lista | Quota media |
+|---|---|---|---|
+| 1,40 | 56,6% | 54,0% | 1,45 → 1,56 |
+| 1,50 | 63,0% | **55,2%** | 1,54 → 1,68 |
+| 1,60 | 55,9% | 51,5% | 1,64 → 1,79 |
+| 1,75 | 55,4% | 47,9% | 1,81 → 1,94 |
+
+La precisione **scende** — a 1,50 di quasi 8 punti — e la quota media sale.
+Erano i multigol a reggere la precisione: gia' misurato il 26/07, toglierli
+costa circa 8 punti. Il confronto pero' e' teorico: un pick che l'utente non
+giocherebbe vale zero, non il 63%.
+
+**Da valutare**: `O2.5` secco e il segno secco `1` / `2` sono fuori dalla lista
+ma hanno probabilita' sempre **maggiore** delle rispettive combo `1 + O2.5` /
+`2 + O2.5`, che invece sono dentro. Su Hjk - Tps il pick vincente era proprio
+`1` al 69%. Riammetterli costerebbe nulla e alzerebbe la precisione.
+
+
 ### 2026-07-27 — Il verdetto oscillava al variare della soglia
 
 Segnalato da Rossi su Nacional Potosi - Real Tomayapo (finita 4-1): a soglia

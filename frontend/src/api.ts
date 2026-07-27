@@ -538,6 +538,30 @@ export function pickFinal(ranked: RankedPick[], aiMarkets: string[] = []): {
 // ============================================================
 // VERDETTO FINALE — fonde i 3 sistemi (Strutturale, AI, Pre)
 // ============================================================
+/**
+ * Mercati ammessi nel VERDETTO FINALE, decisi da Rossi.
+ * Il ranking strutturale continua a mostrarli tutti — serve a capire cosa pensa
+ * il motore — ma la giocata consigliata esce solo da qui, perche' e' quello che
+ * lui gioca davvero. Fuori per scelta esplicita: tutte le combo con DC 12, i
+ * multigol, il segno secco, U1.5 / U2.5 / O3.5.
+ * Deve restare allineata a VERDICT_WHITELIST in netlify/functions/lib/clusterEngine.ts.
+ */
+const VERDICT_WHITELIST = new Set([
+  "1x", "x2",
+  "gg", "ng",
+  "o1.5", "u3.5",
+  "1 + o2.5", "2 + o2.5",
+  "gg + o2.5",
+  "dc 1x + o1.5", "dc x2 + o1.5",
+  "dc 1x + o2.5", "dc x2 + o2.5",
+  "dc 1x + u3.5", "dc x2 + u3.5",
+  "dc 1x + gg", "dc x2 + gg",
+]);
+
+function isVerdictMarket(market: string): boolean {
+  return VERDICT_WHITELIST.has(market.trim().toLowerCase().replace(/\s{2,}/g, " "));
+}
+
 export type VerdictSource = "structural" | "ai" | "pre";
 
 export type VerdictPick = {
@@ -905,6 +929,8 @@ export function buildFinalVerdict(
   // === Build output ===
   const out: VerdictPick[] = Array.from(buckets.values())
     // Filter out picks below value threshold (sotto soglia = solo rischio, niente valore)
+    // Solo i mercati che Rossi gioca davvero (vedi VERDICT_WHITELIST).
+    .filter((b) => isVerdictMarket(b.market))
     .filter((b) => {
       // Nessun pick senza prezzo. Prima i mercati di cui non si riusciva a
       // determinare la quota passavano il filtro: e' cosi' che "MG 1-4 totali"
