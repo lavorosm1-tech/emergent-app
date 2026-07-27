@@ -88,6 +88,31 @@ codice + `.md` insieme -> costruisce.
 
 ## Log (più recente in cima)
 
+### 2026-07-27 — La fusione riordinava il ranking invece di scorrerlo
+
+Segnalato da Rossi su Atletico Ottawa - Pacific: il pick era `O2.5` @1,52
+(59%, settimo nel ranking) mentre `1` @1,57 (63%) stava **quarto**, con
+probabilita' e quota migliori.
+
+**Causa.** La fusione riordinava i candidati con criteri propri —
+probabilita', poi spareggio "entro 5 punti vince la quota piu' bassa". Con
+63% contro 59% il divario stava dentro la banda di spareggio, e la quota piu'
+bassa faceva vincere `O2.5`. Cioe' scorrevamo una lista **diversa** da quella
+mostrata a schermo, e la regola concordata ("si scorre il ranking dall'alto")
+non era rispettata.
+
+**Correzione.** L'ordine della fusione e' ora **esattamente** quello del
+ranking strutturale. Lo spareggio sulla quota resta, ma e' stato spostato
+dentro il motore e vale solo a probabilita' **davvero** pari (entro un punto):
+e' il caso `GG`/`NG` entrambi al 50% ma prezzati 1,57 e 2,20 per cui era nato.
+
+Verificato eseguendo la fusione: a 1,40 e 1,50 esce `1` @1,57, a 1,60
+`MG 3-6 totali` @1,62. Ranking e verdetto raccontano la stessa storia.
+
+**Aperto**: il tasto indietro dalla schermata risultati non torna al dettaglio
+della partita ma salta all'elenco.
+
+
 ### 2026-07-27 — Regola di selezione semplificata: si scorre il ranking
 
 Rossi l'ha formulata cosi', ed e' piu' semplice di quella che avevo scritto:

@@ -1027,21 +1027,25 @@ export function buildFinalVerdict(
   // probabilita': li' e' un vero spareggio, non un ribaltamento.
   const probDi = (b: VerdictPick) =>
     b.coverage ?? structural?.ranking?.find((r) => norm(r.market) === norm(b.market))?.coverage ?? 0;
+  // ORDINE = quello del ranking strutturale, punto.
+  // La regola concordata e' "si scorre il ranking dall'alto e si prende il primo
+  // ammesso che paga abbastanza": se qui riordinassimo con criteri nostri,
+  // scorreremmo una lista diversa da quella che l'utente vede a schermo.
+  // Succedeva su Atletico Ottawa - Pacific: `1` era quarto nel ranking con 63% e
+  // quota 1,57, `O2.5` settimo con 59% e 1,52; il vecchio spareggio "entro 5
+  // punti vince la quota piu' bassa" faceva vincere O2.5, cioe' il secondo.
+  // Lo spareggio sulla quota resta, ma solo a probabilita' DAVVERO pari (entro
+  // un punto), che e' il caso GG/NG per cui era nato.
+  const posizione = new Map<string, number>();
+  structural?.ranking?.forEach((r, i) => posizione.set(norm(r.market), i));
   out.sort((a, b) => {
-    const pa = probDi(a), pb = probDi(b);
-    if (Math.abs(pa - pb) > 0.05) return pb - pa;   // divario netto: vince la probabilita'
-
-    // QUASI PARI — qui decide il BOOKMAKER, non il nostro punteggio.
-    // Il caso che lo ha reso necessario: il modello dava GG e NG entrambi al
-    // 50%, ma il book li prezzava 1,57 e 2,20. A parita' di stima nostra, la
-    // quota piu' bassa e' l'evento che il mercato ritiene piu' probabile, e il
-    // mercato ha molte piu' informazioni di noi (formazioni, infortuni, notizie
-    // dell'ultima ora). Proporre il piu' caro dei due equivarrebbe a dichiarare
-    // una value bet, e non e' quello che stiamo facendo qui.
-    const qa = a.odd ?? 99, qb = b.odd ?? 99;
-    if (Math.abs(qa - qb) > 0.02) return qa - qb;   // quota piu' bassa = piu' probabile
-    return b.score - a.score;                       // davvero pari: decide la fusione
+    const ia = posizione.get(norm(a.market)), ib = posizione.get(norm(b.market));
+    if (ia !== undefined && ib !== undefined) return ia - ib;
+    if (ia !== undefined) return -1;
+    if (ib !== undefined) return 1;
+    return b.score - a.score;
   });
+
 
   // === Mercati opposti ravvicinati (es. NG vs GG testa a testa) ===
   // Se il #1 e il #2 sono mercati mutuamente esclusivi con punteggio vicino

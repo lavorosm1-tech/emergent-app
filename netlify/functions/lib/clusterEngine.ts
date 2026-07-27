@@ -951,7 +951,16 @@ export function structuralAnalysis(
   // e a 1,60 da 54,0% a 56,1%; a soglia 1,40 invece SCENDE da 62,1% a 58,0%.
   // Il punteggio resta calcolato e resta nel campo `score`: e' solo il criterio
   // di ordinamento a essere cambiato, cosi' e' facile tornare indietro.
-  ranked.sort((a, b) => b.coverage - a.coverage || b.score - a.score);
+  ranked.sort((a, b) => {
+    if (Math.abs(a.coverage - b.coverage) > 0.01) return b.coverage - a.coverage;
+    // A probabilita' davvero pari decide il bookmaker: la quota piu' bassa e'
+    // l'evento che il mercato ritiene piu' probabile, e il mercato sa cose che
+    // noi non sappiamo. E' il caso GG/NG dati entrambi al 50% ma prezzati 1,57
+    // e 2,20.
+    const qa = a.odd ?? 99, qb = b.odd ?? 99;
+    if (Math.abs(qa - qb) > 0.02) return qa - qb;
+    return b.score - a.score;
+  });
 
   const pickMarket = ranked.length ? ranked[0].market : "";
   // Non nascondiamo piu' i mercati incoerenti col pick #1 (es. GG quando NG
