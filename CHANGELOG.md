@@ -88,6 +88,37 @@ codice + `.md` insieme -> costruisce.
 
 ## Log (più recente in cima)
 
+### 2026-07-27 — Il verdetto oscillava al variare della soglia
+
+Segnalato da Rossi su Nacional Potosi - Real Tomayapo (finita 4-1): a soglia
+1,40 il pick era `NG`, a 1,50 diventava `GG`, a 1,60 tornava `NG`. Non ha senso:
+alzando la soglia si tolgono mercati, non se ne aggiungono, quindi il pick non
+dovrebbe andare avanti e indietro.
+
+**Causa.** Il punteggio della fusione assegna bonus in base alla POSIZIONE che
+un mercato occupa nelle tre classifiche. Alzando la soglia si rimuovono i
+mercati piu' economici e tutti gli altri **salgono di posizione**: il punteggio
+cambia anche se la loro probabilita' e' rimasta identica. `NG` passava da
+STRUTT #6 a STRUTT #3 senza che nulla fosse cambiato in quella partita.
+
+**Il problema piu' grave sotto.** A soglia 1,40 la fusione sceglieva `NG` al
+**50%** scavalcando `MG 1-3 casa + MG 0-2 ospite` al **64%**, solo perche' NG
+aveva due sistemi concordi. E' il contrario dell'obiettivo dichiarato
+("massima probabilita' sopra la soglia"), ed e' la stessa incoerenza gia'
+corretta nel motore con il punto C: era rimasta nella fusione.
+
+**Correzione.** Il verdetto si ordina ora per probabilita' vera. Il punteggio
+della fusione — bonus di concordanza compreso — decide solo fra mercati entro
+**5 punti** di probabilita': li' e' un vero spareggio, non un ribaltamento.
+
+Su quella partita: a 1,50 il pick era `GG`, che ha **vinto** sul 4-1; a 1,40 e
+1,60 era `NG`, che ha perso. L'avviso della soglia consigliata diceva "non
+conviene superare 1,50", e aveva ragione.
+
+**Da verificare sul campo**: la fusione vive nel frontend e non e' rigiocabile
+sulle 583 partite di test come il motore.
+
+
 ### 2026-07-26 — Avviso sulla soglia massima consigliata, partita per partita
 
 Chiesto da Rossi. Il "muro" oltre il quale alzare la soglia compra solo rischio

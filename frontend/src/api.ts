@@ -934,7 +934,29 @@ export function buildFinalVerdict(
         vetoed: vetoedKeys.has(norm(b.market)),
       };
     });
-  out.sort((a, b) => b.score - a.score);
+  // ORDINAMENTO FINALE — coerente con il criterio del motore (ordina per
+  // probabilita' vera, non per punteggio).
+  //
+  // Il punteggio della fusione da' bonus in base alla POSIZIONE che un mercato
+  // occupa nelle tre classifiche. Ma alzando la soglia di quota si rimuovono i
+  // mercati piu' economici e tutti gli altri salgono di posizione, quindi il
+  // punteggio cambia anche se la loro probabilita' e' rimasta identica. Da qui
+  // l'oscillazione vista su Nacional Potosi - Real Tomayapo: NG a soglia 1,40,
+  // GG a 1,50, di nuovo NG a 1,60, senza che nulla fosse cambiato nei mercati.
+  // E soprattutto: a 1,40 la fusione sceglieva NG al 50% scavalcando un mercato
+  // al 64%, cioe' il contrario dell'obiettivo "massima probabilita' sopra la
+  // soglia".
+  //
+  // Regola: comanda la probabilita'. Il punteggio della fusione (concordanza
+  // fra i sistemi compresa) decide solo fra mercati vicini, entro 5 punti di
+  // probabilita': li' e' un vero spareggio, non un ribaltamento.
+  const probDi = (b: VerdictPick) =>
+    b.coverage ?? structural?.ranking?.find((r) => norm(r.market) === norm(b.market))?.coverage ?? 0;
+  out.sort((a, b) => {
+    const pa = probDi(a), pb = probDi(b);
+    if (Math.abs(pa - pb) > 0.05) return pb - pa;   // divario netto: vince la probabilita'
+    return b.score - a.score;                        // quasi pari: decide la fusione
+  });
 
   // === Mercati opposti ravvicinati (es. NG vs GG testa a testa) ===
   // Se il #1 e il #2 sono mercati mutuamente esclusivi con punteggio vicino
