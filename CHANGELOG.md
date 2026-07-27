@@ -88,6 +88,39 @@ codice + `.md` insieme -> costruisce.
 
 ## Log (più recente in cima)
 
+### 2026-07-27 — La fusione vedeva meno mercati del motore
+
+Segnalato da Rossi su Colo Colo - Deportes Limache (finita 3-1): a soglia 1,60
+il verdetto era `NG` @2,20 al 48%, mentre nel ranking c'era gia'
+`DC 1X + O2.5` @1,66 al 54% — piu' probabile, sopra soglia e coerente con la
+lettura della partita (casa nettissima, λ 2,23 contro 0,89).
+
+**Causa.** I candidati della fusione erano solo i primi N di ciascuno dei tre
+sistemi. `DC 1X + O2.5` stava dodicesimo nel ranking strutturale e non entrava
+mai fra i candidati: la regola "rafforza la direzione con una combo coerente"
+non poteva applicarla perche' quella combo non le arrivava. Il motore la
+sceglieva correttamente, la fusione no — due risposte diverse sulla stessa
+partita.
+
+**Correzione.** Tutti i 18 mercati ammessi entrano fra i candidati della
+fusione, anche quelli che nessun sistema ha nominato nei suoi primi posti.
+
+**Seconda segnalazione, stessa radice**: `DC 1X + GG` non compariva nel ranking.
+Non era un errore di calcolo (45%, quota 2,09) ma il taglio ai primi 20: stava
+ventunesimo. Ora il ranking mostra i primi 20 **piu'** tutti i mercati ammessi
+al verdetto, ovunque si trovino.
+
+**Verificato eseguendo davvero la fusione** su quelle quote:
+
+| Soglia | Prima | Dopo |
+|---|---|---|
+| 1,40 / 1,50 | `1` @1,50 | `DC 1X + O2.5` @1,66 |
+| 1,60 | `NG` @2,20 | `DC 1X + O2.5` @1,66 |
+| 1,75 | — | `DC 1X + GG` @2,09 |
+
+Sul 3-1 entrambe le combo vincono; `NG` avrebbe perso.
+
+
 ### 2026-07-27 — HOTFIX: schermata bianca aprendo una partita
 
 `Uncaught ReferenceError: out is not defined` in `buildFinalVerdict`. Nel commit

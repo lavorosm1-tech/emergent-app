@@ -761,6 +761,26 @@ export function buildFinalVerdict(
     structural.ranking.forEach((r) => structuralWhitelist.add(norm(r.market)));
   }
 
+  // TUTTI i mercati ammessi al verdetto entrano fra i candidati, anche quelli
+  // che nessuno dei tre sistemi ha nominato nei suoi primi posti. Prima i
+  // candidati erano solo i top-N di ciascun sistema, quindi un mercato come
+  // `DC 1X + O2.5` — dodicesimo nel ranking strutturale — non veniva mai
+  // considerato: su Colo Colo - Limache a soglia 1,60 la fusione ripiegava su
+  // `NG` @2,20 al 48% mentre il motore aveva gia' individuato `DC 1X + O2.5`
+  // al 54%, coerente con la lettura della partita.
+  if (structural?.ranking) {
+    for (const r of structural.ranking) {
+      if (!isVerdictMarket(r.market)) continue;
+      const k = norm(r.market);
+      if (buckets.has(k)) continue;
+      buckets.set(k, {
+        market: r.market, score: 0, sources: new Set(), ranks: {},
+        coverage: r.coverage, fragility: r.fragility,
+        odd: r.odd ?? undefined, oddEstimated: !!r.odd_estimated,
+      } as any);
+    }
+  }
+
   // Mercati su cui l'euristica PRE ha potuto esprimersi. Se il backend non
   // manda la lista (versione vecchia), si assume che potesse su tutto: il
   // comportamento torna quello di prima, senza sorprese.

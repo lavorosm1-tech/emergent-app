@@ -967,7 +967,12 @@ export function structuralAnalysis(
     structure,
     cluster,
     central_cluster: central,
-    ranking: top20,
+    // Il ranking mostra i primi 20 PIU' tutti i mercati ammessi al verdetto,
+    // anche se cadono sotto il ventesimo posto: sono quelli fra cui si sceglie
+    // la giocata, quindi devono essere sempre visibili e sempre disponibili
+    // alla fusione. (Rossi aveva notato l'assenza di `DC 1X + GG`, che stava
+    // appena fuori dalla ventesima posizione.)
+    ranking: [...top20, ...ranked.filter((r) => isVerdictMarket(r.market) && !top20.includes(r))],
     pick: selezionaPick(ranked, odds, minOdd),
     explanation: buildExplanation(structure, top20),
   };
