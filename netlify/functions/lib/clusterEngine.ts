@@ -1114,8 +1114,15 @@ export function selezionaPick(
   // saltando tutto cio' che racconta la partita al contrario. Niente scorciatoie
   // e niente preferenze per le combo: se un mercato sta piu' in alto, ha
   // coverage migliore e quota sufficiente, e' lui.
-  for (const r of leggibili) {
-    if (contraddice(direzione.market, r.market)) continue;
+  for (let i = 0; i < leggibili.length; i++) {
+    const r = leggibili[i];
+    // Un mercato e' valido solo se non contraddice NESSUNO di quelli piu' in
+    // alto, non solo la direzione. Prima il confronto era con la sola direzione:
+    // su Deportivo Riestra - Boca la lettura era `DC X2 + U3.5`, e sia `NG`
+    // (57%) sia `GG` (43%) risultavano compatibili con essa, quindi alzando la
+    // soglia il pick passava da NG a GG — due mercati opposti fra loro.
+    // Se un mercato piu' probabile dice il contrario, quello sotto non si gioca.
+    if (leggibili.slice(0, i).some((sopra) => contraddice(sopra.market, r.market))) continue;
     if ((r.odd ?? 0) >= minOdd) return r;
   }
 

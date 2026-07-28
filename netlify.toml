@@ -2,29 +2,12 @@
   publish = "frontend/dist"
   command = "cd frontend && yarn install --frozen-lockfile && yarn build:web"
 
-  # RISPARMIO CREDITI DI BUILD.
-  # Ogni deploy di produzione costa circa 15 crediti, e sul piano gratuito ce ne
-  # sono 1.000 al mese: sono ~66 build. Pubblicare a ogni singolo commit li
-  # brucia in fretta (sul vecchio account: 73 deploy = 1.095 crediti).
-  #
-  # Come funziona `ignore`: e' un comando di shell. Se esce con 0 la build viene
-  # ANNULLATA, se esce con 1 la build parte.
-  # `git diff --quiet` esce 0 quando NON trova differenze. Qui gli chiediamo le
-  # differenze escludendo la documentazione: se l'unica cosa cambiata sono file
-  # .md (CHANGELOG compreso), non c'e' nessuna differenza "vera" -> esce 0 ->
-  # build annullata.
-  #
-  # Il primo membro dell'OR gestisce il caso in cui Netlify non abbia un commit
-  # precedente con cui confrontare (prima build, o cache svuotata): in quel caso
-  # si costruisce sempre, per non rischiare di saltare un deploy necessario.
-  ignore = """
-    if [ -z "$CACHED_COMMIT_REF" ]; then exit 1; fi
-    git diff --quiet "$CACHED_COMMIT_REF" "$COMMIT_REF" -- . \
-      ':(exclude)*.md' \
-      ':(exclude)docs/**' \
-      ':(exclude).gitignore' \
-      ':(exclude)LICENSE'
-  """
+  # L'ignore command e' stato RIMOSSO il 28/07/2026: era il sospettato numero
+  # uno dei "deploy fantasma", cioe' build registrate col commit nuovo ma che
+  # ripubblicavano i file vecchi. Risparmiare qualche credito non vale il rischio
+  # di pubblicare codice che non corrisponde al repository.
+  # Il risparmio resta affidato a [skip ci] nei messaggi di commit (vedi
+  # CHANGELOG), che e' esplicito e verificabile.
 
 [build.environment]
   NODE_VERSION = "22"

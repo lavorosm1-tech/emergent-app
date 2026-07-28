@@ -88,6 +88,40 @@ codice + `.md` insieme -> costruisce.
 
 ## Log (più recente in cima)
 
+### 2026-07-28 — Mercati opposti: il confronto vale con TUTTI quelli piu' in alto
+
+Segnalato da Rossi su Deportivo Riestra - Boca (finita 3-0): a soglia 1,40 il
+pick era `NG` @1,48, a 1,50 diventava `GG` @2,50. Due mercati opposti, esattamente
+cio' che avevamo vietato.
+
+**Causa.** Il controllo confrontava il candidato solo con la **direzione** (il
+mercato ammesso piu' probabile). Li' la direzione era `DC X2 + U3.5`, e sia `NG`
+sia `GG` risultavano compatibili con essa: nessuno dei due veniva bloccato,
+quindi alzando la soglia si passava dall'uno all'altro.
+
+**Correzione.** Un mercato e' valido solo se non contraddice **nessuno** di
+quelli piu' in alto in classifica, non solo la direzione. Se un mercato piu'
+probabile dice il contrario, quello sotto non si gioca. Con `NG` al 57% sopra,
+`GG` al 43% e' ora escluso a qualsiasi soglia.
+
+Verificato eseguendo motore e fusione sulle quote reali prese dal database:
+1,40 e 1,50 → `MG 2-4 totali` @1,50 · 1,60 → `NG` @1,60 · 1,75 → **nessuna
+giocata** (niente di coerente sopra soglia, ed e' il comportamento voluto).
+
+### 2026-07-28 — Rimosso l'ignore command da netlify.toml
+
+Sospettato numero uno dei "deploy fantasma": build registrate col commit nuovo
+ma che ripubblicano i file vecchi. Rossi ha visto piu' volte il sito servire
+codice che non corrisponde al repository, anche dopo un "clear cache and deploy"
+e in finestra anonima. Risparmiare qualche credito non vale il rischio di
+pubblicare codice fantasma: il risparmio resta affidato a `[skip ci]` nei
+messaggi di commit, che e' esplicito e verificabile.
+
+*Nota diagnostica*: `frontend/dist` NON e' tracciata da git (e' in `.gitignore`),
+quindi il bundle pubblicato lo costruisce sempre Netlify. Le build locali servono
+solo a verificare che il codice compili, non finiscono online.
+
+
 ### 2026-07-27 — Un mercato senza quota veniva saltato in silenzio
 
 Su Zaglebie - Piast il verdetto usciva `O2.5` @2,10 al **45%** mentre

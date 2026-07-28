@@ -1131,7 +1131,13 @@ export function buildFinalVerdict(
 
   const direzione = leggibili[0];
   const sopra = (b: VerdictPick) => (b.odd ?? 0) >= minOdd;
-  const coerenti = leggibili.filter((b) => !contraddice(direzione.market, b.market));
+  // Un mercato e' valido solo se non contraddice NESSUNO di quelli piu' in alto,
+  // non solo la direzione: se un mercato piu' probabile dice il contrario,
+  // quello sotto non si gioca. Senza questo, alzando la soglia il pick poteva
+  // passare da `NG` a `GG` perche' entrambi erano compatibili con la direzione.
+  const coerenti = leggibili.filter(
+    (b, i) => !leggibili.slice(0, i).some((sopra) => contraddice(sopra.market, b.market)),
+  );
   const scelto = coerenti.find(sopra);
   if (!scelto) return [];                    // valore nullo: nessuna giocata
   return [scelto, ...coerenti.filter((b) => sopra(b) && b.market !== scelto.market)];
