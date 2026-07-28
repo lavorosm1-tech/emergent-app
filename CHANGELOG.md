@@ -88,6 +88,27 @@ codice + `.md` insieme -> costruisce.
 
 ## Log (più recente in cima)
 
+### 2026-07-27 — Un mercato senza quota veniva saltato in silenzio
+
+Su Zaglebie - Piast il verdetto usciva `O2.5` @2,10 al **45%** mentre
+`MG 2-4 totali` al **60%** stava molto piu' in alto fra i mercati leggibili.
+Il motore lo sceglieva correttamente; la fusione no.
+
+**Causa.** Nella fusione i mercati ammessi venivano inseriti fra i candidati
+con `odd: r.odd ?? undefined`. Se la voce del ranking arrivava senza quota, il
+bucket restava senza prezzo, il filtro di soglia lo scartava
+(`(b.odd ?? 0) >= minOdd` e' falso con quota assente) e il verdetto scivolava
+piu' in basso — fino a un mercato al 45%.
+
+**Correzione.** La quota si risolve subito, con tutte le strade disponibili in
+ordine: voce del ranking → mappa completa `market_odds` (che copre tutti i 54)
+→ quote grezze della partita. Cosi' un mercato non puo' piu' sparire dalla
+selezione per un prezzo mancante.
+
+Verificato eseguendo la fusione con la voce del ranking priva di quota: a 1,40
+e 1,50 esce `MG 2-4 totali` @1,56, come nel motore.
+
+
 ### 2026-07-27 — Probabilita' onesta a schermo e astensione per famiglia
 
 **1. La probabilita' mostrata e' quella corretta dallo storico.** Il motore

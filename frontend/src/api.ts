@@ -801,10 +801,18 @@ export function buildFinalVerdict(
       if (!isVerdictMarket(r.market)) continue;
       const k = norm(r.market);
       if (buckets.has(k)) continue;
+      // La quota si risolve SUBITO, con tutte le strade disponibili: dalla voce
+      // del ranking, dalla mappa completa market_odds, o dalle quote grezze.
+      // Se restasse indefinita il mercato verrebbe scartato dal filtro di
+      // soglia e il verdetto scivolerebbe piu' in basso — e' cosi' che su
+      // Zaglebie - Piast usciva `O2.5` al 45% invece di `MG 2-4 totali` al 60%.
+      const daMappa = structural?.market_odds?.[norm(r.market)] || structural?.market_odds?.[r.market];
+      const quota = r.odd ?? daMappa?.odd ?? (odds ? getMarketOdd(r.market, odds) : undefined);
       buckets.set(k, {
         market: r.market, score: 0, sources: new Set(), ranks: {},
         coverage: r.coverage, fragility: r.fragility,
-        odd: r.odd ?? undefined, oddEstimated: !!r.odd_estimated,
+        odd: quota ?? undefined,
+        oddEstimated: r.odd_estimated ?? daMappa?.estimated ?? false,
       } as any);
     }
   }
