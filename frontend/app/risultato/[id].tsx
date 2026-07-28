@@ -124,7 +124,13 @@ export default function RisultatoPage() {
     <View style={[styles.container, { paddingTop: insets.top + 8 }]}>
       {/* HEADER */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+        {/* Indietro = torna al DETTAGLIO di questa partita, non alla lista.
+            router.back() non bastava: salvando un risultato la schermata avanza
+            alla partita successiva con router.replace, che sostituisce la voce
+            nella cronologia. Da li' in poi "indietro" riportava al punto da cui
+            era iniziata la catena — di solito l'elenco partite — invece che alla
+            partita che si stava guardando. */}
+        <TouchableOpacity onPress={() => router.replace(`/match/${id}`)} style={styles.backBtn}>
           <Ionicons name="chevron-back" size={26} color={colors.text} />
         </TouchableOpacity>
         <View style={{ flex: 1 }}>

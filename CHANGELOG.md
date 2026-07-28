@@ -88,6 +88,20 @@ codice + `.md` insieme -> costruisce.
 
 ## Log (più recente in cima)
 
+### 2026-07-27 — Il tasto indietro torna al dettaglio della partita
+
+Dalle schermate "inserisci risultato" e "quote", indietro riportava all'elenco
+partite invece che alla partita che si stava guardando.
+
+Causa: salvando un risultato la schermata avanza alla partita successiva con
+`router.replace`, che **sostituisce** la voce nella cronologia invece di
+aggiungerla. Da li' in poi `router.back()` riportava al punto da cui era
+iniziata la catena — di solito l'elenco — e non al dettaglio.
+
+Ora indietro va esplicitamente a `/match/{id}`: si torna sempre alla partita
+che si stava guardando, qualunque strada si sia fatta per arrivarci.
+
+
 ### 2026-07-27 — La fusione riordinava il ranking invece di scorrerlo
 
 Segnalato da Rossi su Atletico Ottawa - Pacific: il pick era `O2.5` @1,52

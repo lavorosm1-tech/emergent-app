@@ -55,7 +55,9 @@ export default function QuotePage() {
   return (
     <View style={[styles.container, { paddingTop: insets.top + 8 }]}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+        {/* Stessa logica della schermata risultati: si torna al dettaglio della
+            partita che si stava guardando. */}
+        <TouchableOpacity onPress={() => router.replace(`/match/${id}`)} style={styles.backBtn}>
           <Ionicons name="chevron-back" size={26} color={colors.text} />
         </TouchableOpacity>
         <View style={{ flex: 1 }}>
