@@ -62,25 +62,24 @@ export async function applyMatchResult(
     marketsToUpdate.unshift(prediction.main_prediction);
   }
 
-  await pgRpc("increment_family_counter", { p_family: family, p_league: null });
-  if (manif) await pgRpc("increment_family_counter", { p_family: family, p_league: manif });
-
-  for (const market of marketsToUpdate) {
-    const outcome = evaluateMarket(market, home, away);
-    if (outcome === null) continue;
-    await pgRpc("increment_market_score", { p_family: family, p_market: market, p_league: null, p_win: outcome });
-    if (manif) {
-      await pgRpc("increment_market_score", { p_family: family, p_market: market, p_league: manif, p_win: outcome });
-    }
-  }
-
-  for (const market of STANDARD_MARKETS) {
-    if (marketsToUpdate.includes(market)) continue;
-    const outcome = evaluateMarket(market, home, away);
-    if (outcome !== true) continue;
-    await pgRpc("increment_missed_win", { p_family: family, p_market: market, p_league: null });
-    if (manif) await pgRpc("increment_missed_win", { p_family: family, p_market: market, p_league: manif });
-  }
+  // UN SOLO GIRO invece di un centinaio.
+  // Qui prima c'erano tre cicli di chiamate HTTP verso Supabase: 2 per i
+  // contatori di famiglia, 2 per ogni mercato proposto dall'IA e 2 per ognuno
+  // dei 54 mercati standard per le "occasioni mancate". Fino a ~110 richieste
+  // in sequenza, ognuna con la sua latenza: era li' che se ne andava il tempo di
+  // esecuzione della function — cioe' i crediti di calcolo — ed era anche il
+  // motivo per cui salvare molti risultati dalla Schedina rischiava il timeout.
+  //
+  // Ora il ciclo vive dentro il database (`apply_family_result`), dove i dati
+  // gia' sono. Nessuna logica riscritta: la funzione SQL richiama le stesse
+  // increment_* di prima, solo senza attraversare la rete cinquanta volte.
+  await pgRpc("apply_family_result", {
+    p_family: family,
+    p_league: manif,
+    p_proposti: marketsToUpdate,
+    p_home: home,
+    p_away: away,
+  });
 
   const mainPred = prediction.main_prediction;
   return mainPred

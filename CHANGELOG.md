@@ -88,6 +88,34 @@ codice + `.md` insieme -> costruisce.
 
 ## Log (più recente in cima)
 
+### 2026-07-28 — Salvataggio risultato: da ~110 chiamate a 1
+
+L'unica parte davvero pesante rimasta su Netlify. Per ogni risultato salvato,
+`applyMatchResult` faceva in sequenza:
+
+- 2 chiamate per i contatori di famiglia (globale + campionato)
+- 2 per ogni mercato proposto dall'IA
+- 2 per ognuno dei 54 mercati standard, per le "occasioni mancate"
+
+Fino a **~110 richieste HTTP** dalla function a Supabase, una dopo l'altra,
+ognuna con la sua latenza. E' li' che se ne andava il tempo di esecuzione — cioe'
+i crediti di calcolo — ed era anche il motivo per cui salvare molti risultati
+dalla Schedina rischiava il timeout.
+
+Nuova funzione SQL `apply_family_result(famiglia, campionato, proposti, casa,
+ospite)`: il ciclo gira dentro il database, dove i dati gia' sono. **Nessuna
+logica riscritta** — richiama le stesse `increment_market_score`,
+`increment_missed_win` e `increment_family_counter` di prima, solo senza
+attraversare la rete cinquanta volte. Niente terza copia della logica.
+
+Verificata con una prova a vuoto su una famiglia finta, poi ripulita: 50 mercati
+valutati, mercato proposto e vincente registrato 1W/0L, mercato non proposto ma
+vincente registrato come occasione mancata. Comportamento identico a prima.
+
+Con questa, il percorso "inserisci risultato" fa **3 chiamate al database** in
+tutto: la pagella dei tre sistemi, lo storico per scenario, e questa.
+
+
 ### 2026-07-28 — HOTFIX: senza giocata spariva anche il selettore della quota
 
 Regressione introdotta con l'astensione. Quando nessun mercato coerente superava
