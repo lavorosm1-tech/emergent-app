@@ -88,6 +88,34 @@ codice + `.md` insieme -> costruisce.
 
 ## Log (più recente in cima)
 
+### 2026-07-27 — Probabilita' onesta a schermo e astensione per famiglia
+
+**1. La probabilita' mostrata e' quella corretta dallo storico.** Il motore
+ordinava gia' usando la correzione per scenario, ma a schermo scriveva il
+numero grezzo di Poisson: si leggeva 65% su un mercato che il sistema stava
+gia' trattando come meno affidabile. Ora `coverage` e `fragility` mostrano il
+valore corretto; il grezzo resta disponibile in `coverage_poisson`.
+
+**2. Se una famiglia non ha una lettura, si salta tutta.** Quando i due mercati
+**opposti** piu' alti di una famiglia distano 5 punti o meno, il modello non sa
+da che parte sta la partita: non e' una lettura, e' un pareggio. Quella famiglia
+viene esclusa e si scende dove il motore ha davvero qualcosa da dire. Vale per
+tutte e tre: esito (`1`/`2`/`1X`/`X2`), gol (`GG`/`NG`), totali
+(`O2.5`/multigol). Se nessuna famiglia e' leggibile, nessuna giocata.
+
+Verificato eseguendo motore e fusione su Zaglebie Lubin - Piast Gliwice
+(finita 2-0), dove il ranking dava `X2` 65% e `1X` 62% — tre punti fra due
+scenari opposti, e anche `GG` 51% contro `NG` 49%:
+
+| Soglia | Prima | Dopo | Esito |
+|---|---|---|---|
+| 1,40 / 1,50 | `X2` @1,40 | **`MG 2-4 totali` @1,56** | perso → **vinto** |
+| 1,60 / 1,75 | — | `O2.5` @2,10 | perso |
+
+Due famiglie su tre erano illeggibili; la terza aveva qualcosa da dire, ed era
+quella giusta.
+
+
 ### 2026-07-27 — Il tasto indietro torna al dettaglio della partita
 
 Dalle schermate "inserisci risultato" e "quote", indietro riportava all'elenco

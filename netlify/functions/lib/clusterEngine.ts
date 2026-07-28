@@ -588,6 +588,8 @@ export type RankedMarket = {
   odd: number | null;
   /** true se `odd` è una stima nostra e non un prezzo letto dal bookmaker */
   odd_estimated?: boolean;
+  /** probabilità grezza di Poisson, prima della correzione con lo storico */
+  coverage_poisson?: number;
   ev: number | null;
   ml_adjustment?: { type: "boost" | "malus" | "neutral"; win_rate: number; total: number; delta: string };
   opposes_pick?: boolean;
@@ -932,6 +934,15 @@ export function structuralAnalysis(
       const mixed = r.coverage * (1 - k) + (wr / 100) * k;
       const factor = mixed / cov;
       r.score = round4(r.score * factor);
+      // La probabilita' MOSTRATA diventa quella corretta dallo storico, non
+      // piu' quella grezza di Poisson. Prima il motore ordinava usando la
+      // correzione ma a schermo scriveva il numero non corretto: si leggeva
+      // 65% su un mercato che il sistema stava gia' trattando come meno
+      // affidabile. Il valore grezzo resta in `coverage_poisson`.
+      r.coverage_poisson = r.coverage;
+      r.coverage = round4(mixed);
+      r.fragility = round4(1 - mixed);
+      r.fragility_label = r.fragility >= 0.45 ? "alta" : r.fragility >= 0.25 ? "media" : "bassa";
       const deltaPct = Math.round((factor - 1) * 100);
       r.ml_adjustment = {
         type: deltaPct > 1 ? "boost" : deltaPct < -1 ? "malus" : "neutral",
@@ -1049,6 +1060,37 @@ export function contraddice(direzione: string, candidato: string): boolean {
  * 5. Se non resta niente, si dichiara valore nullo e non si propone nulla.
  *    Meglio nessuna giocata che una giocata contro la propria analisi.
  */
+/** A quale famiglia appartiene un mercato: esito, gol, oppure totali. */
+function famiglia(market: string): "esito" | "gol" | "totali" | null {
+  const p = pezzi(market);
+  if (p.some((x) => ["1", "2", "1X", "X2"].includes(x))) return "esito";
+  if (p.some((x) => ["GG", "NG"].includes(x))) return "gol";
+  if (p.some((x) => x.startsWith("O") || x.startsWith("U") || x.startsWith("MG"))) return "totali";
+  return null;
+}
+
+/**
+ * Famiglie su cui il motore NON ha una lettura.
+ *
+ * Se i due mercati OPPOSTI piu' alti di una famiglia sono separati da pochi
+ * punti, vuol dire che il modello non sa da che parte sta la partita. Su
+ * Zaglebie - Piast il ranking dava `X2` 65% e `1X` 62%: tre punti fra due
+ * scenari opposti non sono una lettura, sono un pareggio. Meglio non giocare
+ * quella famiglia e scendere a una dove il motore ha davvero qualcosa da dire —
+ * li' c'era `MG 2-4 totali` al 60%, e sul 2-0 avrebbe vinto.
+ */
+function famiglieAmbigue(ammessi: RankedMarket[], sogliaPunti = 0.05): Set<string> {
+  const out = new Set<string>();
+  for (const fam of ["esito", "gol", "totali"] as const) {
+    const dellaFamiglia = ammessi.filter((r) => famiglia(r.market) === fam);
+    if (dellaFamiglia.length < 2) continue;
+    const primo = dellaFamiglia[0];
+    const opposto = dellaFamiglia.find((r) => contraddice(primo.market, r.market));
+    if (opposto && Math.abs(primo.coverage - opposto.coverage) <= sogliaPunti) out.add(fam);
+  }
+  return out;
+}
+
 export function selezionaPick(
   ranked: RankedMarket[],
   odds: Odds,
@@ -1059,13 +1101,20 @@ export function selezionaPick(
 
   // La DIREZIONE della partita e' il primo mercato ammesso del ranking, quota o
   // non quota: e' la lettura del motore e non si tocca.
-  const direzione = ammessi[0];
+  const ambigue = famiglieAmbigue(ammessi);
+  const leggibili = ammessi.filter((r) => {
+    const f = famiglia(r.market);
+    return !f || !ambigue.has(f);
+  });
+  if (!leggibili.length) return null;   // nessuna famiglia leggibile: si sta fuori
+
+  const direzione = leggibili[0];
 
   // Poi si scorre il ranking DALL'ALTO e si prende il primo che paga abbastanza,
   // saltando tutto cio' che racconta la partita al contrario. Niente scorciatoie
   // e niente preferenze per le combo: se un mercato sta piu' in alto, ha
   // coverage migliore e quota sufficiente, e' lui.
-  for (const r of ammessi) {
+  for (const r of leggibili) {
     if (contraddice(direzione.market, r.market)) continue;
     if ((r.odd ?? 0) >= minOdd) return r;
   }

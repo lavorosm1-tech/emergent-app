@@ -584,6 +584,34 @@ function contraddice(direzione: string, candidato: string): boolean {
     OPPOSTI.some(([p, q]) => (p === x && q === y) || (q === x && p === y))));
 }
 
+/** A quale famiglia appartiene un mercato: esito, gol, oppure totali. */
+function famiglia(market: string): "esito" | "gol" | "totali" | null {
+  const p = pezzi(market).map((x) => x.toUpperCase());
+  if (p.some((x) => ["1", "2", "1X", "X2"].includes(x))) return "esito";
+  if (p.some((x) => ["GG", "NG"].includes(x))) return "gol";
+  if (p.some((x) => x.startsWith("O") || x.startsWith("U") || x.startsWith("MG"))) return "totali";
+  return null;
+}
+
+/**
+ * Famiglie su cui il motore non ha una lettura: i due mercati OPPOSTI piu' alti
+ * sono separati da pochi punti. Su Zaglebie - Piast il ranking dava `X2` 65% e
+ * `1X` 62%: tre punti fra due scenari opposti non sono una lettura, sono un
+ * pareggio. Si salta la famiglia e si scende dove il motore ha qualcosa da dire.
+ * Deve restare allineata a famiglieAmbigue in clusterEngine.ts.
+ */
+function famiglieAmbigue(lista: VerdictPick[], prob: (b: VerdictPick) => number): Set<string> {
+  const out = new Set<string>();
+  for (const fam of ["esito", "gol", "totali"]) {
+    const della = lista.filter((r) => famiglia(r.market) === fam);
+    if (della.length < 2) continue;
+    const primo = della[0];
+    const opposto = della.find((r) => contraddice(primo.market, r.market));
+    if (opposto && Math.abs(prob(primo) - prob(opposto)) <= 0.05) out.add(fam);
+  }
+  return out;
+}
+
 function isVerdictMarket(market: string): boolean {
   return VERDICT_WHITELIST.has(market.trim().toLowerCase().replace(/\s{2,}/g, " "));
 }
@@ -1084,9 +1112,18 @@ export function buildFinalVerdict(
   // 5. Se non resta niente si dichiara valore nullo: meglio nessuna giocata che
   //    una giocata contro la propria analisi.
   if (!out.length) return out;
-  const direzione = out[0];
+  const probOf = (b: VerdictPick) =>
+    b.coverage ?? structural?.ranking?.find((r) => norm(r.market) === norm(b.market))?.coverage ?? 0;
+  const ambigue = famiglieAmbigue(out, probOf);
+  const leggibili = out.filter((b) => {
+    const f = famiglia(b.market);
+    return !f || !ambigue.has(f);
+  });
+  if (!leggibili.length) return [];      // nessuna famiglia leggibile: si sta fuori
+
+  const direzione = leggibili[0];
   const sopra = (b: VerdictPick) => (b.odd ?? 0) >= minOdd;
-  const coerenti = out.filter((b) => !contraddice(direzione.market, b.market));
+  const coerenti = leggibili.filter((b) => !contraddice(direzione.market, b.market));
   const scelto = coerenti.find(sopra);
   if (!scelto) return [];                    // valore nullo: nessuna giocata
   return [scelto, ...coerenti.filter((b) => sopra(b) && b.market !== scelto.market)];
