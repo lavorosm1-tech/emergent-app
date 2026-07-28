@@ -88,6 +88,24 @@ codice + `.md` insieme -> costruisce.
 
 ## Log (più recente in cima)
 
+### 2026-07-28 — HOTFIX: senza giocata spariva anche il selettore della quota
+
+Regressione introdotta con l'astensione. Quando nessun mercato coerente superava
+la soglia, `buildFinalVerdict` restituiva una lista vuota e la schermata usciva
+con `return null`: spariva **l'intero riquadro del verdetto**, selettore della
+quota minima compreso. L'utente restava davanti a una pagina muta, **senza il
+comando per abbassare la soglia** e sbloccarsi — un vicolo cieco.
+
+Ora il riquadro c'e' sempre. Quando non c'e' una giocata mostra il selettore e
+la spiegazione: *"Nessuna giocata a quota X — sopra questa soglia non resta
+nessun mercato coerente con la lettura della partita. Abbassa la quota minima
+qui sopra."*
+
+*Lezione*: ogni volta che si introduce un caso "niente da mostrare", va
+verificato che i **comandi** per uscirne restino a schermo. L'astensione e' una
+risposta, non l'assenza di interfaccia.
+
+
 ### 2026-07-28 — Mercati opposti: il confronto vale con TUTTI quelli piu' in alto
 
 Segnalato da Rossi su Deportivo Riestra - Boca (finita 3-0): a soglia 1,40 il

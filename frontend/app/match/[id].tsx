@@ -91,6 +91,38 @@ export default function MatchDetail() {
   // "VERDETTO FINALE" nel render — se un giorno cambia la logica lì, va
   // cambiata anche qui, altrimenti si salva un pick diverso da quello mostrato.
   // ============================================================
+  /** Riquadro mostrato quando nessun mercato coerente supera la soglia.
+      Deve contenere COMUNQUE il selettore della quota: senza, l'utente non ha
+      modo di abbassarla e resta bloccato su una schermata muta. */
+  const renderNessunaGiocata = () => (
+    <View style={styles.verdictBlock}>
+      <Text style={styles.verdictTitle}>VERDETTO FINALE</Text>
+      <View style={styles.minOddRow}>
+        <Text style={styles.minOddLabel}>Quota minima</Text>
+        <View style={styles.minOddChips}>
+          {minOddOptions.map((v) => (
+            <TouchableOpacity
+              key={v}
+              onPress={() => changeMinOdd(v)}
+              style={[styles.minOddChip, minOdd === v && styles.minOddChipOn]}
+            >
+              <Text style={[styles.minOddChipTxt, minOdd === v && styles.minOddChipTxtOn]}>
+                {v.toFixed(2)}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      </View>
+      <View style={styles.sogliaWarn}>
+        <Text style={styles.sogliaWarnTitle}>Nessuna giocata a quota {minOdd.toFixed(2)}</Text>
+        <Text style={styles.sogliaWarnBody}>
+          Sopra questa soglia non resta nessun mercato coerente con la lettura della partita.
+          Abbassa la quota minima qui sopra per vedere cosa propone il motore.
+        </Text>
+      </View>
+    </View>
+  );
+
   const savedVerdictRef = useRef<string | null>(null);
   useEffect(() => {
     if (!match || !structural || match.result) return;
@@ -276,7 +308,12 @@ export default function MatchDetail() {
           const llmMarkets = prediction?.playable_markets?.map((p) => p.market) || (prediction?.main_prediction ? [prediction.main_prediction] : []);
           const preRanked = rankPicks(fam, llmMarkets, marketStats);
           const verdictRaw = buildFinalVerdict(structural, preRanked, prediction?.playable_markets, match.odds, history, { minOdd });
-          if (verdictRaw.length === 0) return null;
+          // NIENTE GIOCATA non vuol dire schermata vuota. Prima qui si usciva
+          // con `return null` e spariva tutto il riquadro — selettore della
+          // quota compreso: l'utente restava senza il comando per abbassare la
+          // soglia e sbloccarsi. Ora il riquadro c'e' sempre, con il selettore
+          // e la spiegazione al posto della giocata.
+          if (verdictRaw.length === 0) return renderNessunaGiocata();
           // ============================================================
           // FILTRO STRUTTURALE: scarta picks che violano floor/ceiling
           // (es. MG 2-4 con floor=0, MG 1-3 con floor=2-tetto=4, U2.5 con tetto aperto)
@@ -290,7 +327,7 @@ export default function MatchDetail() {
             !!structural.structure.goal_ceiling_open,
           );
           const verdict = verdictRaw.filter((v) => !violatesFn(v.market));
-          if (verdict.length === 0) return null;
+          if (verdict.length === 0) return renderNessunaGiocata();
           const top = verdict[0];
           // Alternative ordinate per concordanza DESC, poi score DESC.
           // POI filtrate per coerenza: scartano contraddizioni col PICK e
