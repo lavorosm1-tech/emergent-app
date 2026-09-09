@@ -8,7 +8,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 
-import { api, Match, Prediction, MARKET_FAMILIES, ODD_LABELS, OddsKey, quickPredictionFamily, rankPicks, StructuralAnalysis, buildFinalVerdict, VerdictPick, getMarketOdd, filterCoherentAlternatives, violatesStructure, getMatchCautionWarning, MatchHistory } from "@/src/api";
+import { api, Match, Prediction, MARKET_FAMILIES, ODD_LABELS, OddsKey, quickPredictionFamily, rankPicks, StructuralAnalysis, buildFinalVerdict, VerdictPick, getMarketOdd, filterCoherentAlternatives, violatesStructure, getMatchCautionWarning, MatchHistory, getScenarioNote } from "@/src/api";
 import { marketStatsCache, mlStatsCache } from "@/src/utils/cache";
 import { useScrollMemory } from "@/src/utils/scrollMemory";
 import { colors } from "@/src/theme";
@@ -296,6 +296,25 @@ export default function MatchDetail() {
             </View>
           )}
         </View>
+
+        {/* ============ NOTA SCENARIO 1X2 (richiesta da Rossi il 09/09) ============
+            Calcolo separato e di sola lettura sulle quote gia' a sistema:
+            non alimenta ne' modifica il verdetto finale, il motore, l'IA o
+            lo storico. Solo promemoria dello scenario e dei mercati "da
+            manuale" indicati per quello scenario. */}
+        {(() => {
+          const note = getScenarioNote(match.odds);
+          if (!note) return null;
+          return (
+            <View style={styles.scenarioNoteBox}>
+              <Text style={styles.scenarioNoteTitle}>SCENARIO: {note.scenario.toUpperCase()}</Text>
+              <Text style={styles.scenarioNoteSub}>Mercati da considerare:</Text>
+              {note.markets.map((m, i) => (
+                <Text key={i} style={styles.scenarioNoteMarket}>• {m}</Text>
+              ))}
+            </View>
+          );
+        })()}
 
         {/* ============ VERDETTO FINALE (fusione 3 sistemi) ============ */}
         {(() => {
@@ -1251,6 +1270,15 @@ const styles = StyleSheet.create({
   srTag: { borderWidth: 1, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 5 },
   srTagTxt: { fontSize: 9, fontWeight: "900", letterSpacing: 0.3 },
   srBroken: { color: colors.textDim, fontSize: 10, marginTop: 4, fontStyle: "italic" },
+
+  // ===== NOTA SCENARIO 1X2 (promemoria, sola lettura) =====
+  scenarioNoteBox: {
+    backgroundColor: colors.surface, borderRadius: 16, padding: 14,
+    borderWidth: 1, borderColor: colors.textMuted, gap: 4,
+  },
+  scenarioNoteTitle: { color: colors.text, fontSize: 12, fontWeight: "900", letterSpacing: 0.8 },
+  scenarioNoteSub: { color: colors.textMuted, fontSize: 10, marginTop: 2 },
+  scenarioNoteMarket: { color: colors.textDim, fontSize: 11, lineHeight: 15 },
 
   // ===== VERDETTO FINALE =====
   verdictBlock: {

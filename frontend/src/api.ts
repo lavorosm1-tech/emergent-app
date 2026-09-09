@@ -1420,3 +1420,78 @@ function eligibleSystemsFor(market: string, preEligible: Set<string> | null): nu
   if (!preEligible) return 3;                       // nessuna informazione: come prima
   return preEligible.has(normalizeMarket(market)) ? 3 : 2;
 }
+
+// ============================================================================
+// NOTA SCENARIO 1X2 — richiesta da Rossi il 09/09.
+// Calcolo SEPARATO e di sola lettura: non tocca ne' alimenta il verdetto
+// finale, il motore, l'IA o lo storico. Serve solo a mostrare in alto, come
+// promemoria, lo scenario 1X2 della partita e i mercati "da manuale" indicati
+// per quello scenario, usando le quote gia' presenti a sistema.
+// Classificazione per FORMA (ordine tra le tre quote), non per soglie fisse:
+// vedi conversazione del 09/09 per la derivazione completa.
+// ============================================================================
+export type ScenarioNote = {
+  scenario: "Equilibrio" | "Progressione" | "Gap Tecnico";
+  favorita?: "1" | "2";
+  markets: string[];
+};
+
+export function getScenarioNote(odds: Odds): ScenarioNote | null {
+  const q1 = odds.odd_1, qx = odds.odd_X, q2 = odds.odd_2;
+  if (q1 == null || qx == null || q2 == null) return null;
+
+  const gg = odds.odd_GG;
+  const o25 = odds.odd_O25;
+
+  // EQUILIBRIO: la quota X e' la piu' alta delle tre (o pari alla piu' alta).
+  if (qx >= q1 && qx >= q2) {
+    let markets: string[];
+    if (gg != null && o25 != null && gg < 1.5 && o25 < 1.5) {
+      markets = ["MG 3-6 totali (equilibrio con gol molto probabili)"];
+    } else if (gg != null && o25 != null && gg < 1.8 && o25 < 1.8) {
+      markets = ["GG", "Over 2,5"];
+    } else {
+      markets = ["MG 2-4 totali (GG/Over fuori soglia: fallback su multigol)"];
+    }
+    return { scenario: "Equilibrio", markets };
+  }
+
+  // PROGRESSIONE / GAP TECNICO: ordine stretto favorita < X < sfavorita.
+  // La soglia che separa i due scenari e' sulla X (non sulla sfavorita):
+  // "progressione quando... la X non supera il 4, gap tecnico quando...
+  // la X e 2 sono superiori a 4" — se X > 4, la sfavorita lo e' per forza
+  // (essendo sempre > X nell'ordinamento), quindi basta guardare la X.
+  let favorita: "1" | "2" | null = null;
+  if (q1 < qx && qx < q2) { favorita = "1"; }
+  else if (q2 < qx && qx < q1) { favorita = "2"; }
+
+  if (favorita) {
+    const casaOspite = favorita === "1"
+      ? { fav: "CASA", sfav: "OSPITE" }
+      : { fav: "OSPITE", sfav: "CASA" };
+    if (qx <= 4) {
+      return {
+        scenario: "Progressione",
+        favorita,
+        markets: [
+          `MC ${casaOspite.fav} (1-3) + MC ${casaOspite.sfav} (0-2)`,
+          `${favorita} DNB oppure ${favorita} AH +0,75`,
+        ],
+      };
+    }
+    return {
+      scenario: "Gap Tecnico",
+      favorita,
+      markets: [
+        `${favorita} fisso`,
+        "GG + Over 2,5 (combo)",
+        `${favorita} AH -0,75`,
+      ],
+    };
+  }
+
+  // Caso residuo (X piu' bassa delle tre, pareggio piu' probabile di entrambi
+  // gli esiti secchi): trattato come Equilibrio, di cui e' un'espressione
+  // estrema di parita' — vedi conversazione del 09/09.
+  return { scenario: "Equilibrio", markets: ["GG", "Over 2,5"] };
+}
