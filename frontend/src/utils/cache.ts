@@ -87,3 +87,63 @@ export const selectedListCache = {
   set(list: any[]) { selectedListSnapshot = { list, ts: Date.now() }; },
   invalidate() { selectedListSnapshot = null; },
 };
+
+// ============================================================
+// 10/09/2026 — CACHE DEL DETTAGLIO PARTITA
+// ============================================================
+// Aprire una partita faceva partire SEI richieste (match-detail, ml-stats,
+// match-candidates, predict, match-history, odd-settings) e nessuna era in
+// cache: riaprire la stessa partita rifaceva tutto da capo, motore compreso.
+// Qui teniamo il "pacchetto" completo di una partita, con la stessa strategia
+// stale-while-revalidate della home.
+//
+// La chiave include la soglia di quota perche' l'analisi strutturale dipende
+// da quella: cambiando soglia serve un pacchetto diverso, non un aggiornamento
+// di quello vecchio.
+export type MatchBundle = {
+  match: any;
+  cands: any;
+  struct: any;
+  hist: any;
+};
+
+const matchBundles = new Map<string, { data: MatchBundle; ts: number }>();
+const BUNDLE_TTL_MS = 5 * 60 * 1000;
+
+function bundleKey(id: string, minOdd: number) {
+  return `${id}|${minOdd}`;
+}
+
+export const matchDetailCache = {
+  get(id: string, minOdd: number): MatchBundle | null {
+    const e = matchBundles.get(bundleKey(id, minOdd));
+    return e ? e.data : null;
+  },
+  isStale(id: string, minOdd: number): boolean {
+    const e = matchBundles.get(bundleKey(id, minOdd));
+    if (!e) return true;
+    return Date.now() - e.ts > BUNDLE_TTL_MS;
+  },
+  set(id: string, minOdd: number, data: MatchBundle) {
+    matchBundles.set(bundleKey(id, minOdd), { data, ts: Date.now() });
+  },
+  /** Senza id svuota tutto; con id butta via il pacchetto a TUTTE le soglie. */
+  invalidate(id?: string) {
+    if (!id) { matchBundles.clear(); return; }
+    for (const k of Array.from(matchBundles.keys())) {
+      if (k.startsWith(`${id}|`)) matchBundles.delete(k);
+    }
+  },
+};
+
+// Soglia di quota minima: e' una preferenza, cambia solo quando la cambia
+// l'utente. Veniva riletta dal server ad ogni apertura di partita, e per di
+// piu' arrivava DOPO il primo caricamento, facendo ripartire tutte e cinque
+// le chiamate quando la soglia salvata non era 1,40. Ora si legge una volta
+// per sessione.
+let oddSettingsSnapshot: { min_odd: number; options: number[] } | null = null;
+
+export const oddSettingsCache = {
+  get(): { min_odd: number; options: number[] } | null { return oddSettingsSnapshot; },
+  set(v: { min_odd: number; options: number[] }) { oddSettingsSnapshot = v; },
+};

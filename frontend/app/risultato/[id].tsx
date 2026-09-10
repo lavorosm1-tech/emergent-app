@@ -16,6 +16,7 @@ import { api, Match, MARKET_FAMILIES, ODD_LABELS, OddsKey } from "@/src/api";
 import { colors } from "@/src/theme";
 import { useToast } from "@/src/components/Toast";
 import BottomNav from "@/src/components/BottomNav";
+import { selectedListCache, matchesCache, marketStatsCache, mlStatsCache, matchDetailCache } from "@/src/utils/cache";
 
 const DIGITS = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
 // 18 risultati comuni nel calcio (raggruppati per popolarità)
@@ -40,21 +41,39 @@ export default function RisultatoPage() {
   useEffect(() => {
     if (!id) return;
     let active = true;
+
+    const applyMatch = (m: Match) => {
+      setMatch(m);
+      if (m.result) {
+        const [h, a] = m.result.split("-").map((n) => parseInt(n, 10));
+        if (!isNaN(h)) setHome(h); else setHome(null);
+        if (!isNaN(a)) setAway(a); else setAway(null);
+      }
+    };
+
+    // La lista delle partite selezionate serve solo a sapere QUAL E' LA
+    // PROSSIMA: e' la stessa lista da cui si e' arrivati, non ha senso
+    // riscaricarla ad ogni partita della sequenza. Con "salva e scorri" era
+    // una richiesta in piu' ad ogni salvataggio.
+    const cachedList = selectedListCache.get() as Match[] | null;
+    if (cachedList) setSelectedMatches(cachedList);
+
+    // Idem per la partita: se il dettaglio l'ha gia' caricata, e' gia' qui.
+    const cachedBundle = matchDetailCache.get(id as string, 0)
+      || matchDetailCache.get(id as string, 1.40);
+    if (cachedBundle?.match) applyMatch(cachedBundle.match as Match);
+
     (async () => {
       try {
         const m = await api.match(id as string);
-        if (!active) return;
-        setMatch(m);
-        if (m.result) {
-          const [h, a] = m.result.split("-").map((n) => parseInt(n, 10));
-          if (!isNaN(h)) setHome(h);
-          if (!isNaN(a)) setAway(a);
-        }
+        if (active) applyMatch(m);
       } catch (e) { console.warn(e); }
-      try {
-        const list = await api.selectedList();
-        if (active) setSelectedMatches(list);
-      } catch {}
+      if (!cachedList || selectedListCache.isStale()) {
+        try {
+          const list = await api.selectedList();
+          if (active) { selectedListCache.set(list); setSelectedMatches(list); }
+        } catch {}
+      }
     })();
     return () => { active = false; };
   }, [id]);
@@ -76,6 +95,19 @@ export default function RisultatoPage() {
     try {
       const result = `${home}-${away}`;
       await api.setResult(match.id, result);
+      // Il risultato cambia la lista, la card nella home e le statistiche:
+      // le cache che le contengono vanno buttate, altrimenti si torna
+      // indietro e si rivede il vecchio.
+      matchDetailCache.invalidate(match.id);
+      // La lista NON si invalida: si aggiorna sul posto col risultato appena
+      // salvato. Buttarla via costringerebbe la partita successiva della
+      // sequenza "salva e scorri" a riscaricarla ogni volta, che e' proprio
+      // la richiesta che stiamo togliendo.
+      const cur = selectedListCache.get() as Match[] | null;
+      if (cur) selectedListCache.set(cur.map((x) => (x.id === match.id ? { ...x, result } : x)));
+      matchesCache.invalidate(match.day);
+      marketStatsCache.invalidate();
+      mlStatsCache.invalidate();
       toast.show(`✓ Salvato: ${result}`, "success");
       if (goNext && nextMatchId) {
         setHome(null); setAway(null);

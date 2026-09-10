@@ -1,12 +1,33 @@
-import { pgGet, pgPatch, pgRpc, jsonResponse } from "./lib/supabaseRest";
-import { evaluateMarket, parseResult, STANDARD_MARKETS } from "./lib/marketEval";
+import { jsonResponse } from "./lib/supabaseRest";
+import { parseResult } from "./lib/marketEval";
+import { applyMatchResult } from "./lib/applyResult";
 
 /**
  * POST /match-result
  * Body: { "matchId": "<uuid>", "result": "2-1" }
  *
- * Porting di POST /matches/{match_id}/result (server.py) — salva il risultato
- * e aggiorna family_counters / market_scores (la parte di "apprendimento").
+ * Salva il risultato di una partita e fa imparare il sistema.
+ *
+ * 10/09/2026 — QUESTA FUNZIONE ORA DELEGA A applyMatchResult().
+ * Prima aveva una copia PROPRIA della logica di apprendimento, rimasta ferma
+ * a luglio: quando applyResult.ts e' stato scritto (con la protezione contro
+ * il doppio conteggio e l'apprendimento per scenario) e' stato collegato solo
+ * a results-apply / results-bulk / results-fetch, mentre questo endpoint —
+ * quello del pulsante "Salva" nella schermata risultato, il piu' usato — e'
+ * rimasto sulla vecchia strada. Due conseguenze concrete:
+ *
+ *  1) salvando da qui, `scenario_market_scores` e `system_scorecard` non
+ *     venivano MAI aggiornate: l'apprendimento incrementale era spento
+ *     proprio sulla via principale;
+ *  2) non c'era il controllo sul risultato precedente, quindi risalvare la
+ *     stessa partita contava tutto una seconda volta e correggere un
+ *     risultato sbagliato lasciava i conteggi vecchi al loro posto. E' lo
+ *     stesso bug trovato il 26/07 su Mariehamn-Ac Oulu, che credevamo chiuso.
+ *
+ * In piu' la vecchia versione aggiornava i contatori un mercato alla volta:
+ * fino a ~110 richieste in sequenza a Supabase prima di rispondere. Era li'
+ * che se ne andavano i secondi di attesa dopo ogni "Salva". applyMatchResult
+ * fa lo stesso lavoro con una sola RPC (`apply_family_result`).
  */
 export default async (req: Request): Promise<Response> => {
   if (req.method !== "POST") return jsonResponse({ error: "Usa POST" }, 405);
@@ -30,70 +51,10 @@ export default async (req: Request): Promise<Response> => {
   const [home, away] = parsed;
 
   try {
-    const matches = await pgGet(`matches?id=eq.${encodeURIComponent(matchId)}&select=*`);
-    if (!matches.length) return jsonResponse({ error: "Match not found" }, 404);
-    const match = matches[0];
-
-    await pgPatch(`matches?id=eq.${encodeURIComponent(matchId)}`, {
-      result,
-      updated_at: new Date().toISOString(),
-    });
-
-    const preds = await pgGet(
-      `predictions?match_id=eq.${encodeURIComponent(matchId)}&select=*&order=created_at.desc&limit=1`
-    );
-
-    let learning: any = { applied: false };
-
-    if (preds.length) {
-      const prediction = preds[0];
-      const family: string = prediction.family || "INSTABILE";
-      const manif: string | null = match.manifestazione || null;
-      const playable: { market: string }[] = prediction.playable_markets || [];
-      const marketsToUpdate = playable.map((m) => m.market).filter(Boolean);
-      if (prediction.main_prediction && !marketsToUpdate.includes(prediction.main_prediction)) {
-        marketsToUpdate.unshift(prediction.main_prediction);
-      }
-
-      // Contatore partite per famiglia (globale + per campionato)
-      await pgRpc("increment_family_counter", { p_family: family, p_league: null });
-      if (manif) {
-        await pgRpc("increment_family_counter", { p_family: family, p_league: manif });
-      }
-
-      // Mercati effettivamente pronosticati: aggiorna wins/losses
-      for (const market of marketsToUpdate) {
-        const outcome = evaluateMarket(market, home, away);
-        if (outcome === null) continue;
-        await pgRpc("increment_market_score", {
-          p_family: family, p_market: market, p_league: null, p_win: outcome,
-        });
-        if (manif) {
-          await pgRpc("increment_market_score", {
-            p_family: family, p_market: market, p_league: manif, p_win: outcome,
-          });
-        }
-      }
-
-      // Mercati standard NON pronosticati ma che avrebbero vinto -> "occasione persa"
-      for (const market of STANDARD_MARKETS) {
-        if (marketsToUpdate.includes(market)) continue;
-        const outcome = evaluateMarket(market, home, away);
-        if (outcome !== true) continue;
-        await pgRpc("increment_missed_win", { p_family: family, p_market: market, p_league: null });
-        if (manif) {
-          await pgRpc("increment_missed_win", { p_family: family, p_market: market, p_league: manif });
-        }
-      }
-
-      const mainPred = prediction.main_prediction;
-      learning = mainPred
-        ? { applied: true, main_prediction: mainPred, result_ok: evaluateMarket(mainPred, home, away) }
-        : { applied: false };
-    }
-
+    const learning = await applyMatchResult(matchId, result, home, away);
     return jsonResponse({ ok: true, learning });
   } catch (e: any) {
-    return jsonResponse({ error: e.message }, 502);
+    const msg = e?.message || "Errore";
+    return jsonResponse({ error: msg }, msg === "Match not found" ? 404 : 502);
   }
 };

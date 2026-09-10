@@ -160,7 +160,17 @@ const SPECIAL: { match: RegExp; build: (m: RegExpMatchArray) => string; area: st
   { match: /^AMINAZ/, build: () => "Amichevole Nazionali", area: "Mondo" },
   { match: /^AMICLUB/, build: () => "Amichevole Club", area: "Mondo" },
   { match: /^AMI/, build: () => "Amichevole", area: "Mondo" },
-  { match: /^EUCONFL/, build: () => "Euro Conference League", area: "Europa" },
+  // Competizioni UEFA per club. EUCHL ed EUEL non erano riconosciute da
+  // nessuna regola (/^CHAM/ non cattura EUCHL, /^EUR(?!O)/ non cattura EUEL):
+  // finivano in area "Mondo" col codice grezzo al posto del nome, quindi
+  // invisibili nei filtri e non cercabili. Vanno PRIMA della regola generica
+  // /^EU/ qui sotto.
+  { match: /^EUCONFL/, build: () => "UEFA Conference League", area: "Europa" },
+  { match: /^EUCHL/, build: () => "UEFA Champions League", area: "Europa" },
+  { match: /^EUEL/, build: () => "UEFA Europa League", area: "Europa" },
+  { match: /^EUNL/, build: () => "UEFA Nations League", area: "Europa" },
+  { match: /^EUSC/, build: () => "Supercoppa UEFA", area: "Europa" },
+  { match: /^EURO/, build: () => "Campionato Europeo", area: "Europa" },
   { match: /^CPSUDAM/, build: () => "Coppa Sudamerica", area: "America" },
   { match: /^CPLIB/, build: () => "Coppa Libertadores", area: "America" },
   { match: /^CPCAR/, build: () => "Coppa Caraibica", area: "America" },
@@ -169,6 +179,10 @@ const SPECIAL: { match: RegExp; build: (m: RegExpMatchArray) => string; area: st
   { match: /^EUR(?!O)/, build: () => "Europa League", area: "Europa" },
   { match: /^CONF/, build: () => "Conference League", area: "Europa" },
   { match: /^MOND/, build: () => "Mondiali", area: "Mondo" },
+  // Rete di sicurezza: un codice UEFA che non conosciamo ancora finisce
+  // comunque in Europa invece che in "Mondo". Da sostituire con la regola
+  // giusta appena sappiamo il codice esatto.
+  { match: /^EU/, build: () => "Competizione europea", area: "Europa" },
 ];
 
 export function parseLeagueCode(code: string): {

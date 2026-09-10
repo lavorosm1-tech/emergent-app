@@ -88,6 +88,83 @@ codice + `.md` insieme -> costruisce.
 
 ## Log (più recente in cima)
 
+### 2026-09-10 — Velocità di navigazione, ricerca/filtri, header a scomparsa
+
+Sessione partita da una lista di attriti segnalati da Rossi. Cinque interventi.
+
+**A) `match-result.ts` era rimasto sulla vecchia logica di apprendimento — bug,
+non solo lentezza.** Il 28/07 la logica è stata estratta in
+`lib/applyResult.ts` con la protezione contro il doppio conteggio e
+l'apprendimento per scenario, ma è stata collegata solo a `results-apply`,
+`results-bulk` e `results-fetch`. L'endpoint del pulsante **Salva** nella
+schermata risultato — quello usato di più — è rimasto sulla copia vecchia.
+Conseguenze: salvando da lì `scenario_market_scores` e `system_scorecard`
+**non venivano mai aggiornate** (apprendimento incrementale spento sulla via
+principale), e non c'era il controllo sul risultato precedente, quindi
+risalvare contava due volte e correggere lasciava i conteggi vecchi — lo stesso
+bug di Mariehamn-Ac Oulu che credevamo chiuso. Ora `match-result.ts` delega a
+`applyMatchResult()`. Effetto collaterale gradito: la vecchia versione
+aggiornava i contatori un mercato alla volta (~110 richieste in sequenza a
+Supabase), `applyMatchResult` usa una sola RPC `apply_family_result`.
+
+**LEZIONE**: quando si estrae della logica "per non rischiare di rompere il
+file già in produzione", va aperto subito un punto per collegarcelo. Qui il
+commento nel codice diceva esattamente questo, ed è rimasto lì sei settimane.
+
+**B) Apertura partita: da 6-11 richieste a 0 (se in cache).** Aprire una
+partita lanciava `match-detail`, `ml-stats` (500 righe), `match-candidates`,
+`predict` (motore sui 54 mercati), `match-history` e `odd-settings`, nessuna
+in cache. Peggio: `load` dipende da `minOdd`, che arrivava da `odd-settings`
+in modo asincrono, quindi con una soglia salvata diversa da 1,40 **tutte e
+cinque le chiamate ripartivano da capo**. Ora:
+
+- `matchDetailCache` in `utils/cache.ts` tiene il pacchetto completo per
+  (partita, soglia), stale-while-revalidate a 5 minuti come già fa la home;
+- la soglia si legge **una volta per sessione** (`oddSettingsCache` +
+  promessa condivisa), e il caricamento aspetta di conoscerla: niente più
+  doppio giro;
+- `ml-stats` legge `marketStatsCache`, che il file importava solo per
+  invalidarla.
+
+**C) Schedina e schermata risultato.** `selected.tsx` faceva `setLoading(true)`
+e una fetch bloccante a ogni ingresso ignorando `selectedListCache`: ora
+stale-while-revalidate. `risultato/[id].tsx` riscaricava la lista dei
+selezionati a ogni partita della sequenza "salva e scorri" solo per sapere
+quale fosse la prossima: ora la legge dalla cache e, dopo il salvataggio, la
+**aggiorna sul posto** invece di invalidarla (invalidarla avrebbe rimesso la
+richiesta esattamente dove la stavamo togliendo). Animazione dello Stack da
+220 a 160 ms.
+
+**D) Ricerca e filtri.** La ricerca confrontava solo `squadra1 + squadra2 +
+manifestazione`, e `manifestazione` contiene il **codice** (`ITA1`), non il
+nome: cercare "Italia" o "Francia" non poteva trovare nulla. Ora entrano nel
+confronto anche il nome leggibile, la nazione e l'area. La barra di ricerca
+era un cerchio da 40px che apriva un campo stretto: ora è a tutta larghezza,
+sempre visibile, testo 16px. La modale filtri era un riquadro centrato
+all'85%: ora è a tutto schermo, con azzera + conteggio partite in fondo, e una
+terza sezione **COMPETIZIONE** che prima non esisteva (le coppe europee, che
+non hanno una nazione, non erano raggiungibili da nessun filtro).
+
+**E) Codici UEFA mancanti.** Era mappato solo `EUCONFL`: `/^CHAM/` non cattura
+`EUCHL` e `/^EUR(?!O)/` non cattura `EUEL`, quindi finivano in area "Mondo"
+col codice grezzo al posto del nome. Aggiunti `EUCHL`, `EUEL`, `EUNL`, `EUSC`,
+`EURO`, più una rete di sicurezza `/^EU/` → "Competizione europea" per i codici
+che ancora non conosciamo. Allineate le due copie della mappa:
+`frontend/src/utils/leagues.ts` e `netlify/functions/lib/leagueContext.ts`
+(quest'ultima alimenta il prompt dell'IA). `backend/server.py` è morto, ignorato.
+
+**F) Header a scomparsa.** Header e striscia dei giorni collassano scrollando
+verso il basso e ricompaiono scrollando verso l'alto, riusando la stessa
+`SharedValue` di reanimated che già comanda la BottomNav (soglia 12px, già
+agganciata all'`onScroll` della lista). Il collasso usa un `marginTop` negativo
+pari all'altezza misurata con `onLayout`, così lo spazio viene restituito
+davvero alla lista invece di lasciare un buco come farebbe un `translateY`.
+
+**Verifiche fatte**: `parseLeagueCode` eseguita davvero sui codici nuovi e su
+quelli vecchi (nessuna regressione su ITA1/FRA1/AMINAZ/CPLIB/BRA1RS);
+`tsc --noEmit` confrontato con la baseline — 18 errori preesistenti prima, 18
+dopo, nessuno nuovo; `expo export --platform web` completato senza errori.
+
 ### 2026-07-28 — Salvataggio risultato: da ~110 chiamate a 1
 
 L'unica parte davvero pesante rimasta su Netlify. Per ogni risultato salvato,

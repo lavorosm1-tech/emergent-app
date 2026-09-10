@@ -9,13 +9,52 @@ import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 
 import { api, Match, Prediction, MARKET_FAMILIES, ODD_LABELS, OddsKey, quickPredictionFamily, rankPicks, StructuralAnalysis, buildFinalVerdict, VerdictPick, getMarketOdd, filterCoherentAlternatives, violatesStructure, getMatchCautionWarning, MatchHistory, getScenarioNote } from "@/src/api";
-import { marketStatsCache, mlStatsCache } from "@/src/utils/cache";
+import { marketStatsCache, mlStatsCache, matchDetailCache, oddSettingsCache } from "@/src/utils/cache";
 import { useScrollMemory } from "@/src/utils/scrollMemory";
 import { colors } from "@/src/theme";
 import { ScoreInput } from "@/src/components/ScoreInput";
 import { FamilyLegendModal } from "@/src/components/FamilyLegendModal";
 import { predictionQueue } from "@/src/utils/predictionQueue";
 import BottomNav from "@/src/components/BottomNav";
+
+/**
+ * La soglia di quota si legge UNA VOLTA per sessione. Se due schermate la
+ * chiedono insieme condividono la stessa promessa, cosi' non partono due
+ * richieste per lo stesso numero.
+ */
+const ODD_FALLBACK = { min_odd: 1.40, options: [1.40, 1.50, 1.60, 1.75] };
+let oddSettingsPromise: Promise<{ min_odd: number; options: number[] }> | null = null;
+
+function getOddSettingsOnce(): Promise<{ min_odd: number; options: number[] }> {
+  const cached = oddSettingsCache.get();
+  if (cached) return Promise.resolve(cached);
+  if (!oddSettingsPromise) {
+    oddSettingsPromise = api.getMinOdd()
+      .then((r) => {
+        const v = {
+          min_odd: r?.min_odd || ODD_FALLBACK.min_odd,
+          options: r?.options?.length ? r.options : ODD_FALLBACK.options,
+        };
+        oddSettingsCache.set(v);
+        return v;
+      })
+      .catch(() => {
+        oddSettingsPromise = null; // un errore non deve congelare il fallback
+        return ODD_FALLBACK;
+      });
+  }
+  return oddSettingsPromise;
+}
+
+/** Le statistiche mercati sono le stesse per tutta l'app: se la cache della
+ *  home e' ancora fresca non ha senso riscaricare 500 righe. */
+function getMarketStatsCached(): Promise<{ markets: any[] }> {
+  const c = marketStatsCache.get();
+  if (c && !marketStatsCache.isStale()) return Promise.resolve({ markets: c });
+  return api.marketStats()
+    .then((s) => { marketStatsCache.set(s?.markets || []); return { markets: s?.markets || [] }; })
+    .catch(() => ({ markets: marketStatsCache.get() || [] }));
+}
 
 export default function MatchDetail() {
   const { id, gen } = useLocalSearchParams<{ id: string; gen?: string }>();
@@ -39,46 +78,77 @@ export default function MatchDetail() {
   // FASE 2 — soglia di quota minima scelta dall'utente. Alzandola si compra
   // quota pagandola in precisione: misurato su 583 partite storiche,
   // 1,40 -> 62,3% | 1,50 -> 61,6% | 1,60 -> 54,0% | 1,75 -> 49,7%.
-  const [minOdd, setMinOdd] = useState<number>(1.40);
-  const [minOddOptions, setMinOddOptions] = useState<number[]>([1.40, 1.50, 1.60, 1.75]);
+  const oddCached = oddSettingsCache.get();
+  const [minOdd, setMinOdd] = useState<number>(oddCached?.min_odd ?? ODD_FALLBACK.min_odd);
+  const [minOddOptions, setMinOddOptions] = useState<number[]>(oddCached?.options ?? ODD_FALLBACK.options);
+  // Finche' non sappiamo la soglia vera non ha senso caricare: caricare col
+  // default e poi rifare tutto e' esattamente il doppio caricamento che
+  // rendeva lenta l'apertura di ogni partita.
+  const [oddReady, setOddReady] = useState<boolean>(!!oddCached);
 
-  const load = useCallback(async () => {
+  /** Riversa nello stato un pacchetto gia' pronto (dalla cache o dalla rete). */
+  const applyBundle = useCallback((b: { match: any; cands: any; struct: any; hist: any }) => {
+    setMatch(b.match);
+    setPrediction(b.match?.prediction ?? null);
+    setResult(b.match?.result || "");
+    setYellowCandidates(b.cands?.candidates || []);
+    setStructural(b.struct as StructuralAnalysis | null);
+    setHistory(b.hist as MatchHistory | null);
+  }, []);
+
+  // STALE-WHILE-REVALIDATE, come gia' fa la home.
+  //  - se il pacchetto e' in cache lo mostro SUBITO, senza spinner;
+  //  - se e' ancora fresco (<5 min) non chiamo nemmeno il server;
+  //  - se e' vecchio aggiorno in sottofondo, con i dati vecchi gia' a schermo.
+  const load = useCallback(async (force = false) => {
+    if (!id) return;
+    const cached = matchDetailCache.get(id, minOdd);
+    if (cached) {
+      applyBundle(cached);
+      setMarketStats(marketStatsCache.get() || []);
+      setLoading(false);
+      if (!force && !matchDetailCache.isStale(id, minOdd)) return;
+    }
     try {
       const [m, stats, cands, struct, hist] = await Promise.all([
-        api.match(id!),
-        api.marketStats().catch(() => ({ markets: [], family_totals: {} })),
-        api.matchCandidates(id!).catch(() => ({ candidates: [], family: null, family_total: 0 })),
-        api.matchStructural(id!, minOdd).catch(() => null),
-        api.matchHistory(id!).catch(() => null),
+        api.match(id),
+        getMarketStatsCached(),
+        api.matchCandidates(id).catch(() => ({ candidates: [], family: null, family_total: 0 })),
+        api.matchStructural(id, minOdd).catch(() => null),
+        api.matchHistory(id).catch(() => null),
       ]);
-      setMatch(m);
-      setPrediction(m.prediction ?? null);
-      setResult(m.result || "");
+      const bundle = { match: m, cands, struct, hist };
+      matchDetailCache.set(id, minOdd, bundle);
+      applyBundle(bundle);
       setMarketStats(stats?.markets || []);
-      setYellowCandidates(cands?.candidates || []);
-      setStructural(struct as StructuralAnalysis | null);
-      setHistory(hist as MatchHistory | null);
     } catch (e: any) {
-      Alert.alert("Errore", e?.message || "Caricamento");
+      // Con dati gia' a schermo un errore di rete non deve buttare un alert
+      // in faccia: si tiene quello che c'e'.
+      if (!cached) Alert.alert("Errore", e?.message || "Caricamento");
     } finally {
       setLoading(false);
     }
-  }, [id, minOdd]);
+  }, [id, minOdd, applyBundle]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { if (oddReady) load(); }, [load, oddReady]);
 
-  // Soglia salvata nelle impostazioni: la leggiamo una volta all'apertura.
+  // Soglia salvata nelle impostazioni: una volta per SESSIONE, non per partita.
   useEffect(() => {
-    api.getMinOdd()
-      .then((r) => {
-        if (r?.options?.length) setMinOddOptions(r.options);
-        if (r?.min_odd) setMinOdd(r.min_odd);
-      })
-      .catch(() => { /* si resta sul default 1.40 */ });
-  }, []);
+    if (oddReady) return;
+    let alive = true;
+    getOddSettingsOnce().then((r) => {
+      if (!alive) return;
+      setMinOddOptions(r.options);
+      setMinOdd(r.min_odd);
+      setOddReady(true);
+    });
+    return () => { alive = false; };
+  }, [oddReady]);
 
   const changeMinOdd = useCallback((value: number) => {
     setMinOdd(value);                 // il ricalcolo parte da solo: `load` dipende da minOdd
+    const prev = oddSettingsCache.get();
+    oddSettingsCache.set({ min_odd: value, options: prev?.options ?? ODD_FALLBACK.options });
     api.setMinOdd(value).catch(() => { /* la scelta vale comunque per questa sessione */ });
   }, []);
 
@@ -162,7 +232,12 @@ export default function MatchDetail() {
       setAiPending(wasPending);
       // If a background prediction just finished, refresh the data
       if (!wasPending && match && !match.prediction && prediction === null) {
-        try { const m = await api.match(id); setMatch(m); setPrediction(m.prediction ?? null); } catch {}
+        try {
+          const m = await api.match(id);
+          setMatch(m);
+          setPrediction(m.prediction ?? null);
+          matchDetailCache.invalidate(id); // il pacchetto in cache non ha il pronostico appena arrivato
+        } catch {}
       }
     };
     updateState();
@@ -179,6 +254,7 @@ export default function MatchDetail() {
         if (m.prediction) {
           setMatch(m);
           setPrediction(m.prediction);
+          matchDetailCache.invalidate(id);
           clearInterval(interval);
         }
       } catch {}
@@ -194,7 +270,8 @@ export default function MatchDetail() {
     predictionQueue.enqueue(id, forceRegen).then((p) => {
       if (p) {
         setPrediction(p);
-        load();
+        matchDetailCache.invalidate(id);
+        load(true);
       }
     });
   };
@@ -217,6 +294,7 @@ export default function MatchDetail() {
       const out = await api.setResult(id, result.trim());
       marketStatsCache.invalidate();
       mlStatsCache.invalidate();
+      matchDetailCache.invalidate(id);
       if (out.learning?.applied) {
         const ok = out.learning.result_ok;
         Alert.alert(
@@ -226,7 +304,7 @@ export default function MatchDetail() {
       } else {
         Alert.alert("Salvato", "Risultato salvato");
       }
-      await load();
+      await load(true);
     } catch (e: any) {
       Alert.alert("Errore", e?.message);
     }

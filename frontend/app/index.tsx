@@ -4,6 +4,7 @@ import {
   TextInput, RefreshControl, Modal, FlatList, Alert, useWindowDimensions, Platform, BackHandler,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import Animated, { useAnimatedStyle } from "react-native-reanimated";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter, useFocusEffect } from "expo-router";
@@ -126,10 +127,10 @@ function evalLocal(market: string, home: number, away: number): boolean | null {
 let savedScrollY = 0;
 let savedQuery = "";
 let savedSelectedDay: string | null = null;
-let savedShowSearch = false;
 let savedTierFilter: "top" | null = null;
 let savedAreaFilter: string | null = null;
 let savedCountryFilter: string | null = null;
+let savedCompetitionFilter: string | null = null;
 let savedDidInit = false;
 
 export default function Home() {
@@ -144,7 +145,6 @@ export default function Home() {
   const [days, setDays] = useState<string[]>([]);
   const [selectedDay, setSelectedDay] = useState<string | null>(savedSelectedDay);
   const [query, setQuery] = useState(savedQuery);
-  const [showSearch, setShowSearch] = useState(savedShowSearch);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [calOpen, setCalOpen] = useState(false);
@@ -153,6 +153,7 @@ export default function Home() {
   const [tierFilter, setTierFilter] = useState<"top" | null>(savedTierFilter);
   const [areaFilter, setAreaFilter] = useState<string | null>(savedAreaFilter);
   const [countryFilter, setCountryFilter] = useState<string | null>(savedCountryFilter);
+  const [competitionFilter, setCompetitionFilter] = useState<string | null>(savedCompetitionFilter);
   const [sortByTime, setSortByTime] = useState(false);
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   const [marketStats, setMarketStats] = useState<{ market: string; win_rate: number; total: number; family: string }[]>([]);
@@ -163,10 +164,10 @@ export default function Home() {
   // torna su questo schermo il valore e' ancora quello di prima.
   useEffect(() => { savedQuery = query; }, [query]);
   useEffect(() => { savedSelectedDay = selectedDay; }, [selectedDay]);
-  useEffect(() => { savedShowSearch = showSearch; }, [showSearch]);
   useEffect(() => { savedTierFilter = tierFilter; }, [tierFilter]);
   useEffect(() => { savedAreaFilter = areaFilter; }, [areaFilter]);
   useEffect(() => { savedCountryFilter = countryFilter; }, [countryFilter]);
+  useEffect(() => { savedCompetitionFilter = competitionFilter; }, [competitionFilter]);
   useEffect(() => { savedDidInit = didInit; }, [didInit]);
 
   // Subscribe to background prediction queue → re-render to show spinners on pending matches
@@ -294,17 +295,25 @@ export default function Home() {
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return matches.filter((m) => {
+      const lc = parseLeagueCode(m.manifestazione);
       if (q.length >= 2) {
-        const hay = `${m.squadra1} ${m.squadra2} ${m.manifestazione}`.toLowerCase();
+        // La ricerca guardava solo il CODICE della manifestazione ("ITA1"),
+        // quindi cercare "Italia" o "Francia" non poteva trovare niente.
+        // Ora entrano nel confronto anche il nome leggibile ("Italia · Prima
+        // Lega"), la nazione e l'area geografica.
+        const hay = [
+          m.squadra1, m.squadra2, m.manifestazione,
+          lc.label, lc.country || "", lc.area,
+        ].join(" ").toLowerCase();
         if (!hay.includes(q)) return false;
       }
-      const lc = parseLeagueCode(m.manifestazione);
+      if (competitionFilter && m.manifestazione !== competitionFilter) return false;
       if (countryFilter && lc.country !== countryFilter) return false;
       if (areaFilter && lc.area !== areaFilter) return false;
       if (tierFilter === "top" && !lc.isTop) return false;
       return true;
     });
-  }, [matches, query, tierFilter, areaFilter, countryFilter]);
+  }, [matches, query, tierFilter, areaFilter, countryFilter, competitionFilter]);
 
   const grouped = useMemo(() => {
     if (sortByTime) {
@@ -350,7 +359,7 @@ export default function Home() {
       toast.show("Selezione svuotata", "info");
     },
   });
-  const goToToday = () => { const d = nearestDay(days); setSelectedDay(d); setCountryFilter(null); setAreaFilter(null); setQuery(""); setTierFilter(null); };
+  const goToToday = () => { const d = nearestDay(days); setSelectedDay(d); setCountryFilter(null); setAreaFilter(null); setCompetitionFilter(null); setQuery(""); setTierFilter(null); };
 
   // Reset scroll when user actively changes filters or day (NOT when returning
   // from match detail o dalla Schedina). Questo effetto gira anche al primo
@@ -365,7 +374,7 @@ export default function Home() {
     }
     savedScrollY = 0;
     scrollRef.current?.scrollTo({ y: 0, animated: false });
-  }, [selectedDay, query, tierFilter, areaFilter, countryFilter, sortByTime]);
+  }, [selectedDay, query, tierFilter, areaFilter, countryFilter, competitionFilter, sortByTime]);
 
   // Day strip: 5 visible days centered around selectedDay
   const dayStrip = useMemo(() => {
@@ -378,11 +387,49 @@ export default function Home() {
   // Areas + countries from current matches
   const availableAreas = useMemo(() => Array.from(new Set(matches.map(m => parseLeagueCode(m.manifestazione).area))).sort(), [matches]);
   const availableCountries = useMemo(() => Array.from(new Set(matches.map(m => parseLeagueCode(m.manifestazione).country).filter(Boolean) as string[])).sort(), [matches]);
+  // Competizioni presenti nel giorno, col nome leggibile e il numero di
+  // partite. Prima non c'era modo di filtrare per competizione: le coppe
+  // europee, che non hanno una "nazione", erano irraggiungibili dai filtri.
+  const availableCompetitions = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const m of matches) map.set(m.manifestazione, (map.get(m.manifestazione) || 0) + 1);
+    return Array.from(map.entries())
+      .map(([code, n]) => ({ code, n, label: parseLeagueCode(code).label }))
+      .sort((a, b) => a.label.localeCompare(b.label));
+  }, [matches]);
+
+  // Quanti filtri sono attivi: serve al pallino sul pulsante FILTRI.
+  const activeFilterCount = (areaFilter ? 1 : 0) + (countryFilter ? 1 : 0) + (competitionFilter ? 1 : 0);
+
+  // ============================================================
+  // HEADER A SCOMPARSA (richiesta di Rossi, 10/09/2026)
+  // ============================================================
+  // Riusa la stessa `visible` di reanimated che gia' comanda la BottomNav:
+  // scroll verso il basso -> sparisce, verso l'alto -> ricompare, ed e' gia'
+  // agganciata all'onScroll della lista, con soglia di 12px per non fare
+  // lampeggiare tutto al minimo movimento.
+  //
+  // Il collasso e' fatto con un marginTop negativo pari all'altezza misurata:
+  // cosi' lo spazio viene restituito davvero alla lista, invece di lasciare
+  // un buco come farebbe un semplice translateY.
+  const [headerH, setHeaderH] = useState(0);
+  const [dayStripH, setDayStripH] = useState(0);
+  const headerAnim = useAnimatedStyle(() => ({
+    marginTop: headerH ? (bottomNav.visible.value - 1) * headerH : 0,
+    opacity: bottomNav.visible.value,
+  }));
+  const dayStripAnim = useAnimatedStyle(() => ({
+    marginTop: dayStripH ? (bottomNav.visible.value - 1) * dayStripH : 0,
+    opacity: bottomNav.visible.value,
+  }));
 
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
-      {/* Header */}
-      <View style={styles.header}>
+      {/* Header — collassa scrollando verso il basso */}
+      <Animated.View
+        style={[styles.header, headerAnim]}
+        onLayout={(e) => { const h = e.nativeEvent.layout.height; if (h && Math.abs(h - headerH) > 1) setHeaderH(h); }}
+      >
         <View style={styles.titleRow}>
           <Ionicons name="trophy" size={20} color={colors.primary} />
           <Text style={styles.title}>ScoreBlast</Text>
@@ -397,12 +444,15 @@ export default function Home() {
             <Ionicons name="chevron-down" size={14} color={colors.text} />
           </TouchableOpacity>
         </View>
-      </View>
+      </Animated.View>
 
       <View style={isDesktop ? styles.desktopWrap : { flex: 1 }}>
 
-      {/* Day strip */}
-      <View style={styles.dayStrip}>
+      {/* Day strip — collassa insieme all'header */}
+      <Animated.View
+        style={[styles.dayStrip, dayStripAnim]}
+        onLayout={(e) => { const h = e.nativeEvent.layout.height; if (h && Math.abs(h - dayStripH) > 1) setDayStripH(h); }}
+      >
         {dayStrip.map((d) => {
           const dt = parseISO(d); const active = d === selectedDay;
           if (active) {
@@ -429,16 +479,36 @@ export default function Home() {
             <Text style={styles.calSub}>{selectedDay ? fmtDayLong(selectedDay).split(" ").slice(1).join(" ") : ""}</Text>
           </View>
         </TouchableOpacity>
+      </Animated.View>
+
+      {/* Barra di ricerca: sempre visibile e a tutta larghezza. Prima era un
+          cerchio da 40px che apriva un campo stretto solo dopo il tap. */}
+      <View style={styles.searchBar}>
+        <Ionicons name="search" size={20} color={colors.textMuted} />
+        <TextInput
+          placeholder="Cerca squadra, lega o nazione"
+          placeholderTextColor={colors.textDim}
+          value={query}
+          onChangeText={setQuery}
+          style={styles.searchInput}
+          testID="search-input"
+          returnKeyType="search"
+        />
+        {query.length > 0 && (
+          <TouchableOpacity onPress={() => setQuery("")} hitSlop={10} testID="search-clear">
+            <Ionicons name="close-circle" size={20} color={colors.textMuted} />
+          </TouchableOpacity>
+        )}
       </View>
 
       {/* Filter row */}
       <View style={styles.filterRow}>
-        <TouchableOpacity onPress={() => setShowSearch(!showSearch)} style={styles.searchPill} testID="filter-search">
-          <Ionicons name="search" size={16} color={colors.textMuted} />
-        </TouchableOpacity>
-        <TouchableOpacity onPress={() => setFiltersOpen(true)} style={styles.filterPill} testID="filter-open">
-          <Text style={styles.filterPillTxt}>FILTRI</Text>
-          <Ionicons name="options-outline" size={14} color={colors.text} />
+        <TouchableOpacity onPress={() => setFiltersOpen(true)} style={[styles.filterPill, activeFilterCount > 0 && { borderColor: colors.primary }]} testID="filter-open">
+          <Text style={[styles.filterPillTxt, activeFilterCount > 0 && { color: colors.primary }]}>FILTRI</Text>
+          {activeFilterCount > 0 && (
+            <View style={styles.filterBadge}><Text style={styles.filterBadgeTxt}>{activeFilterCount}</Text></View>
+          )}
+          <Ionicons name="options-outline" size={14} color={activeFilterCount > 0 ? colors.primary : colors.text} />
         </TouchableOpacity>
         <TouchableOpacity onPress={() => setTierFilter(tierFilter === "top" ? null : "top")} style={[styles.filterPill, tierFilter === "top" && styles.filterPillActive]} testID="filter-top">
           {tierFilter === "top" ? (
@@ -458,14 +528,6 @@ export default function Home() {
           </TouchableOpacity>
         )}
       </View>
-
-      {showSearch && (
-        <View style={styles.searchBar}>
-          <Ionicons name="search" size={14} color={colors.textMuted} />
-          <TextInput placeholder="Cerca squadra o lega" placeholderTextColor={colors.textDim} value={query} onChangeText={setQuery} style={styles.searchInput} testID="search-input" autoFocus />
-          {query.length > 0 && <TouchableOpacity onPress={() => setQuery("")}><Ionicons name="close" size={16} color={colors.textMuted} /></TouchableOpacity>}
-        </View>
-      )}
 
       {/* Counter row */}
       <View style={styles.countRow}>
@@ -592,34 +654,74 @@ export default function Home() {
         </TouchableOpacity>
       </Modal>
 
-      {/* Filters modal */}
-      <Modal visible={filtersOpen} transparent animationType="slide" onRequestClose={() => setFiltersOpen(false)}>
-        <TouchableOpacity style={styles.modalBg} activeOpacity={1} onPress={() => setFiltersOpen(false)}>
-          <View style={[styles.modalBox, { maxHeight: "85%" }]}>
-            <Text style={styles.modalTitle}>Filtri</Text>
-            <ScrollView>
-              <Text style={styles.filtersSection}>AREA GEOGRAFICA</Text>
-              <View style={styles.chipRow}>
-                <TouchableOpacity onPress={() => setAreaFilter(null)} style={[styles.chip, !areaFilter && styles.chipActive]}><Text style={[styles.chipTxt, !areaFilter && { color: "#FFF" }]}>TUTTE</Text></TouchableOpacity>
-                {availableAreas.map(a => (
-                  <TouchableOpacity key={a} onPress={() => setAreaFilter(a === areaFilter ? null : a)} style={[styles.chip, areaFilter === a && styles.chipActive]} testID={`area-${a}`}>
-                    <Text style={[styles.chipTxt, areaFilter === a && { color: "#FFF" }]}>{a.toUpperCase()}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-              <Text style={styles.filtersSection}>NAZIONE</Text>
-              <View style={styles.chipRow}>
-                <TouchableOpacity onPress={() => setCountryFilter(null)} style={[styles.chip, !countryFilter && styles.chipActive]}><Text style={[styles.chipTxt, !countryFilter && { color: "#FFF" }]}>TUTTE</Text></TouchableOpacity>
-                {availableCountries.map(c => (
-                  <TouchableOpacity key={c} onPress={() => setCountryFilter(c === countryFilter ? null : c)} style={[styles.chip, countryFilter === c && styles.chipActive]} testID={`country-${c}`}>
-                    <Text style={[styles.chipTxt, countryFilter === c && { color: "#FFF" }]}>{c.toUpperCase()}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </ScrollView>
-            <TouchableOpacity onPress={() => setFiltersOpen(false)} style={styles.applyBtn}><Text style={styles.applyBtnTxt}>APPLICA</Text></TouchableOpacity>
+      {/* Filters modal — a tutto schermo (prima era un riquadro centrato
+          all'85% dell'altezza, con le chip schiacciate su poche righe). */}
+      <Modal visible={filtersOpen} animationType="slide" onRequestClose={() => setFiltersOpen(false)}>
+        <SafeAreaView style={styles.filtersScreen} edges={["top", "bottom"]}>
+          <View style={styles.filtersHeader}>
+            <Text style={styles.filtersTitle}>Filtri</Text>
+            <TouchableOpacity onPress={() => setFiltersOpen(false)} hitSlop={12} testID="filters-close">
+              <Ionicons name="close" size={26} color={colors.text} />
+            </TouchableOpacity>
           </View>
-        </TouchableOpacity>
+
+          <ScrollView contentContainerStyle={styles.filtersBody} keyboardShouldPersistTaps="handled">
+            <Text style={styles.filtersSection}>AREA GEOGRAFICA</Text>
+            <View style={styles.chipRow}>
+              <TouchableOpacity onPress={() => setAreaFilter(null)} style={[styles.chip, !areaFilter && styles.chipActive]}><Text style={[styles.chipTxt, !areaFilter && { color: "#FFF" }]}>TUTTE</Text></TouchableOpacity>
+              {availableAreas.map(a => (
+                <TouchableOpacity key={a} onPress={() => setAreaFilter(a === areaFilter ? null : a)} style={[styles.chip, areaFilter === a && styles.chipActive]} testID={`area-${a}`}>
+                  <Text style={[styles.chipTxt, areaFilter === a && { color: "#FFF" }]}>{a.toUpperCase()}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <Text style={styles.filtersSection}>NAZIONE</Text>
+            <View style={styles.chipRow}>
+              <TouchableOpacity onPress={() => setCountryFilter(null)} style={[styles.chip, !countryFilter && styles.chipActive]}><Text style={[styles.chipTxt, !countryFilter && { color: "#FFF" }]}>TUTTE</Text></TouchableOpacity>
+              {availableCountries.map(c => (
+                <TouchableOpacity key={c} onPress={() => setCountryFilter(c === countryFilter ? null : c)} style={[styles.chip, countryFilter === c && styles.chipActive]} testID={`country-${c}`}>
+                  <Text style={[styles.chipTxt, countryFilter === c && { color: "#FFF" }]}>{c.toUpperCase()}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <Text style={styles.filtersSection}>COMPETIZIONE</Text>
+            <View style={styles.compList}>
+              <TouchableOpacity onPress={() => setCompetitionFilter(null)} style={[styles.compRow, !competitionFilter && styles.compRowActive]} testID="comp-all">
+                <Text style={[styles.compTxt, !competitionFilter && { color: colors.primary }]}>Tutte le competizioni</Text>
+                <Text style={styles.compCount}>{matches.length}</Text>
+              </TouchableOpacity>
+              {availableCompetitions.map(({ code, n, label }) => (
+                <TouchableOpacity
+                  key={code}
+                  onPress={() => setCompetitionFilter(code === competitionFilter ? null : code)}
+                  style={[styles.compRow, competitionFilter === code && styles.compRowActive]}
+                  testID={`comp-${code}`}
+                >
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.compTxt, competitionFilter === code && { color: colors.primary }]} numberOfLines={1}>{label}</Text>
+                    <Text style={styles.compCode}>{code}</Text>
+                  </View>
+                  <Text style={styles.compCount}>{n}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </ScrollView>
+
+          <View style={styles.filtersFooter}>
+            <TouchableOpacity
+              onPress={() => { setAreaFilter(null); setCountryFilter(null); setCompetitionFilter(null); }}
+              style={styles.clearFiltersBtn}
+              testID="filters-clear"
+            >
+              <Text style={styles.clearFiltersTxt}>AZZERA</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => setFiltersOpen(false)} style={[styles.applyBtn, { flex: 1, marginTop: 0 }]}>
+              <Text style={styles.applyBtnTxt}>MOSTRA {filtered.length} PARTITE</Text>
+            </TouchableOpacity>
+          </View>
+        </SafeAreaView>
       </Modal>
     </SafeAreaView>
   );
@@ -647,13 +749,16 @@ const styles = StyleSheet.create({
   calMain: { color: colors.primary, fontSize: 10, fontWeight: "900", letterSpacing: 0.5 },
   calSub: { color: colors.primary, fontSize: 12, fontWeight: "800" },
   filterRow: { flexDirection: "row", paddingHorizontal: 16, gap: 8, alignItems: "center", paddingBottom: 8 },
-  searchPill: { width: 40, height: 40, borderRadius: 999, backgroundColor: colors.surfaceHi, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center" },
+
   filterPill: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: colors.surfaceHi, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 999, overflow: "hidden" },
   filterPillActive: { borderColor: colors.primary, padding: 0 },
   filterPillGrad: { paddingHorizontal: 14, paddingVertical: 10, borderRadius: 999 },
   filterPillTxt: { color: colors.text, fontSize: 11, fontWeight: "900", letterSpacing: 0.5 },
-  searchBar: { flexDirection: "row", alignItems: "center", gap: 8, marginHorizontal: 16, marginBottom: 8, backgroundColor: colors.surfaceHi, borderRadius: 10, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 12, paddingVertical: 8 },
-  searchInput: { flex: 1, color: colors.text, fontSize: 14 },
+  // Barra di ricerca: piu' alta e a tutta larghezza, sempre a schermo.
+  searchBar: { flexDirection: "row", alignItems: "center", gap: 10, marginHorizontal: 16, marginBottom: 10, backgroundColor: colors.surfaceHi, borderRadius: 14, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 16, paddingVertical: 14 },
+  searchInput: { flex: 1, color: colors.text, fontSize: 16, fontWeight: "600", outlineStyle: "none" } as any,
+  filterBadge: { minWidth: 18, height: 18, borderRadius: 9, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center", paddingHorizontal: 4 },
+  filterBadgeTxt: { color: "#FFF", fontSize: 10, fontWeight: "900" },
   countRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 16, paddingVertical: 8 },
   countTxt: { color: colors.textMuted, fontSize: 13 },
   countNum: { color: colors.text, fontWeight: "900" },
@@ -699,6 +804,19 @@ const styles = StyleSheet.create({
   chip: { backgroundColor: colors.surfaceHi, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 999 },
   chipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
   chipTxt: { color: colors.text, fontSize: 11, fontWeight: "800", letterSpacing: 0.5 },
-  applyBtn: { backgroundColor: colors.primary, paddingVertical: 12, borderRadius: 10, marginTop: 12, alignItems: "center" },
+  filtersScreen: { flex: 1, backgroundColor: colors.bg },
+  filtersHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: colors.border },
+  filtersTitle: { color: colors.text, fontSize: 22, fontWeight: "900", letterSpacing: -0.5 },
+  filtersBody: { padding: 16, paddingBottom: 32 },
+  filtersFooter: { flexDirection: "row", gap: 10, paddingHorizontal: 16, paddingVertical: 12, borderTopWidth: 1, borderTopColor: colors.border },
+  clearFiltersBtn: { paddingHorizontal: 20, justifyContent: "center", borderRadius: 10, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surfaceHi },
+  clearFiltersTxt: { color: colors.textMuted, fontSize: 12, fontWeight: "900", letterSpacing: 1 },
+  compList: { gap: 6 },
+  compRow: { flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: colors.surfaceHi, borderWidth: 1, borderColor: colors.border, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12 },
+  compRowActive: { borderColor: colors.primary, backgroundColor: "rgba(255,140,66,0.08)" },
+  compTxt: { color: colors.text, fontSize: 14, fontWeight: "800" },
+  compCode: { color: colors.textDim, fontSize: 11, fontWeight: "700", marginTop: 2, letterSpacing: 0.5 },
+  compCount: { color: colors.textMuted, fontSize: 13, fontWeight: "900" },
+  applyBtn: { backgroundColor: colors.primary, paddingVertical: 14, borderRadius: 10, marginTop: 12, alignItems: "center", justifyContent: "center" },
   applyBtnTxt: { color: "#FFF", fontWeight: "900", letterSpacing: 1 },
 });

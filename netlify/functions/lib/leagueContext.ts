@@ -79,7 +79,14 @@ const LEAGUE_SPECIAL: [RegExp, (m: RegExpMatchArray) => string][] = [
   [/^AMICLUB/, () => "Amichevole Club"],
   [/^AMIF/, () => "Amichevole Femminile"],
   [/^AMI/, () => "Amichevole"],
-  [/^EUCONFL/, () => "Euro Conference League"],
+  // Allineate a frontend/src/utils/leagues.ts: EUCHL/EUEL non erano
+  // riconosciute e arrivavano al prompt dell'IA come codice grezzo.
+  [/^EUCONFL/, () => "UEFA Conference League"],
+  [/^EUCHL/, () => "UEFA Champions League"],
+  [/^EUEL/, () => "UEFA Europa League"],
+  [/^EUNL/, () => "UEFA Nations League"],
+  [/^EUSC/, () => "Supercoppa UEFA"],
+  [/^EURO/, () => "Campionato Europeo"],
   [/^CPSUDAM/, () => "Coppa Sudamerica"],
   [/^CPLIB/, () => "Coppa Libertadores"],
   [/^CPCAR/, () => "Coppa Caraibica"],
@@ -88,6 +95,7 @@ const LEAGUE_SPECIAL: [RegExp, (m: RegExpMatchArray) => string][] = [
   [/^EUR(?!O)/, () => "Europa League"],
   [/^CONF/, () => "Conference League"],
   [/^MOND/, () => "Mondiali"],
+  [/^EU/, () => "Competizione europea"],
 ];
 
 export function parseLeagueLabel(code: string): string {

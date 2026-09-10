@@ -27,18 +27,36 @@ export default function Selected() {
   const [results, setResults] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  // STALE-WHILE-REVALIDATE. Prima questa schermata faceva setLoading(true) e
+  // una fetch bloccante ad OGNI ingresso, ignorando `selectedListCache` che
+  // pure importava: da qui lo spinner ogni volta che si apriva la Schedina,
+  // anche solo per tornarci indietro dopo due secondi.
+  const applyList = useCallback((list: Match[]) => {
+    setItems(list);
+    const r: Record<string, string> = {};
+    list.forEach((m) => { if (m.result) r[m.id] = m.result; });
+    setResults(r);
+  }, []);
+
+  const load = useCallback(async (force = false) => {
+    const cached = selectedListCache.get() as Match[] | null;
+    if (cached) {
+      applyList(cached);
+      setLoading(false);
+      if (!force && !selectedListCache.isStale()) return;
+    } else {
+      setLoading(true);
+    }
     try {
       const list = await api.selectedList();
-      setItems(list);
-      const r: Record<string, string> = {};
-      list.forEach((m) => { if (m.result) r[m.id] = m.result; });
-      setResults(r);
+      selectedListCache.set(list);
+      applyList(list);
+    } catch {
+      // con la lista gia' a schermo un errore di rete non deve svuotarla
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [applyList]);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
@@ -59,7 +77,7 @@ export default function Selected() {
       setReviewList(reviews);
       marketStatsCache.invalidate();
       mlStatsCache.invalidate();
-      await load();
+      await load(true);
       if (reviews.length > 0) {
         Alert.alert("Auto-fetch completato", `${summary}\n\nAlcune partite hanno confidence bassa e richiedono conferma manuale.`);
       } else {
@@ -78,7 +96,7 @@ export default function Selected() {
       setReviewList(reviewList.filter((x) => x.id !== item.id));
       marketStatsCache.invalidate();
       mlStatsCache.invalidate();
-      await load();
+      await load(true);
     } catch (e: any) {
       Alert.alert("Errore", e?.message || "Errore");
     }
@@ -105,7 +123,7 @@ export default function Selected() {
         selectedListCache.invalidate();
         matchesCache.invalidate(); // tutti i giorni
         try { await api.clearSelection(); } catch (e) { console.warn(e); }
-        await load();
+        await load(true);
         toast.show("Selezione svuotata", "info");
       },
     });
@@ -135,7 +153,7 @@ export default function Selected() {
       // fino a 5 minuti dopo il salvataggio.
       marketStatsCache.invalidate();
       mlStatsCache.invalidate();
-      await load();
+      await load(true);
       Alert.alert("Salvato", `${out.updated} risultati aggiornati`);
     } catch (e: any) {
       Alert.alert("Errore", e?.message);

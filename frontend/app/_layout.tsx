@@ -50,7 +50,7 @@ export default function RootLayout() {
       <BottomNavProvider>
         <ToastProvider>
           <StatusBar style="light" />
-          <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: "#0A0A0A" }, animation: "slide_from_right", animationDuration: 220 }} />
+          <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: "#0A0A0A" }, animation: "slide_from_right", animationDuration: 160 }} />
           <FabBack />
         </ToastProvider>
       </BottomNavProvider>
