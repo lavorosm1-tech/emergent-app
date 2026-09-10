@@ -88,6 +88,28 @@ codice + `.md` insieme -> costruisce.
 
 ## Log (più recente in cima)
 
+### 2026-09-10 (3) — La barra di scorrimento spostata in fondo, aggiunto ESCI
+
+Rossi non trovava il tasto AVANTI: era stato messo sotto l'header, in cima,
+mentre lui lo cercava in fondo. Spostato in una barra fissa sopra la BottomNav
+— dove arriva il pollice, e dove sta già "Salva → Prossima" nella schermata
+risultato: stesso gesto, stesso posto.
+
+La barra ora è **sempre presente** in `/match/[id]`, non solo quando la partita
+è in Schedina, così c'è sempre una via d'uscita esplicita:
+
+- **ESCI** sempre a sinistra (torna indietro, o alla home se non c'è storia);
+- **PREC · n/tot · AVANTI** solo quando la partita è in Schedina e ce n'è più
+  di una;
+- altrimenti al loro posto una riga che dice perché non ci sono ("Partita non
+  in Schedina" / "Unica partita in Schedina"), invece del nulla di prima.
+
+Quel testo serve anche a diagnosticare: se un domani i tasti non compaiono, la
+riga dice se il problema è la selezione o il caricamento della lista.
+
+**Verifiche**: `tsc --noEmit` a 18 errori come la baseline; `expo export`
+completato e stringa "AVANTI" confermata dentro il bundle esportato.
+
 ### 2026-09-10 (2) — Tasto AVANTI in Schedina, barra in basso di nuovo fissa
 
 Due correzioni chieste da Rossi dopo aver provato la sessione precedente.

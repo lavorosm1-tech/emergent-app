@@ -388,37 +388,6 @@ export default function MatchDetail() {
         </TouchableOpacity>
       </View>
 
-      {/* Scorrimento fra le partite selezionate: compare solo se questa
-          partita e' in Schedina e ce n'e' piu' di una. */}
-      {selIndex >= 0 && selList.length > 1 && (
-        <View style={styles.selNavBar}>
-          <TouchableOpacity
-            testID="sel-prev"
-            onPress={() => goToSel(prevSel)}
-            disabled={!prevSel}
-            style={[styles.selNavBtn, !prevSel && styles.selNavBtnOff]}
-          >
-            <Ionicons name="chevron-back" size={16} color={prevSel ? colors.text : colors.textDim} />
-            <Text style={[styles.selNavTxt, !prevSel && { color: colors.textDim }]}>PREC</Text>
-          </TouchableOpacity>
-
-          <View style={styles.selNavCount}>
-            <Ionicons name="ticket-outline" size={13} color={colors.primary} />
-            <Text style={styles.selNavCountTxt}>{selIndex + 1} / {selList.length}</Text>
-          </View>
-
-          <TouchableOpacity
-            testID="sel-next"
-            onPress={() => goToSel(nextSel)}
-            disabled={!nextSel}
-            style={[styles.selNavBtn, styles.selNavBtnMain, !nextSel && styles.selNavBtnOff]}
-          >
-            <Text style={[styles.selNavTxt, nextSel ? { color: "#FFF" } : { color: colors.textDim }]}>AVANTI</Text>
-            <Ionicons name="chevron-forward" size={16} color={nextSel ? "#FFF" : colors.textDim} />
-          </TouchableOpacity>
-        </View>
-      )}
-
       <ScrollView contentContainerStyle={styles.content} {...scrollMem}>
         {/* Match hero */}
         <View style={styles.hero}>
@@ -1159,6 +1128,59 @@ export default function MatchDetail() {
           che diventa contestuale automaticamente quando l'utente entra
           in una route /match/, /risultato/, /quote/.
        ============================================================ */}
+      {/* ============================================================
+          BARRA DI SCORRIMENTO — IN FONDO, sopra la BottomNav
+          ============================================================
+          Prima stava sotto l'header, in cima: Rossi la cercava in fondo e non
+          la trovava. Qui e' dove arriva il pollice, ed e' anche dove sta gia'
+          "Salva -> Prossima" nella schermata risultato: stesso gesto, stesso
+          posto. E' sempre presente, cosi' c'e' sempre una via d'uscita anche
+          quando la partita non e' in Schedina; PREC e AVANTI compaiono solo
+          quando c'e' davvero dove andare. */}
+      <View style={[styles.selNavBar, { bottom: navHeight }]}>
+        <TouchableOpacity
+          testID="sel-exit"
+          onPress={() => (router.canGoBack() ? router.back() : router.replace("/"))}
+          style={styles.selNavBtn}
+        >
+          <Ionicons name="close" size={16} color={colors.text} />
+          <Text style={styles.selNavTxt}>ESCI</Text>
+        </TouchableOpacity>
+
+        {selIndex >= 0 && selList.length > 1 ? (
+          <>
+            <TouchableOpacity
+              testID="sel-prev"
+              onPress={() => goToSel(prevSel)}
+              disabled={!prevSel}
+              style={[styles.selNavBtn, !prevSel && styles.selNavBtnOff]}
+            >
+              <Ionicons name="chevron-back" size={16} color={prevSel ? colors.text : colors.textDim} />
+              <Text style={[styles.selNavTxt, !prevSel && { color: colors.textDim }]}>PREC</Text>
+            </TouchableOpacity>
+
+            <View style={styles.selNavCount}>
+              <Ionicons name="ticket-outline" size={13} color={colors.primary} />
+              <Text style={styles.selNavCountTxt}>{selIndex + 1}/{selList.length}</Text>
+            </View>
+
+            <TouchableOpacity
+              testID="sel-next"
+              onPress={() => goToSel(nextSel)}
+              disabled={!nextSel}
+              style={[styles.selNavBtn, styles.selNavBtnMain, !nextSel && styles.selNavBtnOff]}
+            >
+              <Text style={[styles.selNavTxt, nextSel ? { color: "#FFF" } : { color: colors.textDim }]}>AVANTI</Text>
+              <Ionicons name="chevron-forward" size={16} color={nextSel ? "#FFF" : colors.textDim} />
+            </TouchableOpacity>
+          </>
+        ) : (
+          <Text style={styles.selNavHint} numberOfLines={1}>
+            {selIndex >= 0 ? "Unica partita in Schedina" : "Partita non in Schedina"}
+          </Text>
+        )}
+      </View>
+
       <BottomNav />
     </SafeAreaView>
   );
@@ -1166,7 +1188,8 @@ export default function MatchDetail() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.bg },
-  selNavBar: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10, paddingHorizontal: 16, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: colors.border },
+  selNavBar: { position: "absolute", left: 0, right: 0, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8, paddingHorizontal: 12, paddingVertical: 10, backgroundColor: colors.surface, borderTopWidth: 1, borderTopColor: colors.border },
+  selNavHint: { flex: 1, textAlign: "right", color: colors.textDim, fontSize: 11, fontWeight: "700" },
   selNavBtn: { flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: colors.surfaceHi, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 16, paddingVertical: 10, borderRadius: 999 },
   selNavBtnMain: { backgroundColor: colors.primary, borderColor: colors.primary },
   selNavBtnOff: { backgroundColor: colors.surface, borderColor: colors.border, opacity: 0.5 },
