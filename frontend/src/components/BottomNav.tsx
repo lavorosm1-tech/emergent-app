@@ -38,10 +38,33 @@ function getContextualTabs(matchId: string, currentPath: string): { route: strin
   ];
 }
 
+/**
+ * Misure della barra in basso, esportate perche' chi si appoggia SOPRA di lei
+ * (la barra ESCI/PREC/AVANTI del dettaglio partita) non debba indovinarle.
+ * Prima erano ricopiate a mano in match/[id].tsx con numeri leggermente
+ * diversi, e si vedeva: fra le due barre restava una striscia di sfondo.
+ */
+const NAV_CONTENT_HEIGHT = 46; // icona 22 + gap + etichetta 10
+
+export function useNavMetrics() {
+  const insets = useSafeAreaInsets();
+  let isAndroidUA = false;
+  try {
+    if (typeof navigator !== "undefined" && navigator.userAgent) {
+      isAndroidUA = /android/i.test(navigator.userAgent);
+    }
+  } catch {}
+  // Prima era Math.max(insets.bottom, 24) + 12: sotto le etichette restava una
+  // fascia nera vuota grande quanto le etichette stesse. insets.bottom gia'
+  // tiene conto della barra di sistema, quindi il minimo forzato serve solo
+  // come rete di sicurezza e puo' essere piccolo.
+  const bottomPadding = Math.max(insets.bottom, isAndroidUA ? 8 : 0) + 6;
+  return { bottomPadding, height: bottomPadding + 6 + NAV_CONTENT_HEIGHT };
+}
+
 export default function BottomNav() {
   const router = useRouter();
   const path = usePathname();
-  const insets = useSafeAreaInsets();
   const { show } = useBottomNav();
   const [selCount, setSelCount] = useState(0);
 
@@ -79,17 +102,7 @@ export default function BottomNav() {
   } catch {}
   const TABS_RENDER = matchId ? getContextualTabs(matchId, path || "") : TABS;
 
-  // ============================================================
-  // Padding bottom Android: aumentato min 24dp per system buttons
-  // SSR-safe: navigator può essere undefined durante prerendering web
-  // ============================================================
-  let isAndroidUA = false;
-  try {
-    if (typeof navigator !== "undefined" && navigator.userAgent) {
-      isAndroidUA = /android/i.test(navigator.userAgent);
-    }
-  } catch {}
-  const bottomPadding = Math.max(insets.bottom, isAndroidUA ? 24 : 0) + 12;
+  const { bottomPadding } = useNavMetrics();
 
   // ============================================================
   // 10/09/2026 — AUTO-HIDE DISATTIVATO (richiesta esplicita di Rossi).
@@ -141,10 +154,10 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(10,10,10,0.96)",
     borderTopWidth: 1,
     borderTopColor: colors.border,
-    paddingTop: 8,
+    paddingTop: 6,
     paddingHorizontal: 4,
   },
-  tab: { flex: 1, alignItems: "center", justifyContent: "center", gap: 4 },
+  tab: { flex: 1, alignItems: "center", justifyContent: "center", gap: 3 },
   label: { fontSize: 10, fontWeight: "800", letterSpacing: 0.5, textTransform: "uppercase" },
   badge: {
     position: "absolute", top: -4, right: -8,

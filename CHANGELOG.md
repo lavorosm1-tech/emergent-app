@@ -88,6 +88,41 @@ codice + `.md` insieme -> costruisce.
 
 ## Log (più recente in cima)
 
+### 2026-09-10 (4) — Pulizia della zona bassa: via la freccia flottante, spazi riallineati
+
+Da uno screenshot di Rossi con la barra AVANTI finalmente al suo posto, ma la
+zona in fondo disordinata.
+
+**Via `FabBack`.** La freccia circolare flottante in basso a destra duplicava il
+tasto indietro che ogni schermata non-hub ha già in alto a sinistra, e da quando
+c'è la barra ESCI/PREC/AVANTI ci finiva letteralmente sopra. Rimossa da
+`_layout.tsx`; il componente resta in `src/components/` se servisse di nuovo.
+
+**Misure della BottomNav esportate (`useNavMetrics`).** Erano ricopiate a mano in
+`match/[id].tsx` con numeri leggermente diversi (`insets.bottom + 56 + 12`
+contro `Math.max(insets.bottom, 24) + 12 + 56`), e fra le due barre restava una
+striscia di sfondo. Ora il numero è uno solo e viene dalla stessa funzione.
+
+**Fascia vuota sotto le etichette.** `Math.max(insets.bottom, 24) + 12` lasciava
+sotto PRONOSTICO AI / RISULTATO / QUOTE un vuoto grande quanto le etichette
+stesse: `insets.bottom` tiene già conto della barra di sistema, quindi il minimo
+forzato serve solo da rete di sicurezza. Sceso a `Math.max(insets.bottom, 8) + 6`,
+con `paddingTop` 8 → 6 e gap icona/etichetta 4 → 3.
+
+**Tasti tutti della stessa misura.** Prima ognuno si dimensionava sul proprio
+contenuto e in fila risultavano di altezze e raggi diversi. Ora altezza fissa 38,
+raggio 10, spazi regolari. PREC diventa quadrato senza etichetta — è il gesto
+meno frequente, e così resta larghezza per AVANTI, che è quello che si usa.
+Sfondo della barra identico a quello della BottomNav, così le due si leggono
+come un blocco unico.
+
+**Spazio in fondo alla ScrollView** non più un `paddingBottom: 200` buttato lì
+ma `navHeight + 64`, calcolato: niente contenuto coperto e niente vuoto di
+troppo.
+
+**Verifiche**: `tsc --noEmit` a 18 errori come la baseline; `expo export`
+completato.
+
 ### 2026-09-10 (3) — La barra di scorrimento spostata in fondo, aggiunto ESCI
 
 Rossi non trovava il tasto AVANTI: era stato messo sotto l'header, in cima,

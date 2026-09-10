@@ -3,7 +3,7 @@ import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator,
   TextInput, Alert,
 } from "react-native";
-import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -15,7 +15,7 @@ import { colors } from "@/src/theme";
 import { ScoreInput } from "@/src/components/ScoreInput";
 import { FamilyLegendModal } from "@/src/components/FamilyLegendModal";
 import { predictionQueue } from "@/src/utils/predictionQueue";
-import BottomNav from "@/src/components/BottomNav";
+import BottomNav, { useNavMetrics } from "@/src/components/BottomNav";
 
 /**
  * La soglia di quota si legge UNA VOLTA per sessione. Se due schermate la
@@ -60,9 +60,10 @@ export default function MatchDetail() {
   const { id, gen } = useLocalSearchParams<{ id: string; gen?: string }>();
   const router = useRouter();
   const scrollMem = useScrollMemory(`/match/${id ?? "x"}`);
-  const insets = useSafeAreaInsets();
-  // Altezza approssimativa della BottomNav per posizionare la barra fissa sopra
-  const navHeight = insets.bottom + 56 + 12;
+  // Altezza REALE della BottomNav, presa dal suo stesso calcolo: prima era
+  // stimata a mano qui e i due numeri non coincidevano, lasciando una
+  // striscia di sfondo fra le due barre.
+  const { height: navHeight } = useNavMetrics();
   const [match, setMatch] = useState<Match | null>(null);
   const [prediction, setPrediction] = useState<Prediction | null>(null);
   const [loading, setLoading] = useState(true);
@@ -388,7 +389,7 @@ export default function MatchDetail() {
         </TouchableOpacity>
       </View>
 
-      <ScrollView contentContainerStyle={styles.content} {...scrollMem}>
+      <ScrollView contentContainerStyle={[styles.content, { paddingBottom: navHeight + 64 }]} {...scrollMem}>
         {/* Match hero */}
         <View style={styles.hero}>
           <Text style={styles.heroDay}>{match.day} · {match.time}</Text>
@@ -1143,24 +1144,26 @@ export default function MatchDetail() {
           onPress={() => (router.canGoBack() ? router.back() : router.replace("/"))}
           style={styles.selNavBtn}
         >
-          <Ionicons name="close" size={16} color={colors.text} />
+          <Ionicons name="close" size={15} color={colors.text} />
           <Text style={styles.selNavTxt}>ESCI</Text>
         </TouchableOpacity>
 
         {selIndex >= 0 && selList.length > 1 ? (
           <>
+            {/* PREC e' quadrato e senza etichetta: e' il gesto meno frequente
+                e cosi' resta larghezza per AVANTI, che e' quello che si usa. */}
             <TouchableOpacity
               testID="sel-prev"
               onPress={() => goToSel(prevSel)}
               disabled={!prevSel}
-              style={[styles.selNavBtn, !prevSel && styles.selNavBtnOff]}
+              style={[styles.selNavBtn, styles.selNavBtnIcon, !prevSel && styles.selNavBtnOff]}
+              accessibilityLabel="Partita precedente"
             >
-              <Ionicons name="chevron-back" size={16} color={prevSel ? colors.text : colors.textDim} />
-              <Text style={[styles.selNavTxt, !prevSel && { color: colors.textDim }]}>PREC</Text>
+              <Ionicons name="chevron-back" size={17} color={prevSel ? colors.text : colors.textDim} />
             </TouchableOpacity>
 
             <View style={styles.selNavCount}>
-              <Ionicons name="ticket-outline" size={13} color={colors.primary} />
+              <Ionicons name="ticket-outline" size={12} color={colors.primary} />
               <Text style={styles.selNavCountTxt}>{selIndex + 1}/{selList.length}</Text>
             </View>
 
@@ -1171,7 +1174,7 @@ export default function MatchDetail() {
               style={[styles.selNavBtn, styles.selNavBtnMain, !nextSel && styles.selNavBtnOff]}
             >
               <Text style={[styles.selNavTxt, nextSel ? { color: "#FFF" } : { color: colors.textDim }]}>AVANTI</Text>
-              <Ionicons name="chevron-forward" size={16} color={nextSel ? "#FFF" : colors.textDim} />
+              <Ionicons name="chevron-forward" size={15} color={nextSel ? "#FFF" : colors.textDim} />
             </TouchableOpacity>
           </>
         ) : (
@@ -1188,21 +1191,37 @@ export default function MatchDetail() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.bg },
-  selNavBar: { position: "absolute", left: 0, right: 0, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8, paddingHorizontal: 12, paddingVertical: 10, backgroundColor: colors.surface, borderTopWidth: 1, borderTopColor: colors.border },
+  // Tutti i tasti della barra hanno la STESSA altezza (SELNAV_H) e lo stesso
+  // raggio: prima ognuno si dimensionava sul proprio contenuto e in fila
+  // risultavano di misure diverse. Sfondo identico alla BottomNav, cosi' le
+  // due barre si leggono come un unico blocco invece che come due fasce.
+  selNavBar: {
+    position: "absolute", left: 0, right: 0,
+    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+    gap: 6, paddingHorizontal: 10, paddingVertical: 7,
+    backgroundColor: "rgba(10,10,10,0.96)",
+    borderTopWidth: 1, borderTopColor: colors.border,
+  },
   selNavHint: { flex: 1, textAlign: "right", color: colors.textDim, fontSize: 11, fontWeight: "700" },
-  selNavBtn: { flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: colors.surfaceHi, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 16, paddingVertical: 10, borderRadius: 999 },
+  selNavBtn: {
+    height: 38, minWidth: 38,
+    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 5,
+    backgroundColor: colors.surfaceHi, borderWidth: 1, borderColor: colors.border,
+    paddingHorizontal: 14, borderRadius: 10,
+  },
+  selNavBtnIcon: { paddingHorizontal: 0, width: 38 },
   selNavBtnMain: { backgroundColor: colors.primary, borderColor: colors.primary },
-  selNavBtnOff: { backgroundColor: colors.surface, borderColor: colors.border, opacity: 0.5 },
-  selNavTxt: { color: colors.text, fontSize: 12, fontWeight: "900", letterSpacing: 0.8 },
-  selNavCount: { flexDirection: "row", alignItems: "center", gap: 5 },
-  selNavCountTxt: { color: colors.primary, fontSize: 13, fontWeight: "900", letterSpacing: 0.5 },
+  selNavBtnOff: { backgroundColor: colors.surface, borderColor: colors.border, opacity: 0.45 },
+  selNavTxt: { color: colors.text, fontSize: 12, fontWeight: "900", letterSpacing: 0.6 },
+  selNavCount: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 2 },
+  selNavCountTxt: { color: colors.primary, fontSize: 13, fontWeight: "900", letterSpacing: 0.3 },
   header: {
     flexDirection: "row", alignItems: "center", justifyContent: "space-between",
     paddingHorizontal: 8, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: colors.border,
   },
   iconBtn: { padding: 8 },
   headerTitle: { flex: 1, color: colors.text, fontSize: 14, fontWeight: "800", textAlign: "center", textTransform: "uppercase", letterSpacing: 0.5 },
-  content: { padding: 16, paddingBottom: 200, gap: 16 },
+  content: { padding: 16, gap: 16 },
   hero: { alignItems: "center", paddingVertical: 16, backgroundColor: colors.surface, borderRadius: 16, borderWidth: 1, borderColor: colors.border },
   heroDay: { color: colors.textMuted, fontSize: 11, fontWeight: "700", letterSpacing: 1, marginBottom: 12 },
   team: { color: colors.text, fontSize: 18, fontWeight: "900", textTransform: "uppercase" },
