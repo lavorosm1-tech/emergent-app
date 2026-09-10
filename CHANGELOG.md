@@ -88,6 +88,38 @@ codice + `.md` insieme -> costruisce.
 
 ## Log (più recente in cima)
 
+### 2026-09-10 (2) — Tasto AVANTI in Schedina, barra in basso di nuovo fissa
+
+Due correzioni chieste da Rossi dopo aver provato la sessione precedente.
+
+**1) Scorrimento fra le partite della Schedina.** Aprendo una partita
+selezionata si restava bloccati lì: per vedere la successiva bisognava tornare
+indietro alla Schedina e riaprirla a mano. Aggiunta sotto l'header di
+`/match/[id]` una barra **PREC · n/tot · AVANTI**, visibile solo quando la
+partita è in Schedina e ce n'è più di una. La lista arriva da
+`selectedListCache`, la stessa già usata da Schedina e schermata risultato,
+quindi nel caso normale non costa nessuna richiesta. La navigazione usa
+`router.replace` e non `push`: scorrendo dieci partite non deve accumularsi una
+pila di dieci schermate da smontare col tasto indietro.
+
+**2) Auto-hide della BottomNav disattivato.** Nell'intervento precedente
+l'header a scomparsa era stato agganciato alla stessa `SharedValue` che già
+nascondeva la barra in basso, e così scorrendo sparivano anche Profilo,
+Strumenti, Partite, Schedina e Book. Errore di valutazione: quella barra
+contiene i **comandi di navigazione**, e nasconderli obbliga a risalire in cima
+per cambiare schermata. L'header e la striscia dei giorni, invece, sono
+informazione — nasconderli guadagna spazio senza togliere niente.
+
+**REGOLA GENERALE che ne esce**: si può nascondere allo scroll ciò che si
+*legge*, mai ciò con cui si *comanda*.
+
+`visible` resta viva e continua a comandare l'header nella home. In
+`BottomNav.tsx` è rimasto un commento che spiega come riattivare l'auto-hide se
+mai servisse.
+
+**Verifiche**: `tsc --noEmit` a 18 errori come la baseline, nessuno nuovo;
+`expo export --platform web` completato.
+
 ### 2026-09-10 — Velocità di navigazione, ricerca/filtri, header a scomparsa
 
 Sessione partita da una lista di attriti segnalati da Rossi. Cinque interventi.

@@ -3,7 +3,7 @@ import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter, usePathname } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import Animated, { useAnimatedStyle, interpolate } from "react-native-reanimated";
+import Animated from "react-native-reanimated";
 import { colors } from "@/src/theme";
 import { api } from "@/src/api";
 import { useBottomNav } from "@/src/components/BottomNavContext";
@@ -42,7 +42,7 @@ export default function BottomNav() {
   const router = useRouter();
   const path = usePathname();
   const insets = useSafeAreaInsets();
-  const { visible, show } = useBottomNav();
+  const { show } = useBottomNav();
   const [selCount, setSelCount] = useState(0);
 
   // Ogni cambio rotta → forza la BottomNav visibile + aggiorna selCount via cache
@@ -90,22 +90,21 @@ export default function BottomNav() {
     }
   } catch {}
   const bottomPadding = Math.max(insets.bottom, isAndroidUA ? 24 : 0) + 12;
-  const navHeight = bottomPadding + 56;
 
   // ============================================================
-  // Auto-hide: si nasconde quando l'utente scorre verso il basso
-  // attraverso il contenuto (scroll-down attivo). Riappare allo
-  // scroll-up. Animazione translateY 0 → navHeight.
-  // I tasti di sistema Android restano comunque sempre visibili
-  // (sono fuori dal nostro spazio app).
+  // 10/09/2026 — AUTO-HIDE DISATTIVATO (richiesta esplicita di Rossi).
   // ============================================================
-  const animStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: interpolate(visible.value, [0, 1], [navHeight, 0]) }],
-    opacity: interpolate(visible.value, [0, 1], [0, 1]),
-  }));
-
+  // Questa barra si nascondeva scorrendo verso il basso, insieme all'header.
+  // Ma qui ci sono i tasti di navigazione dell'app (Profilo, Strumenti,
+  // Partite, Schedina, Book): devono restare raggiungibili MENTRE si scorre,
+  // altrimenti per cambiare schermata bisogna prima risalire.
+  //
+  // La SharedValue `visible` resta in piedi e continua a comandare header e
+  // striscia dei giorni nella home: e' li' che il comportamento ha senso,
+  // perche' guadagna spazio di lettura senza togliere comandi.
+  // Per riattivarlo qui basta rimettere `animStyle` nello style qui sotto.
   return (
-    <Animated.View style={[styles.wrap, { paddingBottom: bottomPadding }, animStyle]}>
+    <Animated.View style={[styles.wrap, { paddingBottom: bottomPadding }]}>
       {TABS_RENDER.map((t) => {
         const active = (t.route === "/" && path === "/") || (t.route !== "/" && path?.startsWith(t.route));
         const isSchedina = t.route === "/selected";

@@ -9,7 +9,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 
 import { api, Match, Prediction, MARKET_FAMILIES, ODD_LABELS, OddsKey, quickPredictionFamily, rankPicks, StructuralAnalysis, buildFinalVerdict, VerdictPick, getMarketOdd, filterCoherentAlternatives, violatesStructure, getMatchCautionWarning, MatchHistory, getScenarioNote } from "@/src/api";
-import { marketStatsCache, mlStatsCache, matchDetailCache, oddSettingsCache } from "@/src/utils/cache";
+import { marketStatsCache, mlStatsCache, matchDetailCache, oddSettingsCache, selectedListCache } from "@/src/utils/cache";
 import { useScrollMemory } from "@/src/utils/scrollMemory";
 import { colors } from "@/src/theme";
 import { ScoreInput } from "@/src/components/ScoreInput";
@@ -85,6 +85,8 @@ export default function MatchDetail() {
   // default e poi rifare tutto e' esattamente il doppio caricamento che
   // rendeva lenta l'apertura di ogni partita.
   const [oddReady, setOddReady] = useState<boolean>(!!oddCached);
+  // Lista delle partite in Schedina: serve a sapere qual e' la prossima.
+  const [selList, setSelList] = useState<Match[]>((selectedListCache.get() as Match[]) || []);
 
   /** Riversa nello stato un pacchetto gia' pronto (dalla cache o dalla rete). */
   const applyBundle = useCallback((b: { match: any; cands: any; struct: any; hist: any }) => {
@@ -310,6 +312,32 @@ export default function MatchDetail() {
     }
   };
 
+  // ============================================================
+  // SCORRIMENTO FRA LE PARTITE DELLA SCHEDINA (richiesta di Rossi, 10/09)
+  // ============================================================
+  // Aprendo una partita selezionata si restava bloccati li': per vedere la
+  // successiva bisognava tornare indietro alla Schedina e riaprirla a mano.
+  // La lista arriva dalla cache condivisa (la stessa gia' usata da Schedina e
+  // schermata risultato), quindi nel caso normale non costa nessuna richiesta.
+  useEffect(() => {
+    let alive = true;
+    const cached = selectedListCache.get() as Match[] | null;
+    if (cached) setSelList(cached);
+    if (!cached || selectedListCache.isStale()) {
+      api.selectedList()
+        .then((list) => { if (alive) { selectedListCache.set(list); setSelList(list); } })
+        .catch(() => {});
+    }
+    return () => { alive = false; };
+  }, [id]);
+
+  const selIndex = id ? selList.findIndex((m) => m.id === id) : -1;
+  const prevSel = selIndex > 0 ? selList[selIndex - 1] : null;
+  const nextSel = selIndex >= 0 && selIndex < selList.length - 1 ? selList[selIndex + 1] : null;
+  // `replace` e non `push`: scorrendo dieci partite non deve accumularsi una
+  // pila di dieci schermate da smontare col tasto indietro.
+  const goToSel = (m: Match | null) => { if (m) router.replace(`/match/${m.id}`); };
+
   const toggleSelect = async () => {
     if (!match) return;
     const next = !match.selected;
@@ -359,6 +387,37 @@ export default function MatchDetail() {
             color={match.selected ? colors.primary : colors.textMuted} />
         </TouchableOpacity>
       </View>
+
+      {/* Scorrimento fra le partite selezionate: compare solo se questa
+          partita e' in Schedina e ce n'e' piu' di una. */}
+      {selIndex >= 0 && selList.length > 1 && (
+        <View style={styles.selNavBar}>
+          <TouchableOpacity
+            testID="sel-prev"
+            onPress={() => goToSel(prevSel)}
+            disabled={!prevSel}
+            style={[styles.selNavBtn, !prevSel && styles.selNavBtnOff]}
+          >
+            <Ionicons name="chevron-back" size={16} color={prevSel ? colors.text : colors.textDim} />
+            <Text style={[styles.selNavTxt, !prevSel && { color: colors.textDim }]}>PREC</Text>
+          </TouchableOpacity>
+
+          <View style={styles.selNavCount}>
+            <Ionicons name="ticket-outline" size={13} color={colors.primary} />
+            <Text style={styles.selNavCountTxt}>{selIndex + 1} / {selList.length}</Text>
+          </View>
+
+          <TouchableOpacity
+            testID="sel-next"
+            onPress={() => goToSel(nextSel)}
+            disabled={!nextSel}
+            style={[styles.selNavBtn, styles.selNavBtnMain, !nextSel && styles.selNavBtnOff]}
+          >
+            <Text style={[styles.selNavTxt, nextSel ? { color: "#FFF" } : { color: colors.textDim }]}>AVANTI</Text>
+            <Ionicons name="chevron-forward" size={16} color={nextSel ? "#FFF" : colors.textDim} />
+          </TouchableOpacity>
+        </View>
+      )}
 
       <ScrollView contentContainerStyle={styles.content} {...scrollMem}>
         {/* Match hero */}
@@ -1107,6 +1166,13 @@ export default function MatchDetail() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.bg },
+  selNavBar: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10, paddingHorizontal: 16, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: colors.border },
+  selNavBtn: { flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: colors.surfaceHi, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 16, paddingVertical: 10, borderRadius: 999 },
+  selNavBtnMain: { backgroundColor: colors.primary, borderColor: colors.primary },
+  selNavBtnOff: { backgroundColor: colors.surface, borderColor: colors.border, opacity: 0.5 },
+  selNavTxt: { color: colors.text, fontSize: 12, fontWeight: "900", letterSpacing: 0.8 },
+  selNavCount: { flexDirection: "row", alignItems: "center", gap: 5 },
+  selNavCountTxt: { color: colors.primary, fontSize: 13, fontWeight: "900", letterSpacing: 0.5 },
   header: {
     flexDirection: "row", alignItems: "center", justifyContent: "space-between",
     paddingHorizontal: 8, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: colors.border,
