@@ -88,6 +88,39 @@ codice + `.md` insieme -> costruisce.
 
 ## Log (più recente in cima)
 
+### 2026-09-11 (3) — Vercel: 27 function erano troppe, ora ce n'è una sola
+
+Primo deploy su Vercel fallito. Sintomo ingannevole: **il build passava**
+(esportazione Expo completata, 27 function compilate) e l'errore arrivava subito
+dopo, al passo "Deploying outputs", **senza niente nei log del build**.
+
+Causa: il piano Hobby di Vercel accetta al massimo **12 Serverless Function per
+deploy**. Noi ne creavamo 27, una per involucro. Il controllo avviene alla
+consegna, non alla compilazione, ed è per questo che i log del build erano
+puliti.
+
+**Soluzione**: un solo `api/[route].ts` che riceve tutte le rotte e smista al
+gestore giusto in base all'ultimo segmento del percorso, con import statici (il
+bundler deve poterli seguire a tempo di compilazione, quindi niente import
+dinamici). `upload-excel.mjs` resta separato perché è già un bundle con xlsx
+dentro ed è JavaScript, non TypeScript: importarlo dal dispatcher creerebbe
+problemi di risoluzione senza vantaggi. **Totale: 2 function contro un tetto
+di 12**, con margine per crescere.
+
+Il dispatcher ricava il nome dall'ultimo segmento, quindi funziona sia con la
+rotta pulita `/predict` (riscritta da `vercel.json`) sia con `/api/predict`
+diretta: non dipendiamo da come Vercel presenta l'URL dopo un rewrite.
+
+`netlify/functions/` non è stato toccato. Le implementazioni restano uniche.
+
+**LEZIONE**: su Vercel Hobby, un build verde non significa deploy riuscito. I
+limiti di piano si applicano alla consegna e non lasciano traccia nei log del
+build — vanno letti dalla pagina del deploy.
+
+**Verifiche**: dispatcher compilato con esbuild (tutti e 26 gli import risolti)
+ed ESEGUITO davvero: rotta inesistente → 404 con messaggio leggibile,
+`/llm-settings` e `/api/llm-settings` → entrambe 200 sullo stesso gestore.
+
 ### 2026-09-11 (2) — Migrazione a Vercel: il repo ora sa girare su due piattaforme
 
 Netlify si era bloccato per una **fattura non pagata** da $9 (i crediti di build
