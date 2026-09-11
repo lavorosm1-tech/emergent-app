@@ -8,7 +8,7 @@
   "outputDirectory": "frontend/dist",
   "functions": {
     "api/**": {
-      "maxDuration": 60
+      "maxDuration": 300
     }
   },
   "rewrites": [

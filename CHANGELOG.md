@@ -88,6 +88,40 @@ codice + `.md` insieme -> costruisce.
 
 ## Log (più recente in cima)
 
+### 2026-09-11 (5) — 504 su ai-predict: due numeri che dovevano accordarsi e non lo facevano
+
+Rossi lancia un pronostico con Nemotron 3 Ultra e riceve un **504 Gateway
+Timeout**, cioè un errore muto della piattaforma invece del nostro messaggio.
+
+**Causa**: `maxDuration` a 60s in `vercel.json` e taglio dell'AbortController a
+55s dentro `callLlm`. Cinque secondi di margine — ma fra l'inizio della function
+e la fine ci sono **10 chiamate a Supabase** (statistiche famiglie, scenario,
+soglia, poi la scrittura del pronostico e gli incrementi di spesa). La function
+veniva uccisa dalla piattaforma prima che il nostro errore leggibile potesse
+uscire.
+
+**Correzione strutturale, non un numero aggiustato a mano.** Il taglio ora si
+**deriva** dal tetto della piattaforma meno una riserva esplicita per tutto ciò
+che non è la chiamata al modello: 300s − 45s = 255s su Vercel, 26s − 5s = 21s
+su Netlify. Restano due costanti da tenere in accordo (`maxDuration` in
+`vercel.json` e `platformCapMs` qui), ed è scritto nel commento.
+
+`maxDuration` alzato da 60 a **300s**, il massimo documentato del piano Hobby.
+
+**MA — Nemotron 3 Ultra resta non utilizzabile per questo prompt, e non è un
+problema di timeout.** La scheda del modello dichiara ~6 token al secondo. Il
+nostro prompt chiede un JSON sui 54 mercati, con tetto a 3000 token di uscita:
+3000 ÷ 6 ≈ **500 secondi**, oltre il massimo assoluto del piano. Nessun tetto
+raggiungibile basta. Il messaggio d'errore ora indirizza esplicitamente a
+**Nemotron 3 Super**, che è lo stesso modello in versione più piccola.
+
+**LEZIONE**: quando due limiti devono stare in accordo (il tetto della
+piattaforma e il nostro taglio), il secondo va CALCOLATO dal primo. Scritti a
+mano separatamente, prima o poi divergono — e qui la divergenza si manifestava
+come un errore muto, il tipo peggiore da diagnosticare.
+
+**Verifiche**: budget ESEGUITO con `fetch` finto — 21s senza `VERCEL`, 255s con.
+
 ### 2026-09-11 (4) — Le function giravano in Virginia, il database sta in Irlanda
 
 Su Vercel l'app funzionava ma era lenta ad aprire le partite. Invece di

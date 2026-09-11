@@ -140,7 +140,19 @@ export async function callLlm(
   // Durante la migrazione l'app gira su entrambe, quindi il valore va scelto a
   // tempo di esecuzione e non scritto fisso.
   const onVercel = !!readEnv("VERCEL");
-  const timeoutMs = onVercel ? 55000 : option.provider === "openrouter" ? 22000 : 25000;
+
+  // Il budget si calcola UNA VOLTA, partendo dal tetto della piattaforma, e
+  // non si scrive a mano. L'11/09 avevamo 60s di tetto e 55s di taglio: cinque
+  // secondi di margine per le ~10 chiamate a Supabase che stanno prima e dopo
+  // questa funzione. Risultato: la piattaforma uccideva la function prima che
+  // il nostro messaggio potesse uscire, e Rossi vedeva un 504 muto.
+  //
+  // La riserva serve proprio a quello: il tempo che NON e' della chiamata al
+  // modello. Se un giorno cambia maxDuration in vercel.json, va cambiato anche
+  // platformCapMs qui — sono due numeri che devono restare in accordo.
+  const platformCapMs = onVercel ? 300_000 : 26_000; // vercel.json / limite Netlify
+  const reserveMs = onVercel ? 45_000 : 5_000;
+  const timeoutMs = Math.max(10_000, platformCapMs - reserveMs);
   const timer = setTimeout(() => controller.abort(), timeoutMs);
 
   let res: Response;
@@ -171,7 +183,7 @@ export async function callLlm(
   } catch (e: any) {
     if (e?.name === "AbortError") {
       throw new Error(
-        `${option.label} non ha risposto entro ${timeoutMs / 1000} secondi. I modelli gratuiti su OpenRouter sono molto lenti: riprova, oppure scegli un altro modello.`
+        `${option.label} non ha risposto entro ${Math.round(timeoutMs / 1000)} secondi. I modelli gratuiti su OpenRouter sono molto lenti: prova Nemotron 3 Super, che e' lo stesso modello in versione piu' piccola e veloce.`
       );
     }
     throw e;
