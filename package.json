@@ -1,0 +1,8 @@
+{
+  "name": "emergent-app",
+  "private": true,
+  "description": "Radice del repository. Il vero progetto sta in frontend/ (Expo web) e netlify/functions/ (logica server). Questo file esiste per dichiarare a Vercel la versione di Node, la stessa che usa Netlify.",
+  "engines": {
+    "node": "22.x"
+  }
+}

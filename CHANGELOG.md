@@ -88,6 +88,49 @@ codice + `.md` insieme -> costruisce.
 
 ## Log (più recente in cima)
 
+### 2026-09-11 (2) — Migrazione a Vercel: il repo ora sa girare su due piattaforme
+
+Netlify si era bloccato per una **fattura non pagata** da $9 (i crediti di build
+NON erano esauriti: 914 su 1.000 ancora disponibili). Rossi ha deciso di passare
+a Vercel. Motivo che resta valido a prescindere dal blocco: su Netlify le
+function si fermano a 26 secondi, ed è quel tetto che impedisce di usare i
+modelli lenti come Nemotron.
+
+**Scelta di fondo: nessuna duplicazione della logica.** Le 27 function restano
+dove sono, in `netlify/functions/`. In `api/` ci sono 27 **involucri sottili**
+che le richiamano. Le due piattaforme dichiarano le funzioni in modo diverso —
+Netlify vuole un `export default` che riceve una `Request`, Vercel vuole un
+export per ogni metodo HTTP — ma il corpo è identico, perché entrambe usano
+`Request` e `Response` standard del web. Così durante la migrazione l'app
+funziona su tutte e due e non c'è codice da mantenere in doppio.
+
+**Le rotte pubbliche non cambiano.** Il frontend chiama percorsi puliti
+(`/predict`, `/matches-list`, …) e i 27 rewrite in `vercel.json` li mappano su
+`/api/*` esattamente come facevano i redirect di `netlify.toml`. **Zero
+modifiche al frontend**, che è la parte che riduce di più il rischio.
+
+**`maxDuration` a 60s** in `vercel.json`, contro i 26 non negoziabili di
+Netlify. Si può salire fino a 300 sul piano Hobby, ma prima va verificato sul
+campo.
+
+**Timeout LLM ora adattivo.** Era fisso a 22s, tarato sul tetto di Netlify. Ora
+legge la variabile `VERCEL` (che Vercel imposta da sola) e usa 55s quando gira
+lì. Durante la migrazione lo stesso codice gira su entrambe, quindi il valore
+va scelto a tempo di esecuzione e non scritto fisso.
+
+**`package.json` nella root** solo per dichiarare Node 22 a Vercel, la stessa
+versione che `netlify.toml` dichiara a Netlify.
+
+`netlify.toml` **non è stato toccato**: Netlify continua a funzionare come
+prima. Si spegne solo quando Vercel è verificato.
+
+**Verifiche fatte**: tutti e 27 gli involucri compilati e risolti davvero con
+esbuild (non solo controllati a vista); rotte di `netlify.toml` confrontate una
+a una con le funzioni esistenti — 27 rotte, 27 funzioni, nessuna orfana da
+nessuna delle due parti; timeout adattivo ESEGUITO con `fetch` finto e
+verificato a 22s senza `VERCEL` e 55s con `VERCEL`; firma delle funzioni Vercel
+verificata sulla documentazione ufficiale invece che a memoria.
+
 ### 2026-09-11 — [skip ci] ha bloccato il deploy di OpenRouter + Nemotron Super
 
 Rossi non vedeva Nemotron nel menu modelli. Causa: il commit `db48557` era

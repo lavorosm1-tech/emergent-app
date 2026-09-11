@@ -134,7 +134,13 @@ export async function callLlm(
   // secondi, senza spiegazioni. Tagliando noi a 22 l'errore che arriva a
   // schermo dice cosa e' successo davvero, invece di un 502 muto.
   const controller = new AbortController();
-  const timeoutMs = option.provider === "openrouter" ? 22000 : 25000;
+  // Quanto tempo abbiamo davvero dipende dalla piattaforma che ci ospita:
+  // Netlify uccide le function intorno ai 26 secondi, Vercel ce ne concede 60
+  // (impostati in vercel.json). La variabile VERCEL la mette Vercel da sola.
+  // Durante la migrazione l'app gira su entrambe, quindi il valore va scelto a
+  // tempo di esecuzione e non scritto fisso.
+  const onVercel = !!readEnv("VERCEL");
+  const timeoutMs = onVercel ? 55000 : option.provider === "openrouter" ? 22000 : 25000;
   const timer = setTimeout(() => controller.abort(), timeoutMs);
 
   let res: Response;

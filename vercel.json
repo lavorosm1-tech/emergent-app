@@ -1,0 +1,144 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "installCommand": "cd frontend && yarn install --frozen-lockfile",
+  "buildCommand": "cd frontend && yarn build:web",
+  "outputDirectory": "frontend/dist",
+  "functions": {
+    "api/**": {
+      "maxDuration": 60
+    }
+  },
+  "rewrites": [
+    {
+      "source": "/predict",
+      "destination": "/api/predict"
+    },
+    {
+      "source": "/matches-list",
+      "destination": "/api/matches-list"
+    },
+    {
+      "source": "/matches-days",
+      "destination": "/api/matches-days"
+    },
+    {
+      "source": "/match-detail",
+      "destination": "/api/match-detail"
+    },
+    {
+      "source": "/match-result",
+      "destination": "/api/match-result"
+    },
+    {
+      "source": "/upload-excel",
+      "destination": "/api/upload-excel"
+    },
+    {
+      "source": "/upload-skipped",
+      "destination": "/api/upload-skipped"
+    },
+    {
+      "source": "/ai-predict",
+      "destination": "/api/ai-predict"
+    },
+    {
+      "source": "/llm-settings",
+      "destination": "/api/llm-settings"
+    },
+    {
+      "source": "/budget",
+      "destination": "/api/budget"
+    },
+    {
+      "source": "/ml-stats",
+      "destination": "/api/ml-stats"
+    },
+    {
+      "source": "/selection-update",
+      "destination": "/api/selection-update"
+    },
+    {
+      "source": "/selected-list",
+      "destination": "/api/selected-list"
+    },
+    {
+      "source": "/selection-clear",
+      "destination": "/api/selection-clear"
+    },
+    {
+      "source": "/export-db",
+      "destination": "/api/export-db"
+    },
+    {
+      "source": "/import-db",
+      "destination": "/api/import-db"
+    },
+    {
+      "source": "/delete-all",
+      "destination": "/api/delete-all"
+    },
+    {
+      "source": "/match-candidates",
+      "destination": "/api/match-candidates"
+    },
+    {
+      "source": "/match-history",
+      "destination": "/api/match-history"
+    },
+    {
+      "source": "/results-apply",
+      "destination": "/api/results-apply"
+    },
+    {
+      "source": "/results-bulk",
+      "destination": "/api/results-bulk"
+    },
+    {
+      "source": "/stats-scores",
+      "destination": "/api/stats-scores"
+    },
+    {
+      "source": "/stats-reset",
+      "destination": "/api/stats-reset"
+    },
+    {
+      "source": "/aistudio-prompt",
+      "destination": "/api/aistudio-prompt"
+    },
+    {
+      "source": "/results-fetch",
+      "destination": "/api/results-fetch"
+    },
+    {
+      "source": "/save-verdict",
+      "destination": "/api/save-verdict"
+    },
+    {
+      "source": "/odd-settings",
+      "destination": "/api/odd-settings"
+    },
+    {
+      "source": "/((?!api/).*)",
+      "destination": "/index.html"
+    }
+  ],
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "X-Frame-Options",
+          "value": "DENY"
+        },
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
+        },
+        {
+          "key": "Referrer-Policy",
+          "value": "strict-origin-when-cross-origin"
+        }
+      ]
+    }
+  ]
+}
