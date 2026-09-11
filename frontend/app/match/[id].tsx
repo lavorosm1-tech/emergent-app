@@ -339,6 +339,37 @@ export default function MatchDetail() {
   // pila di dieci schermate da smontare col tasto indietro.
   const goToSel = (m: Match | null) => { if (m) router.replace(`/match/${m.id}`); };
 
+  // ============================================================
+  // PRECARICAMENTO DELLA PARTITA SUCCESSIVA
+  // ============================================================
+  // Mentre Rossi legge questa partita, la connessione e' ferma. Usiamo quel
+  // tempo morto per scaricare in sottofondo il pacchetto della prossima in
+  // Schedina, cosi' premendo AVANTI compare istantanea invece di ricominciare
+  // da cinque richieste. Se non preme AVANTI si e' sprecata una richiesta:
+  // costo accettabile, perche' in una schedina si scorre quasi sempre avanti.
+  //
+  // Parte con 1,2 secondi di ritardo per non rubare banda al caricamento della
+  // partita che si sta guardando adesso, che ha la precedenza.
+  useEffect(() => {
+    if (!oddReady || loading) return;
+    const nid = nextSel?.id;
+    if (!nid || matchDetailCache.get(nid, minOdd)) return;
+    let alive = true;
+    const timer = setTimeout(() => {
+      Promise.all([
+        api.match(nid),
+        api.matchCandidates(nid).catch(() => ({ candidates: [], family: null, family_total: 0 })),
+        api.matchStructural(nid, minOdd).catch(() => null),
+        api.matchHistory(nid).catch(() => null),
+      ])
+        .then(([m, cands, struct, hist]) => {
+          if (alive) matchDetailCache.set(nid, minOdd, { match: m, cands, struct, hist });
+        })
+        .catch(() => { /* il precaricamento non deve mai disturbare */ });
+    }, 1200);
+    return () => { alive = false; clearTimeout(timer); };
+  }, [oddReady, loading, nextSel?.id, minOdd]);
+
   const toggleSelect = async () => {
     if (!match) return;
     const next = !match.selected;

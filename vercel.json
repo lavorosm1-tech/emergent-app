@@ -1,5 +1,8 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
+  "regions": [
+    "dub1"
+  ],
   "installCommand": "cd frontend && yarn install --frozen-lockfile",
   "buildCommand": "cd frontend && yarn build:web",
   "outputDirectory": "frontend/dist",

@@ -218,10 +218,19 @@ export default function Home() {
         setDays(ds); setMarketStats(stats?.markets || []); return ds;
       }
 
+      // L'elenco dei giorni e le statistiche mercati cambiano di rado e sono
+      // GIA' state scaricate dalla chiamata load(null) di avvio. Rifarle qui
+      // significava, ad ogni apertura dell'app, tre richieste identiche a
+      // /matches-days e tre a /ml-stats a pochi secondi di distanza (viste nei
+      // log di Vercel). Se la cache e' fresca si riusa e basta.
+      const dsFresh = daysCache.get();
+      const statsFresh = marketStatsCache.get();
       const [ms, ds, stats] = await Promise.all([
         api.matches(day),
-        api.days(),
-        api.marketStats().catch(() => ({ markets: [], family_totals: {} })),
+        dsFresh && !daysCache.isStale() ? Promise.resolve(dsFresh) : api.days(),
+        statsFresh && !marketStatsCache.isStale()
+          ? Promise.resolve({ markets: statsFresh })
+          : api.marketStats().catch(() => ({ markets: [], family_totals: {} })),
       ]);
       matchesCache.set(day, ms);
       daysCache.set(ds);

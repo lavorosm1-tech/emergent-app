@@ -88,6 +88,39 @@ codice + `.md` insieme -> costruisce.
 
 ## Log (più recente in cima)
 
+### 2026-09-11 (4) — Le function giravano in Virginia, il database sta in Irlanda
+
+Su Vercel l'app funzionava ma era lenta ad aprire le partite. Invece di
+ipotizzare ho letto i log di esecuzione e risolto il dominio del database.
+
+**CAUSA PRINCIPALE — regione sbagliata.** `db.zjucgmngettxfwgxazxl.supabase.co`
+risolve a `2a05:d018:…`, che è AWS **eu-west-1 (Irlanda)**. Le Vercel Function
+partono per default in `iad1` (Virginia). Ogni query attraversava l'Atlantico
+due volte, ~160ms di sola andata e ritorno, e le nostre function ne fanno
+parecchie **in sequenza**: `match-history` da sola fa storico globale, storico
+per campionato e due RPC di forma squadre. Aggiunto `"regions": ["dub1"]` in
+`vercel.json`: Dublino è la stessa regione AWS del database, quindi le query
+passano da ~160ms a pochi millisecondi. Migliora anche il tratto
+utente→function, visto che Rossi è a Roma.
+
+Su Netlify il problema c'era identico (function in `us-east-1`), solo che non
+avevamo mai guardato.
+
+**Chiamate duplicate all'avvio.** Nei log si vedevano tre `/matches-days` e tre
+`/ml-stats` in quattro secondi. Causa: `load(null)` all'avvio scarica giorni e
+statistiche, poi imposta il giorno più vicino, il che fa ripartire `load(day)`
+che le riscarica entrambe. Ora `load(day)` riusa le cache se sono fresche.
+
+**Precaricamento della partita successiva.** Mentre si legge una partita la
+connessione è ferma: dopo 1,2 secondi (per non rubare banda al caricamento in
+corso) parte in sottofondo il pacchetto della prossima in Schedina. Premendo
+AVANTI compare istantanea invece di ricominciare da cinque richieste. Se AVANTI
+non viene premuto si è sprecata una richiesta — costo accettabile, in una
+schedina si scorre quasi sempre in avanti.
+
+**LEZIONE**: prima di ottimizzare il codice, controllare **dove girano le cose**.
+Nessuna quantità di cache avrebbe compensato un oceano di troppo a ogni query.
+
 ### 2026-09-11 (3) — Vercel: 27 function erano troppe, ora ce n'è una sola
 
 Primo deploy su Vercel fallito. Sintomo ingannevole: **il build passava**
