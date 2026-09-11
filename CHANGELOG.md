@@ -88,6 +88,24 @@ codice + `.md` insieme -> costruisce.
 
 ## Log (più recente in cima)
 
+### 2026-09-11 — [skip ci] ha bloccato il deploy di OpenRouter + Nemotron Super
+
+Rossi non vedeva Nemotron nel menu modelli. Causa: il commit `db48557` era
+stato pushato con `[skip ci]` in fondo al messaggio — Netlify lo ha
+correttamente ignorato e non ha costruito niente. Il tentativo di rimedio
+(`221c246`, commit VUOTA) non ha risolto: senza file modificati non parte
+nessun build. Il deploy pubblicato era rimasto a `fcc5d239`, verificato col
+`commit_ref` del published deploy.
+
+**REGOLA, da rispettare d'ora in avanti**: `[skip ci]` va SOLO su modifiche che
+non devono andare online (CHANGELOG, commenti, refactoring interno). Una
+funzionalità che l'utente deve poter usare non lo porta mai. E se serve
+innescare un build, la commit deve contenere una modifica vera: una commit
+vuota non basta.
+
+Aggiunto nel frattempo **Nemotron 3 Super** (`nvidia/nemotron-3-super-120b-a12b:free`)
+come alternativa più veloce di Ultra, da usare se Ultra va in timeout a 22s.
+
 ### 2026-09-10 (5) — OpenRouter come provider, Nemotron 3 Ultra nel menu modelli
 
 Richiesta di Rossi: aggiungere `NVIDIA: Nemotron 3 Ultra (free)` accanto a
