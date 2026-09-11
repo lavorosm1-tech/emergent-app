@@ -1,5 +1,5 @@
 import { pgGet, pgPost, jsonResponse } from "./lib/supabaseRest";
-import { LLM_OPTIONS, DEFAULT_LLM, CONFIGURED_PROVIDERS } from "./lib/llmProviders";
+import { LLM_OPTIONS, DEFAULT_LLM, isProviderUsable } from "./lib/llmProviders";
 
 /**
  * GET /llm-settings          -> { options, selected_id }
@@ -13,7 +13,7 @@ export default async (req: Request): Promise<Response> => {
     if (req.method === "GET") {
       const rows = await pgGet(`settings?key=eq.llm_model&select=value`);
       const selectedId = rows.length ? rows[0].value : DEFAULT_LLM;
-      const options = LLM_OPTIONS.map((o) => ({ ...o, configured: CONFIGURED_PROVIDERS.has(o.provider) }));
+      const options = LLM_OPTIONS.map((o) => ({ ...o, configured: isProviderUsable(o.provider) }));
       return jsonResponse({ options, selected_id: selectedId });
     }
 

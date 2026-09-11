@@ -8,7 +8,7 @@
 export type LlmOption = {
   id: string;
   label: string;
-  provider: "deepseek" | "groq" | "gemini" | "anthropic" | "openai";
+  provider: "deepseek" | "groq" | "openrouter" | "gemini" | "anthropic" | "openai";
   model: string;
   cost_per_pred: number;
   speed: string;
@@ -25,6 +25,12 @@ export const LLM_OPTIONS: LlmOption[] = [
     cost_per_pred: 0, speed: "Veloce", quality: "Ottimo", desc: "Gratuito — miglior qualità disponibile su Groq, nessun costo" },
   { id: "groq-gpt-oss-20b", label: "GPT-OSS 20B (Groq)", provider: "groq", model: "openai/gpt-oss-20b",
     cost_per_pred: 0, speed: "Velocissimo", quality: "Buono", desc: "Gratuito — più leggero e ancora più veloce, nessun costo" },
+  // OpenRouter: un solo endpoint per moltissimi modelli, sempre in formato
+  // OpenAI, quindi usa lo stesso adapter generico di DeepSeek e Groq.
+  { id: "openrouter-nemotron-ultra", label: "Nemotron 3 Ultra (OpenRouter)", provider: "openrouter",
+    model: "nvidia/nemotron-3-ultra-550b-a55b:free",
+    cost_per_pred: 0, speed: "Molto lento", quality: "Ottimo",
+    desc: "Gratuito — ragionamento profondo ma lentissimo: puo' andare in timeout. Max 50 richieste/giorno (1.000 con credito)" },
   { id: "gemini-flash", label: "Gemini 2.5 Flash", provider: "gemini", model: "gemini-2.5-flash",
     cost_per_pred: 0.002, speed: "Veloce", quality: "Buono", desc: "Veloce e bilanciato" },
   { id: "gemini-pro", label: "Gemini 2.5 Pro", provider: "gemini", model: "gemini-2.5-pro",
@@ -42,16 +48,18 @@ export const LLM_OPTIONS: LlmOption[] = [
 export const DEFAULT_LLM = "deepseek-chat";
 
 /** Provider gia' collegati con una chiave funzionante (aggiornato man mano che l'utente le fornisce). */
-export const CONFIGURED_PROVIDERS = new Set(["deepseek", "groq"]);
+export const CONFIGURED_PROVIDERS = new Set(["deepseek", "groq", "openrouter"]);
 
 const PROVIDER_BASE_URL: Record<string, string> = {
   deepseek: "https://api.deepseek.com",
   groq: "https://api.groq.com/openai/v1",
+  openrouter: "https://openrouter.ai/api/v1",
 };
 
 const PROVIDER_ENV_KEY: Record<string, string> = {
   deepseek: "DEEPSEEK_API_KEY",
   groq: "GROQ_API_KEY",
+  openrouter: "OPENROUTER_API_KEY",
 };
 
 declare const Netlify: { env: { get(key: string): string | undefined } } | undefined;
@@ -72,6 +80,18 @@ function readEnv(key: string): string | undefined {
   return process.env[key];
 }
 
+/**
+ * Vero se il provider ha un adapter E la sua chiave e' davvero su Netlify.
+ * Serve a llm-settings per dire al frontend quali modelli sono utilizzabili
+ * ADESSO: prima bastava essere nell'elenco, e un modello senza chiave
+ * risultava "configurato" fino al momento in cui lo si usava e falliva.
+ */
+export function isProviderUsable(provider: string): boolean {
+  if (!CONFIGURED_PROVIDERS.has(provider)) return false;
+  const envKey = PROVIDER_ENV_KEY[provider];
+  return !!(envKey && readEnv(envKey));
+}
+
 export async function callLlm(
   option: LlmOption,
   systemPrompt: string,
@@ -90,8 +110,12 @@ export async function callLlm(
   }
 
   const isReasoningModel =
-    option.id === "deepseek-reasoner" || option.model.includes("r1") || option.model.includes("gpt-oss");
-  const maxTokens = isReasoningModel ? 8000 : 2000;
+    option.id === "deepseek-reasoner" || option.model.includes("r1") ||
+    option.model.includes("gpt-oss") || option.model.includes("nemotron");
+  // Su OpenRouter il tetto resta piu' basso: i modelli :free sono lenti e con
+  // 8000 token di uscita la funzione Netlify va in timeout prima della fine.
+  // Meglio una risposta corta che arriva di una lunga che non arriva mai.
+  const maxTokens = option.provider === "openrouter" ? 3000 : isReasoningModel ? 8000 : 2000;
 
   // DeepSeek V4 (sia Flash che Pro) attiva di default la "thinking mode" —
   // diversamente dal vecchio V3.2 (deepseek-chat), che non ragionava affatto.
@@ -102,11 +126,26 @@ export async function callLlm(
   // reasoning_content qui sotto resterebbe con testo incompleto).
   const disableThinking = option.provider === "deepseek" && option.id !== "deepseek-reasoner";
 
-  const res = await fetch(`${baseUrl}/chat/completions`, {
+  // Le Netlify Function vengono uccise dalla piattaforma intorno ai 26
+  // secondi, senza spiegazioni. Tagliando noi a 22 l'errore che arriva a
+  // schermo dice cosa e' successo davvero, invece di un 502 muto.
+  const controller = new AbortController();
+  const timeoutMs = option.provider === "openrouter" ? 22000 : 25000;
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+  let res: Response;
+  try {
+    res = await fetch(`${baseUrl}/chat/completions`, {
     method: "POST",
+    signal: controller.signal,
     headers: {
       Authorization: `Bearer ${apiKey}`,
       "Content-Type": "application/json",
+      // OpenRouter chiede di identificare l'applicazione chiamante: serve per
+      // le statistiche e per non essere trattati come traffico anonimo.
+      ...(option.provider === "openrouter"
+        ? { "HTTP-Referer": "https://pronoblast.netlify.app", "X-Title": "ScoreBlast" }
+        : {}),
     },
     body: JSON.stringify({
       model: option.model,
@@ -119,15 +158,38 @@ export async function callLlm(
       ...(disableThinking ? { thinking: { type: "disabled" } } : {}),
     }),
   });
+  } catch (e: any) {
+    if (e?.name === "AbortError") {
+      throw new Error(
+        `${option.label} non ha risposto entro ${timeoutMs / 1000} secondi. I modelli gratuiti su OpenRouter sono molto lenti: riprova, oppure scegli un altro modello.`
+      );
+    }
+    throw e;
+  } finally {
+    clearTimeout(timer);
+  }
 
   if (!res.ok) {
     const errText = await res.text();
+    // 429 = tetto di richieste superato. Vale la pena dirlo in chiaro, perche'
+    // sui modelli :free si arriva a 50 richieste al giorno molto in fretta.
+    if (res.status === 429) {
+      throw new Error(
+        `${option.label}: tetto di richieste superato (20 al minuto, 50 al giorno sui modelli gratuiti). Riprova piu' tardi o scegli un altro modello. Dettaglio: ${errText}`
+      );
+    }
     throw new Error(`Errore ${option.provider} (${res.status}): ${errText}`);
   }
 
   const data = await res.json();
+  // OpenRouter puo' restituire un errore dentro una risposta 200.
+  if (data?.error) {
+    throw new Error(`Errore ${option.provider}: ${data.error.message || JSON.stringify(data.error)}`);
+  }
   const msg = data?.choices?.[0]?.message;
-  let text: string = msg?.content || msg?.reasoning_content || "";
-  if (!text.trim() && msg?.reasoning_content) text = msg.reasoning_content;
+  // OpenRouter espone il ragionamento come `reasoning`, DeepSeek come
+  // `reasoning_content`: proviamo entrambi prima di arrenderci.
+  let text: string = msg?.content || "";
+  if (!text.trim()) text = msg?.reasoning_content || msg?.reasoning || "";
   return text;
 }

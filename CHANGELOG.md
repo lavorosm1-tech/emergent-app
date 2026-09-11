@@ -88,6 +88,53 @@ codice + `.md` insieme -> costruisce.
 
 ## Log (più recente in cima)
 
+### 2026-09-10 (5) — OpenRouter come provider, Nemotron 3 Ultra nel menu modelli
+
+Richiesta di Rossi: aggiungere `NVIDIA: Nemotron 3 Ultra (free)` accanto a
+DeepSeek e Groq nella scelta del modello.
+
+Costo basso perché OpenRouter parla il formato OpenAI come gli altri due:
+stesso `/chat/completions`, stesso body. È bastato aggiungere base URL, nome
+della variabile d'ambiente (`OPENROUTER_API_KEY`) e una voce in `LLM_OPTIONS` —
+il menu del frontend è generato da quell'elenco, quindi compare da solo.
+
+Modello: `nvidia/nemotron-3-ultra-550b-a55b:free`, endpoint
+`https://openrouter.ai/api/v1`.
+
+**Adattamenti specifici, tutti dovuti al fatto che i modelli `:free` sono lenti
+e contingentati:**
+
+- `max_tokens` a 3000 su OpenRouter invece di 8000. Nemotron è un modello di
+  ragionamento, ma con 8000 token di uscita a quella velocità la funzione muore
+  prima della fine: meglio una risposta corta che arriva.
+- **Timeout esplicito a 22s** con `AbortController`. Netlify uccide le function
+  intorno ai 26 secondi senza spiegazioni: tagliando prima, l'errore che arriva
+  a schermo dice cosa è successo invece di un 502 muto.
+- **429 riconosciuto e spiegato**: i `:free` sono a 20 richieste/minuto e 50 al
+  giorno (1.000 dopo un acquisto una tantum da $10). Ci si arriva in fretta, e
+  un messaggio generico avrebbe fatto perdere tempo.
+- **Errore dentro una risposta 200**: OpenRouter a volte risponde 200 con un
+  `error` nel corpo (tipicamente "no endpoints available"). Ora viene
+  intercettato invece di produrre un JSON vuoto.
+- **Ragionamento**: OpenRouter espone il campo `reasoning`, DeepSeek
+  `reasoning_content`. Si provano entrambi prima di arrendersi.
+- Header `HTTP-Referer` e `X-Title` aggiunti solo per OpenRouter.
+
+**`isProviderUsable()`** sostituisce `CONFIGURED_PROVIDERS.has()` in
+`llm-settings`: prima bastava essere nell'elenco per risultare "configurato",
+anche senza chiave. Ora si controlla che la variabile d'ambiente esista davvero,
+quindi il modello appare spento finché la chiave non è su Netlify.
+
+**Verifiche**: adapter ESEGUITO davvero con `fetch` finto su sei casi — risposta
+normale, fallback su `reasoning`, 429, errore dentro una 200, timeout (scattato a
+22s come previsto), e DeepSeek invariato (nessun header OpenRouter, `thinking`
+ancora disabilitato). `tsc` pulito sulle function e a 18 errori di baseline sul
+frontend.
+
+**NOTA**: `OPENROUTER_API_KEY` va aggiunta su Netlify da Rossi — gli strumenti
+disponibili a Claude non permettono di leggere né scrivere le variabili
+d'ambiente.
+
 ### 2026-09-10 (4) — Pulizia della zona bassa: via la freccia flottante, spazi riallineati
 
 Da uno screenshot di Rossi con la barra AVANTI finalmente al suo posto, ma la
