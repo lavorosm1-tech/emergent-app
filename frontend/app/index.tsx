@@ -16,7 +16,7 @@ import { useBottomNav } from "@/src/components/BottomNavContext";
 import { useToast } from "@/src/components/Toast";
 import { matchesCache, daysCache, marketStatsCache, selectedListCache } from "@/src/utils/cache";
 import { confirmAction } from "@/src/utils/platform";
-import { parseLeagueCode } from "@/src/utils/leagues";
+import { parseLeagueCode, isMainLeague, isFirstDivision } from "@/src/utils/leagues";
 import { predictionQueue } from "@/src/utils/predictionQueue";
 
 function todayISO() {
@@ -129,7 +129,7 @@ let savedQuery = "";
 let savedSelectedDay: string | null = null;
 let savedTierFilter: "top" | null = null;
 let savedAreaFilter: string | null = null;
-let savedCountryFilter: string | null = null;
+let savedCountryFilters: string[] = [];
 let savedCompetitionFilter: string | null = null;
 let savedDidInit = false;
 
@@ -152,7 +152,8 @@ export default function Home() {
   const [didInit, setDidInit] = useState(savedDidInit);
   const [tierFilter, setTierFilter] = useState<"top" | null>(savedTierFilter);
   const [areaFilter, setAreaFilter] = useState<string | null>(savedAreaFilter);
-  const [countryFilter, setCountryFilter] = useState<string | null>(savedCountryFilter);
+  // Selezione MULTIPLA: si possono scegliere quante nazioni si vuole.
+  const [countryFilters, setCountryFilters] = useState<string[]>(savedCountryFilters);
   const [competitionFilter, setCompetitionFilter] = useState<string | null>(savedCompetitionFilter);
   const [sortByTime, setSortByTime] = useState(false);
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
@@ -166,7 +167,7 @@ export default function Home() {
   useEffect(() => { savedSelectedDay = selectedDay; }, [selectedDay]);
   useEffect(() => { savedTierFilter = tierFilter; }, [tierFilter]);
   useEffect(() => { savedAreaFilter = areaFilter; }, [areaFilter]);
-  useEffect(() => { savedCountryFilter = countryFilter; }, [countryFilter]);
+  useEffect(() => { savedCountryFilters = countryFilters; }, [countryFilters]);
   useEffect(() => { savedCompetitionFilter = competitionFilter; }, [competitionFilter]);
   useEffect(() => { savedDidInit = didInit; }, [didInit]);
 
@@ -317,12 +318,25 @@ export default function Home() {
         if (!hay.includes(q)) return false;
       }
       if (competitionFilter && m.manifestazione !== competitionFilter) return false;
-      if (countryFilter && lc.country !== countryFilter) return false;
+      if (countryFilters.length > 0 && (!lc.country || !countryFilters.includes(lc.country))) return false;
       if (areaFilter && lc.area !== areaFilter) return false;
-      if (tierFilter === "top" && !lc.isTop) return false;
+
+      // PRINCIPALI, due comportamenti a seconda che ci siano nazioni scelte:
+      //  - da solo: l'elenco fisso (GER1, ING1, SPA1, ITA1, FRA1, OLA1, NOR1,
+      //    POR1, USA1, SVE1, DAN1) piu' tutte le coppe europee;
+      //  - insieme a una o piu' nazioni: SOLO la prima divisione di quelle
+      //    nazioni. Cosi' "Italia + Germania + PRINCIPALI" da' ITA1 e GER1,
+      //    mentre "Italia + Germania" da solo da' anche ITA2, ITA3, GER2...
+      if (tierFilter === "top") {
+        if (countryFilters.length > 0) {
+          if (!isFirstDivision(m.manifestazione)) return false;
+        } else if (!isMainLeague(m.manifestazione)) {
+          return false;
+        }
+      }
       return true;
     });
-  }, [matches, query, tierFilter, areaFilter, countryFilter, competitionFilter]);
+  }, [matches, query, tierFilter, areaFilter, countryFilters, competitionFilter]);
 
   const grouped = useMemo(() => {
     if (sortByTime) {
@@ -368,7 +382,7 @@ export default function Home() {
       toast.show("Selezione svuotata", "info");
     },
   });
-  const goToToday = () => { const d = nearestDay(days); setSelectedDay(d); setCountryFilter(null); setAreaFilter(null); setCompetitionFilter(null); setQuery(""); setTierFilter(null); };
+  const goToToday = () => { const d = nearestDay(days); setSelectedDay(d); setCountryFilters([]); setAreaFilter(null); setCompetitionFilter(null); setQuery(""); setTierFilter(null); };
 
   // Reset scroll when user actively changes filters or day (NOT when returning
   // from match detail o dalla Schedina). Questo effetto gira anche al primo
@@ -383,7 +397,7 @@ export default function Home() {
     }
     savedScrollY = 0;
     scrollRef.current?.scrollTo({ y: 0, animated: false });
-  }, [selectedDay, query, tierFilter, areaFilter, countryFilter, competitionFilter, sortByTime]);
+  }, [selectedDay, query, tierFilter, areaFilter, countryFilters, competitionFilter, sortByTime]);
 
   // Day strip: 5 visible days centered around selectedDay
   const dayStrip = useMemo(() => {
@@ -408,7 +422,7 @@ export default function Home() {
   }, [matches]);
 
   // Quanti filtri sono attivi: serve al pallino sul pulsante FILTRI.
-  const activeFilterCount = (areaFilter ? 1 : 0) + (countryFilter ? 1 : 0) + (competitionFilter ? 1 : 0);
+  const activeFilterCount = (areaFilter ? 1 : 0) + countryFilters.length + (competitionFilter ? 1 : 0);
 
   // ============================================================
   // HEADER A SCOMPARSA (richiesta di Rossi, 10/09/2026)
@@ -685,14 +699,22 @@ export default function Home() {
               ))}
             </View>
 
-            <Text style={styles.filtersSection}>NAZIONE</Text>
+            <Text style={styles.filtersSection}>NAZIONI  (puoi sceglierne piu\u2019 di una)</Text>
             <View style={styles.chipRow}>
-              <TouchableOpacity onPress={() => setCountryFilter(null)} style={[styles.chip, !countryFilter && styles.chipActive]}><Text style={[styles.chipTxt, !countryFilter && { color: "#FFF" }]}>TUTTE</Text></TouchableOpacity>
-              {availableCountries.map(c => (
-                <TouchableOpacity key={c} onPress={() => setCountryFilter(c === countryFilter ? null : c)} style={[styles.chip, countryFilter === c && styles.chipActive]} testID={`country-${c}`}>
-                  <Text style={[styles.chipTxt, countryFilter === c && { color: "#FFF" }]}>{c.toUpperCase()}</Text>
-                </TouchableOpacity>
-              ))}
+              <TouchableOpacity onPress={() => setCountryFilters([])} style={[styles.chip, countryFilters.length === 0 && styles.chipActive]}><Text style={[styles.chipTxt, countryFilters.length === 0 && { color: "#FFF" }]}>TUTTE</Text></TouchableOpacity>
+              {availableCountries.map(c => {
+                const on = countryFilters.includes(c);
+                return (
+                  <TouchableOpacity
+                    key={c}
+                    onPress={() => setCountryFilters(on ? countryFilters.filter(x => x !== c) : [...countryFilters, c])}
+                    style={[styles.chip, on && styles.chipActive]}
+                    testID={`country-${c}`}
+                  >
+                    <Text style={[styles.chipTxt, on && { color: "#FFF" }]}>{c.toUpperCase()}</Text>
+                  </TouchableOpacity>
+                );
+              })}
             </View>
 
             <Text style={styles.filtersSection}>COMPETIZIONE</Text>
@@ -720,7 +742,7 @@ export default function Home() {
 
           <View style={styles.filtersFooter}>
             <TouchableOpacity
-              onPress={() => { setAreaFilter(null); setCountryFilter(null); setCompetitionFilter(null); }}
+              onPress={() => { setAreaFilter(null); setCountryFilters([]); setCompetitionFilter(null); }}
               style={styles.clearFiltersBtn}
               testID="filters-clear"
             >

@@ -17,6 +17,7 @@ import { colors } from "@/src/theme";
 import BottomNav from "@/src/components/BottomNav";
 import { AISTUDIO_FRAMEWORK } from "@/src/book-content";
 import { openExternalUrl, confirmAction } from "@/src/utils/platform";
+import { AI_CHAT_URL } from "@/src/utils/aiChat";
 
 export default function Strumenti() {
   const bottomNav = useBottomNav();
@@ -135,14 +136,14 @@ export default function Strumenti() {
     try {
       const { csv, count } = await api.aiStudioPrompt();
       if (count === 0) {
-        Alert.alert("Nessuna partita selezionata", "Seleziona almeno una partita per usare il framework AI Studio.");
+        Alert.alert("Nessuna partita selezionata", "Seleziona almeno una partita per usare il framework TypingMind.");
         return;
       }
       const filled = AISTUDIO_FRAMEWORK.replace("{{CSV}}", csv);
       // CRITICAL: open the new tab BEFORE any async call (popup blocker)
       let newWin: Window | null = null;
       if (Platform.OS === "web" && typeof window !== "undefined") {
-        newWin = window.open("https://aistudio.google.com/prompts/new_chat", "_blank", "noopener,noreferrer");
+        newWin = window.open(AI_CHAT_URL, "_blank", "noopener,noreferrer");
       }
       try {
         await Clipboard.setStringAsync(filled);
@@ -152,13 +153,13 @@ export default function Strumenti() {
         }
       }
       if (Platform.OS !== "web") {
-        openExternalUrl("https://aistudio.google.com/prompts/new_chat");
+        openExternalUrl(AI_CHAT_URL);
       }
       if (Platform.OS === "web" && !newWin) {
-        Alert.alert("Popup bloccato", "Abilita i popup per questo sito o apri manualmente https://aistudio.google.com/prompts/new_chat e incolla con Ctrl+V.");
+        Alert.alert("Popup bloccato", "Abilita i popup per questo sito o apri manualmente " + AI_CHAT_URL + " e incolla con Ctrl+V.");
         return;
       }
-      Alert.alert("Prompt Copiato ✓", `${count} partite. Incolla con Ctrl+V nella nuova scheda di AI Studio.`);
+      Alert.alert("Prompt Copiato ✓", `${count} partite. Incolla con Ctrl+V nella nuova scheda di TypingMind.`);
     } catch (e: any) {
       Alert.alert("Errore", e?.message);
     } finally {
@@ -274,7 +275,7 @@ export default function Strumenti() {
         <Tool
           testID="tool-aistudio"
           icon="planet-outline"
-          title="Framework Google AI Studio"
+          title="Framework TypingMind"
           desc="Genera CSV partite e copia framework prompt per analisi web esterna."
           onPress={openAIStudio}
         />

@@ -88,6 +88,47 @@ codice + `.md` insieme -> costruisce.
 
 ## Log (più recente in cima)
 
+### 2026-09-14 (2) — PRINCIPALI ristretto, nazioni a selezione multipla, TypingMind
+
+**PRINCIPALI.** Usava `isTop`, cioè "prima divisione di qualsiasi nazione": in
+una giornata piena uscivano decine di campionati. Ora ha due comportamenti:
+
+- **da solo** → elenco fisso deciso da Rossi (GER1, ING1, SPA1, ITA1, FRA1,
+  OLA1, NOR1, POR1, USA1, SVE1, DAN1) **più tutte le competizioni europee**
+  (EUCHL, EUEL, EUCONFL…), che non avendo una nazione non sarebbero
+  raggiungibili in nessun altro modo;
+- **insieme a una o più nazioni** → solo la prima divisione di quelle nazioni.
+  "Italia + Germania + PRINCIPALI" dà ITA1 e GER1; senza PRINCIPALI dà anche
+  ITA2, ITA3, GER2…
+
+Aggiunta `isFirstDivision()` in `leagues.ts` perché `isTop` è troppo permissivo:
+il suo `/^[A-Z]+1(?!\d)/` accetta anche `ITA1F` (femminile) e `BRA1RS`
+(riserve). La nuova usa `/^[A-Z]{2,4}1$/`.
+
+**Nazioni a selezione multipla.** Il filtro era a scelta singola
+(`countryFilter: string | null`); ora è `countryFilters: string[]`, senza limite
+di quante se ne possono attivare. Il pallino sul pulsante FILTRI conta ogni
+nazione scelta.
+
+**TypingMind al posto di Google AI Studio.** L'indirizzo era scritto a mano in
+**tre file** (`book.tsx`, `selected.tsx`, `strumenti.tsx`): ora sta in
+`src/utils/aiChat.ts`, così la prossima volta non se ne aggiornano due su tre.
+
+Il prompt NON viaggia nell'indirizzo: TypingMind tiene le conversazioni nel
+browser e non ha un parametro documentato per precompilare il testo. Resta il
+meccanismo che già funzionava — testo negli appunti, scheda aperta, incolla —
+che ha il vantaggio di non dipendere da come quel sito legge gli indirizzi.
+
+**Il prompt ora contiene l'istruzione, non solo i dati.** Prima arrivava un CSV
+di quote e basta, e la richiesta andava scritta a mano ogni volta. Ora
+`aistudio-prompt` antepone la consegna: ricerca sulle partite, pronostico, e una
+multipla con quota totale di almeno 13, con motivazione per riga e quota finale.
+
+**Verifiche**: `isMainLeague` e `isFirstDivision` ESEGUITE sui casi limite
+(ITA1/ITA2/BEL1/ITA1F/BRA1RS/EUCHL/SCO1); `aistudio-prompt` eseguita con dati
+finti, controllato il testo completo che finisce negli appunti; `tsc` a 18
+errori di baseline, nessuno nuovo; `expo export` completato.
+
 ### 2026-09-14 — Upload Excel rotto su Vercel: `Dynamic require of "stream"`
 
 Rossi segnala che il caricamento del file Excel non funziona più. **Non ha

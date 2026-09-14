@@ -262,3 +262,31 @@ export function parseLeagueCode(code: string): {
     : raw;
   return { country, category, area, label, shortLabel, isTop };
 }
+
+
+// ============================================================
+// COMPETIZIONI "PRINCIPALI" (14/09/2026)
+// ============================================================
+// Il tasto PRINCIPALI usava `isTop`, cioe' "prima divisione di QUALSIASI
+// nazione": in una giornata piena uscivano decine di campionati. Rossi vuole
+// un elenco ristretto e deciso da lui.
+export const MAIN_LEAGUE_CODES = [
+  "GER1", "ING1", "SPA1", "ITA1", "FRA1", "OLA1",
+  "NOR1", "POR1", "USA1", "SVE1", "DAN1",
+];
+
+/** Prima divisione vera: ITA1 si', ITA1F (femminile) e BRA1RS (riserve) no.
+ *  `isTop` usa /^[A-Z]+1(?!\d)/, che invece li accetta entrambi. */
+export function isFirstDivision(code: string): boolean {
+  const c = (code || "").toUpperCase().trim();
+  return /^[A-Z]{2,4}1$/.test(c) && !!parseLeagueCode(c).country;
+}
+
+/** Cosa mostra PRINCIPALI quando NON c'e' nessuna nazione selezionata:
+ *  l'elenco fisso qui sopra piu' tutte le competizioni europee per club
+ *  (EUCHL, EUEL, EUCONFL...), che non hanno una nazione e quindi non
+ *  sarebbero raggiungibili in nessun altro modo. */
+export function isMainLeague(code: string): boolean {
+  const c = (code || "").toUpperCase().trim();
+  return MAIN_LEAGUE_CODES.includes(c) || /^EU/.test(c);
+}

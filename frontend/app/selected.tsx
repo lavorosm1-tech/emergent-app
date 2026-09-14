@@ -18,6 +18,7 @@ import { useBottomNav } from "@/src/components/BottomNavContext";
 import { useToast } from "@/src/components/Toast";
 import { selectedListCache, matchesCache, marketStatsCache, mlStatsCache } from "@/src/utils/cache";
 import BottomNav from "@/src/components/BottomNav";
+import { AI_CHAT_URL } from "@/src/utils/aiChat";
 
 export default function Selected() {
   const router = useRouter();
@@ -199,7 +200,7 @@ export default function Selected() {
               // THEN open new tab
               let newWin: Window | null = null;
               if (Platform.OS === "web" && typeof window !== "undefined") {
-                newWin = window.open("https://aistudio.google.com/prompts/new_chat", "_blank", "noopener,noreferrer");
+                newWin = window.open(AI_CHAT_URL, "_blank", "noopener,noreferrer");
               }
               if (Platform.OS === "web" && !newWin) {
                 Alert.alert("Popup bloccato", "Abilita i popup e riprova.");
@@ -207,14 +208,14 @@ export default function Selected() {
               }
               Alert.alert(
                 copied ? "Prompt copiato ✓" : "Prompt pronto",
-                `${count} partite. ${copied ? "Incolla con Ctrl+V" : "Copia manuale richiesta"} nella scheda AI Studio.`,
+                `${count} partite. ${copied ? "Incolla con Ctrl+V" : "Copia manuale richiesta"} nella scheda TypingMind.`,
               );
             } catch (e: any) { Alert.alert("Errore", e?.message); }
           }}
           style={styles.aiStudioBtn}
         >
           <Ionicons name="planet" size={14} color={colors.primary} />
-          <Text style={styles.aiStudioBtnTxt}>AI STUDIO</Text>
+          <Text style={styles.aiStudioBtnTxt}>TYPINGMIND</Text>
         </TouchableOpacity>
         <TouchableOpacity
           testID="sel-autofetch"

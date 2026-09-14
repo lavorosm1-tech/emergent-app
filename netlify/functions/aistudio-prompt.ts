@@ -31,7 +31,21 @@ export default async (): Promise<Response> => {
       ].join(","));
     }
 
-    return jsonResponse({ csv: lines.join("\n"), count: selected.length });
+    // 14/09/2026 — Il CSV da solo non diceva al modello cosa farci: arrivava
+    // una tabella di quote e basta, e l'istruzione andava scritta a mano ogni
+    // volta. Ora la richiesta viaggia insieme ai dati, cosi' basta incollare.
+    const istruzioni = [
+      "Fai una ricerca per queste partite e proponi un pronostico, costruendo",
+      "una multipla con quota totale di almeno 13.",
+      "",
+      "Per ogni partita indica: esito scelto, quota, e il motivo in una riga.",
+      "Alla fine riporta la quota totale della multipla.",
+      "",
+      `Partite selezionate (${selected.length}):`,
+      "",
+    ].join("\n");
+
+    return jsonResponse({ csv: istruzioni + lines.join("\n"), count: selected.length });
   } catch (e: any) {
     return jsonResponse({ error: e.message }, 502);
   }
