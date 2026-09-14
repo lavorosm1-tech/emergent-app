@@ -1,3 +1,22 @@
+// ============================================================
+// PATCH 14/09/2026 — "Dynamic require of \"stream\" is not supported"
+// ============================================================
+// Questo file e' un bundle generato da esbuild con xlsx dentro. xlsx, essendo
+// CommonJS, chiama require("stream") mentre si inizializza. Il bundle e' pero'
+// un modulo ESM (.mjs), dove `require` non esiste: esbuild ci mette uno shim
+// (__require, poco sotto) che, non trovando `require`, LANCIA un errore.
+//
+// Su Netlify non si vedeva perche' il suo bundler ricompilava questo file
+// prima di eseguirlo, fornendo un `require` vero. Vercel invece lo esegue
+// com'e', e l'upload Excel rispondeva 500 gia' al caricamento del modulo,
+// prima ancora di leggere il file.
+//
+// Le due righe qui sotto ricostruiscono un `require` funzionante a partire
+// dall'URL del modulo. Devono stare PRIMA dello shim, cosi' quando lui
+// controlla `typeof require !== "undefined"` trova quello vero e lo usa.
+import { createRequire } from "node:module";
+const require = createRequire(import.meta.url);
+
 var __create = Object.create;
 var __defProp = Object.defineProperty;
 var __getOwnPropDesc = Object.getOwnPropertyDescriptor;

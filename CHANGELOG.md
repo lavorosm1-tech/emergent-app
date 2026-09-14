@@ -88,6 +88,46 @@ codice + `.md` insieme -> costruisce.
 
 ## Log (più recente in cima)
 
+### 2026-09-14 — Upload Excel rotto su Vercel: `Dynamic require of "stream"`
+
+Rossi segnala che il caricamento del file Excel non funziona più. **Non ha
+toccato niente lui**: è una vittima della migrazione, emersa solo ora perché
+l'upload non era fra le cose provate subito dopo il passaggio.
+
+**Diagnosi dai log di esecuzione Vercel**, non per ipotesi:
+
+```
+POST /upload-excel 500
+Error: Dynamic require of "stream" is not supported
+  at netlify/functions/upload-excel.mjs:11
+  at make_xlsx_lib (…:33241)
+```
+
+`upload-excel.mjs` è un bundle generato da esbuild con xlsx dentro. xlsx è
+CommonJS e chiama `require("stream")` mentre si inizializza, ma il bundle è un
+modulo ESM dove `require` non esiste: esbuild ci mette uno shim che, non
+trovandolo, **lancia**. La funzione moriva al caricamento del modulo, prima
+ancora di leggere il file caricato.
+
+**Perché su Netlify non si vedeva**: il bundler di Netlify ricompilava il file
+prima di eseguirlo e forniva un `require` vero. Vercel lo esegue com'è.
+
+**Correzione**: due righe in testa al bundle che ricostruiscono un `require`
+funzionante da `createRequire(import.meta.url)`. Devono stare PRIMA dello shim,
+così quando lui controlla `typeof require !== "undefined"` trova quello vero.
+Nessuna ricompilazione, nessun cambio alla logica di parsing.
+
+**LEZIONE**: un artefatto pre-compilato committato nel repo (come questo
+bundle) porta con sé assunzioni sull'ambiente che lo eseguirà. Cambiando
+piattaforma, quelle assunzioni vanno riverificate una per una — un bundle non è
+codice portabile solo perché è JavaScript.
+
+**Verifiche fatte ESEGUENDO, non compilando**: modulo importato in Node (prima
+lanciava all'import, ora carica); POST senza file → 400 controllato; POST con un
+vero `.xlsx` generato al momento → **200**, con xlsx che ha aperto e letto il
+foglio. `rows_seen: 0` perché il file di prova non ha il formato Sisal, ma il
+parsing è arrivato in fondo senza errori.
+
 ### 2026-09-11 (5) — 504 su ai-predict: due numeri che dovevano accordarsi e non lo facevano
 
 Rossi lancia un pronostico con Nemotron 3 Ultra e riceve un **504 Gateway
