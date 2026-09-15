@@ -24,7 +24,10 @@ export default async (): Promise<Response> => {
 
     const header = "Data,Ora,Lega,Competizione,Casa,Ospite,1,X,2,1X,X2,U1.5,O1.5,U2.5,O2.5,U3.5,O3.5,GG,NG";
     const lines = [header];
-    const v = (x: number | undefined | null) => (x === undefined || x === null ? "" : String(x));
+    // Arrotondamento a 2 decimali: una quota non ha mai piu' di due cifre, e una
+    // coda tipo 2.4000000000000004 nel CSV e' solo rumore per chi legge.
+    const v = (x: number | undefined | null) =>
+      x === undefined || x === null || isNaN(Number(x)) ? "" : String(Math.round(Number(x) * 100) / 100);
     const s = (x: string) => String(x).replace(/,/g, " ").trim();
 
     for (const m of selected as any[]) {
@@ -54,7 +57,7 @@ export default async (): Promise<Response> => {
     // selezionate hanno la LORO data, che non e' detto sia oggi: usiamo quella,
     // altrimenti il modello cercherebbe formazioni per il giorno sbagliato.
     // ========================================================================
-    const TARGET_QUOTA = 15;
+    const TARGET_QUOTA = 13;
 
     const giorni = (Array.from(new Set(selected.map((m: any) => m.day).filter(Boolean))) as string[]).sort();
     const itDate = (d: string) => {
@@ -73,8 +76,13 @@ export default async (): Promise<Response> => {
     const istruzioni = [
       "**Ruolo:** Quantitative Sports Betting Analyst (Poisson/Dixon-Coles + Copula correlazione + Kelly Criterion).",
       "",
-      `**Task:** Costruisci **1 multipla mista (max 6-8 gambe)** per le partite del **${dataTxt}** nei campionati: ${campionatiTxt}.`,
+      `**Task:** Analizza **TUTTE le ${selected.length} partite** elencate in fondo (del **${dataTxt}**, campionati: ${campionatiTxt}) e costruisci **1 multipla mista (max 8 gambe)**.`,
       `Obiettivo: **Quota totale ≥ ${TARGET_QUOTA}** con **Expected Value (EV) complessivo > +3%**.`,
+      "",
+      "**Vincoli di copertura e di chiusura (prioritari su tutto il resto):**",
+      `- **Analizza tutte e ${selected.length} le partite, una per una.** Per ognuna produci il suo pronostico singolo, anche per quelle che poi NON entreranno nella multipla. Nessuna partita va saltata.`,
+      `- **La multipla usa il MINOR numero di gambe che raggiunge quota ${TARGET_QUOTA}.** Aggiungi gambe in ordine di EV decrescente e **fermati appena il prodotto delle quote tocca o supera ${TARGET_QUOTA}**: non continuare per "arrotondare". Possono bastare 4 gambe come servirne 8, decidilo tu in base alle quote.`,
+      `- Se i vincoli strutturali qui sotto rendono **impossibile** raggiungere ${TARGET_QUOTA}, **dillo esplicitamente** e proponi la combinazione migliore raggiungibile: non forzare gambe fuori soglia di edge pur di arrivare al numero.`,
       "",
       "**Mercati Ammessi & Regole Specifiche:**",
       "",
@@ -98,7 +106,7 @@ export default async (): Promise<Response> => {
       "- **Esposizione per orario:** Max **2 gambe nello stesso slot orario** (live-hedge impossibile altrimenti).",
       "",
       "**Processo Obbligatorio (Chain-of-Thought visibile):**",
-      "1.  **Data Ingestion:** Partite del giorno → Formazioni probabili/ufficiose → xG/xGA ultime 6 (home/away split) → Assenze chiave (pesate per xG contribution) → Motivazioni (classifica, coppe, derby).",
+      "1.  **Data Ingestion:** Le partite elencate in fondo → Formazioni probabili/ufficiose → xG/xGA ultime 6 (home/away split) → Assenze chiave (pesate per xG contribution) → Motivazioni (classifica, coppe, derby).",
       "2.  **Fair Odds Engine per partita:**",
       "    - Fit **Dixon-Coles** (time-decay ξ=0.0018, ρ per low-scoring correction).",
       "    - Simula **10.000 match** → Distribuzione esatta P(Home Goals, Away Goals).",
@@ -109,13 +117,15 @@ export default async (): Promise<Response> => {
       "    - Risolvi con **Greedy + Local Search** (o MILP se hai solver).",
       "5.  **Output Finale:**",
       "    - **Tabella Partite (con Fair Odds calcolate vs Quote Book).**",
+      `    - **Pronostici singoli: uno per OGNUNA delle ${selected.length} partite** (evento, pick consigliato, quota, fair odds, edge%), comprese quelle escluse dalla multipla, con il motivo dell'esclusione.`,
       "    - **Multipla Selezionata:** {Evento, Mercato, Pick, Quota_Book, Fair_Odds, Edge%, Kelly%_suggerito}.",
       "    - **Matrice Correlazione (heatmap o tabella ρ_ij).**",
       "    - **Simulazione Monte Carlo Multipla:** P(Vittoria), ROI atteso, Drawdown max 95° percentile.",
       "    - **Varianti:** \"Low Risk\" (sostituisci gambe ρ-alte con 1X2/DC), \"High EV\" (accetta ρ fino a 0.45 per quota > Target*1.5).",
       "    - **Checklist Pre-Bet:** Formazioni confermate? Quote ancora valide? Limiti bookmaker ok?",
       "",
-      "**Tono:** Clinico, matematico, zero narrative. Mostra i numeri (λ_home, λ_away, ρ, Edge%, Kelly). Includendo le partite che sono state selezionate.",
+      "**Tono:** Clinico, matematico, zero narrative. Mostra i numeri (λ_home, λ_away, ρ, Edge%, Kelly).",
+      "**Disclaimer:** 18+, Gioco Responsabile, Quote volatili, Modello ≠ Realtà.",
       "",
       "---",
       "",

@@ -88,6 +88,41 @@ codice + `.md` insieme -> costruisce.
 
 ## Log (più recente in cima)
 
+### 2026-09-15 (3) — Prompt: tutte le partite analizzate, multipla che si ferma a 13
+
+Rossi ha precisato due regole che la specifica scritta non conteneva:
+**tutte** le partite selezionate vanno analizzate (10 selezionate = 10
+pronostici), e la multipla deve **fermarsi appena raggiunge quota 13**, con
+tante gambe quante servono — 4, 6 o 8, lo decide il modello dalle quote.
+
+Aggiunto in cima al prompt un blocco **"Vincoli di copertura e di chiusura
+(prioritari su tutto il resto)"**:
+
+- analizza tutte e N le partite una per una, producendo il pronostico singolo
+  anche per quelle che non entreranno nella multipla;
+- usa il **minor numero di gambe** che raggiunge la soglia, aggiungendo in
+  ordine di EV decrescente e fermandosi appena il prodotto la tocca;
+- **se i vincoli strutturali rendono impossibile arrivare a 13, dillo invece di
+  forzare** gambe sotto soglia di edge pur di arrivare al numero.
+
+L'ultimo punto è un'aggiunta di Claude: con max 2 gambe per campionato e max 2
+per slot orario, su una Schedina concentrata la soglia può essere irraggiungibile,
+e un modello lasciato senza istruzioni forzerebbe la risposta.
+
+Nella sezione output ora è preteso l'elenco dei **pronostici singoli per ognuna**
+delle N partite, comprese le escluse, col motivo dell'esclusione.
+
+`target_quota` da 15 a **13**. Aggiunto il **Disclaimer** (18+, gioco
+responsabile) presente nella specifica aggiornata. Tetto di 8 gambe mantenuto
+come limite superiore: il minimo lo decide la soglia.
+
+**Arrotondamento quote a 2 decimali** nel CSV: senza, una quota poteva uscire
+come `2.4000000000000004`, rumore inutile per chi legge il prompt.
+
+**Verifiche ESEGUITE**: funzione lanciata con 10 partite disordinate su 9
+campionati e 2 giorni — conteggio, elenco campionati, date e ordinamento
+corretti; arrotondamento verificato su un valore con coda di virgola.
+
 ### 2026-09-15 (2) — Prompt TypingMind sostituito con la specifica di Rossi
 
 Il prompt erano quattro righe ("fai un pronostico, multipla da almeno 13").
