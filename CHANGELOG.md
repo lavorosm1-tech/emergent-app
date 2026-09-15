@@ -88,6 +88,48 @@ codice + `.md` insieme -> costruisce.
 
 ## Log (più recente in cima)
 
+### 2026-09-15 — Nota scenario: da posizione relativa a paletti assoluti
+
+La nota 1X2 classificava per **forma**: Equilibrio se la X era la più alta
+delle tre, altrimenti Progressione/Gap secondo l'ordine favorita < X <
+sfavorita. Rossi ha chiesto paletti assoluti, e aveva ragione: una partita con
+1=2,62 X=3,27 2=3,91 finiva in "Progressione" pur non avendo nessuna favorita
+vera.
+
+**Verifica prima di toccare** (chiesta da Rossi): confronto fra la regola nel
+codice e quella descritta, su ~700 combinazioni di quote calibrate su valori
+reali. Coincidevano nel 68%. Tutta la divergenza era una sola famiglia: partite
+senza favorita sotto 2,00 che il codice chiamava Progressione per via
+dell'ordine.
+
+La descrizione a voce aveva però due difetti, segnalati e poi risolti insieme:
+- **sovrapposizione**: 1=4,93 X=4,08 2=2,02 rientrava sia in Equilibrio
+  (entrambe sopra 2, X sopra 2,99) sia in Gap (X sopra 4);
+- **buco**: una quota di esattamente 2,00 non era né "sotto 1,99" né "sopra 2",
+  quindi non cadeva in nessuna categoria.
+
+**Regola nuova, una sola discriminante — esiste una favorita sotto 2,00?**
+
+- **no** → EQUILIBRIO, anche con 1 e 2 a 4. Se nessuno è favorito la partita è
+  in equilibrio, punto.
+- **sì** → conta dove sta la X: da **4,00 in su** → GAP TECNICO; **sotto 4,00**
+  → PROGRESSIONE.
+
+Niente buchi (ogni partita cade da qualche parte), niente sovrapposizioni.
+
+**Due scelte prese da Claude e segnalate a Rossi**: l'equilibrio non controlla
+la X (con entrambe sopra 2,00 e X sotto 2,99 — partita bloccata — resta
+equilibrio, il caso più equilibrato che esista); e favorita sotto 2,00 con X
+sotto 3,00 va in Progressione, combinazione che in pratica non si verifica ma
+meglio coperta che scoperta.
+
+**Verifiche ESEGUITE**: 12 casi limite compresi tutti gli esempi di Rossi e i
+due difetti di cui sopra — tutti corrispondono; su un listino di quote reali la
+classificazione si divide in tre fasce nette e graduali: favorita fino a ~1,65 →
+Gap, da 1,72 a 1,99 → Progressione, da 2,00 in su → Equilibrio.
+
+Resta un calcolo di sola lettura: non tocca verdetto, motore, IA o storico.
+
 ### 2026-09-14 (2) — PRINCIPALI ristretto, nazioni a selezione multipla, TypingMind
 
 **PRINCIPALI.** Usava `isTop`, cioè "prima divisione di qualsiasi nazione": in

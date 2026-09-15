@@ -1443,8 +1443,48 @@ export function getScenarioNote(odds: Odds): ScenarioNote | null {
   const gg = odds.odd_GG;
   const o25 = odds.odd_O25;
 
-  // EQUILIBRIO: la quota X e' la piu' alta delle tre (o pari alla piu' alta).
-  if (qx >= q1 && qx >= q2) {
+  // ==========================================================================
+  // 15/09/2026 — RISCRITTA SU PALETTI ASSOLUTI (specifica di Rossi).
+  //
+  // Prima classificava per POSIZIONE RELATIVA: "Equilibrio" se la X era la piu'
+  // alta delle tre, altrimenti Progressione/Gap secondo l'ordine
+  // favorita < X < sfavorita. Conseguenza: una partita con 1=2,62 X=3,27
+  // 2=3,91 finiva in "Progressione" pur non avendo nessuna favorita vera.
+  //
+  // La discriminante ora e' UNA SOLA: esiste una favorita sotto quota 2,00?
+  //
+  //   NO  -> EQUILIBRIO. Valgono le regole di equilibrio anche con 1 e 2 a 4:
+  //          se nessuno e' favorito, la partita e' in equilibrio, punto.
+  //   SI  -> conta dove sta la X:
+  //            X da 4,00 in su  -> GAP TECNICO   (es. 1=1,80 X=4,00 2=4,30)
+  //            X sotto 4,00     -> PROGRESSIONE  (es. 1=1,95 X=3,40 2=3,80)
+  //
+  // Cosi' non restano buchi (ogni partita cade in una categoria) ne'
+  // sovrapposizioni (le condizioni si escludono a vicenda). La versione
+  // descritta a voce ne aveva entrambi: 1=4,93 X=4,08 2=2,02 rientrava sia in
+  // Equilibrio sia in Gap, e una quota di esattamente 2,00 non rientrava in
+  // nessuna delle tre.
+  //
+  // DUE SCELTE CHE HO PRESO IO, segnalate a Rossi il 15/09:
+  //  - equilibrio non controlla la X. Con entrambe sopra 2,00 e X sotto 2,99
+  //    (partita bloccata, pareggio molto probabile) resta equilibrio: e' il
+  //    caso piu' equilibrato che esista.
+  //  - favorita sotto 2,00 con X sotto 3,00 -> Progressione. Combinazione che
+  //    in pratica non si verifica (una favorita a 1,50 implica un pareggio
+  //    intorno a 4), ma meglio coperta che lasciata scoperta.
+  //
+  // Resta un calcolo di sola lettura: non tocca il verdetto, il motore, l'IA
+  // o lo storico.
+  // ==========================================================================
+  const SOGLIA_FAVORITA = 2.00;
+  const SOGLIA_GAP = 4.00;
+
+  const favorita: "1" | "2" | null =
+    q1 < SOGLIA_FAVORITA && q1 <= q2 ? "1" :
+    q2 < SOGLIA_FAVORITA && q2 < q1 ? "2" :
+    null;
+
+  if (!favorita) {
     let markets: string[];
     if (gg != null && o25 != null && gg < 1.5 && o25 < 1.5) {
       markets = ["MG 3-6 totali (equilibrio con gol molto probabili)"];
@@ -1456,29 +1496,11 @@ export function getScenarioNote(odds: Odds): ScenarioNote | null {
     return { scenario: "Equilibrio", markets };
   }
 
-  // PROGRESSIONE / GAP TECNICO: ordine stretto favorita < X < sfavorita.
-  // La soglia che separa i due scenari e' sulla X (non sulla sfavorita):
-  // "progressione quando... la X non supera il 4, gap tecnico quando...
-  // la X e 2 sono superiori a 4" — se X > 4, la sfavorita lo e' per forza
-  // (essendo sempre > X nell'ordinamento), quindi basta guardare la X.
-  let favorita: "1" | "2" | null = null;
-  if (q1 < qx && qx < q2) { favorita = "1"; }
-  else if (q2 < qx && qx < q1) { favorita = "2"; }
+  const casaOspite = favorita === "1"
+    ? { fav: "CASA", sfav: "OSPITE" }
+    : { fav: "OSPITE", sfav: "CASA" };
 
-  if (favorita) {
-    const casaOspite = favorita === "1"
-      ? { fav: "CASA", sfav: "OSPITE" }
-      : { fav: "OSPITE", sfav: "CASA" };
-    if (qx <= 4) {
-      return {
-        scenario: "Progressione",
-        favorita,
-        markets: [
-          `MC ${casaOspite.fav} (1-3) + MC ${casaOspite.sfav} (0-2)`,
-          `${favorita} DNB oppure ${favorita} AH +0,75`,
-        ],
-      };
-    }
+  if (qx >= SOGLIA_GAP) {
     return {
       scenario: "Gap Tecnico",
       favorita,
@@ -1490,8 +1512,12 @@ export function getScenarioNote(odds: Odds): ScenarioNote | null {
     };
   }
 
-  // Caso residuo (X piu' bassa delle tre, pareggio piu' probabile di entrambi
-  // gli esiti secchi): trattato come Equilibrio, di cui e' un'espressione
-  // estrema di parita' — vedi conversazione del 09/09.
-  return { scenario: "Equilibrio", markets: ["GG", "Over 2,5"] };
+  return {
+    scenario: "Progressione",
+    favorita,
+    markets: [
+      `MC ${casaOspite.fav} (1-3) + MC ${casaOspite.sfav} (0-2)`,
+      `${favorita} DNB oppure ${favorita} AH +0,75`,
+    ],
+  };
 }
