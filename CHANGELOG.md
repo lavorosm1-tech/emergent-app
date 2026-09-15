@@ -88,6 +88,37 @@ codice + `.md` insieme -> costruisce.
 
 ## Log (più recente in cima)
 
+### 2026-09-15 (2) — Prompt TypingMind sostituito con la specifica di Rossi
+
+Il prompt erano quattro righe ("fai un pronostico, multipla da almeno 13").
+Rossi ha scritto una consegna da analista quantitativo — Dixon-Coles, copula per
+la correlazione, Kelly — con soglie di edge per mercato, vincoli
+anti-correlazione (ρ < 0.35), limiti di esposizione per campionato e slot
+orario, e un formato di output preteso. Sostituita integralmente in
+`aistudio-prompt.ts`.
+
+**I segnaposto vengono compilati dai dati veri**, non lasciati da riempire a
+mano: `{data}` dai giorni delle partite in Schedina, `{lista_campionati}` dai
+loro nomi leggibili, `{target_quota}` = 15.
+
+**Scelta consapevole**: la specifica diceva "partite di OGGI", ma le partite in
+Schedina hanno la LORO data, che non è detto sia oggi. Usiamo quella: altrimenti
+il modello cercherebbe formazioni e assenze per il giorno sbagliato, che su un
+prompt che pretende line-up ufficiali è un errore grosso.
+
+**Ordine (richiesto da Rossi).** `pgGet` non garantisce un ordine, quindi le
+partite arrivavano sparse — prima una delle 21:00, poi una delle 15:00. Ora
+sono ordinate per giorno, orario, competizione e squadra di casa: lo stesso
+ordine della Schedina. Aggiunta anche la colonna **Data** al CSV, che prima non
+c'era: con partite su più giorni non si capiva quale fosse quando.
+
+**Verifiche ESEGUITE**: funzione lanciata con righe volutamente disordinate —
+riordinate correttamente; CSV controllato con i nomi di colonna REALI del
+database (`odd_x`, `odd_gg`, `odd_o25` in minuscolo, mappati da `rowToOdds`).
+Un primo giro con nomi maiuscoli mostrava le colonne X/GG/Over vuote: era un
+difetto del dato di prova, non del codice, ed è stato verificato invece che dato
+per scontato.
+
 ### 2026-09-15 — Nota scenario: da posizione relativa a paletti assoluti
 
 La nota 1X2 classificava per **forma**: Equilibrio se la X era la più alta
