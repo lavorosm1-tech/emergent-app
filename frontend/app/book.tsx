@@ -7,7 +7,7 @@ import { useRouter } from "expo-router";
 
 import BottomNav from "@/src/components/BottomNav";
 import { colors } from "@/src/theme";
-import { BOOK_RULES, AISTUDIO_FRAMEWORK } from "@/src/book-content";
+import { BOOK_RULES } from "@/src/book-content";
 import { api } from "@/src/api";
 import { openExternalUrl } from "@/src/utils/platform";
 import { AI_CHAT_URL } from "@/src/utils/aiChat";
@@ -32,7 +32,15 @@ export default function Book() {
         Alert.alert("Nessuna partita selezionata", "Seleziona almeno una partita prima di usare il framework TypingMind.");
         return;
       }
-      const filled = AISTUDIO_FRAMEWORK.replace("{{CSV}}", csv);
+      // 16/09/2026 — NIENTE PIU' INVOLUCRO.
+      // Qui il prompt del server veniva infilato dentro AISTUDIO_FRAMEWORK
+      // al posto di {{CSV}}: quel framework e' una consegna DIVERSA
+      // ("raccoglitore dati web, non fare EV matematico") e si aspettava
+      // una semplice tabella di quote. Ricevendo un prompt completo, il
+      // modello si trovava due consegne opposte e seguiva la prima.
+      // Il testo che arriva da /aistudio-prompt e' gia' completo di ruolo,
+      // processo, formato di output e disclaimer: va incollato cosi' com'e'.
+      const filled = csv;
       // CRITICAL: open window BEFORE async clipboard call to avoid popup blocker
       let newWin: Window | null = null;
       if (Platform.OS === "web" && typeof window !== "undefined") {

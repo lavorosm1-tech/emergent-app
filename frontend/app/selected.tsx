@@ -11,7 +11,6 @@ import { api, Match, quickPrediction, evaluateMarketOutcome } from "@/src/api";
 import { colors } from "@/src/theme";
 import { ScoreInput } from "@/src/components/ScoreInput";
 import { confirmAction } from "@/src/utils/platform";
-import { AISTUDIO_FRAMEWORK } from "@/src/book-content";
 import { Platform } from "react-native";
 import { parseLeagueCode } from "@/src/utils/leagues";
 import { useBottomNav } from "@/src/components/BottomNavContext";
@@ -174,7 +173,15 @@ export default function Selected() {
             if (items.length === 0) { Alert.alert("Vuoto", "Nessuna partita selezionata"); return; }
             try {
               const { csv, count } = await api.aiStudioPrompt();
-              const filled = AISTUDIO_FRAMEWORK.replace("{{CSV}}", csv);
+              // 16/09/2026 — NIENTE PIU' INVOLUCRO.
+      // Qui il prompt del server veniva infilato dentro AISTUDIO_FRAMEWORK
+      // al posto di {{CSV}}: quel framework e' una consegna DIVERSA
+      // ("raccoglitore dati web, non fare EV matematico") e si aspettava
+      // una semplice tabella di quote. Ricevendo un prompt completo, il
+      // modello si trovava due consegne opposte e seguiva la prima.
+      // Il testo che arriva da /aistudio-prompt e' gia' completo di ruolo,
+      // processo, formato di output e disclaimer: va incollato cosi' com'e'.
+      const filled = csv;
               // IMPORTANT: copy FIRST while document has focus, then open new tab
               let copied = false;
               if (Platform.OS === "web" && typeof navigator !== "undefined") {

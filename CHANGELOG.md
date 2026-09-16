@@ -88,6 +88,41 @@ codice + `.md` insieme -> costruisce.
 
 ## Log (più recente in cima)
 
+### 2026-09-16 (2) — Il prompt nuovo finiva dentro quello vecchio
+
+Rossi continuava a vedere il prompt vecchio anche dopo il deploy. Verificato
+interrogando il server in diretta: `/aistudio-prompt` restituiva la versione
+NUOVA, corretta. Il problema era nel frontend.
+
+**Causa**: in `selected.tsx`, `book.tsx` e `strumenti.tsx` il testo del server
+non veniva copiato così com'è, ma infilato dentro `AISTUDIO_FRAMEWORK`
+(`frontend/src/book-content.ts`) al posto del segnaposto `{{CSV}}`.
+
+Quel framework è una consegna **completamente diversa** — "raccoglitore dati
+web, usa solo fotmob/footystats/365scores, **non fare EV matematico**", con
+formato di output `PARTITA_WEB` / `PARTITA_LLM` — e si aspettava lì una semplice
+tabella di quote. Da quando `/aistudio-prompt` genera un prompt completo, negli
+appunti finivano **due consegne opposte nello stesso messaggio**, e il modello
+seguiva la prima.
+
+**Correzione**: `const filled = csv` nei tre punti. Il testo del server è già
+completo di ruolo, processo, formato e disclaimer.
+
+`AISTUDIO_FRAMEWORK` resta nel file, annotato come non più in uso: è un buon
+prompt per un lavoro DIVERSO (raccogliere xG, formazioni e assenze in una chat
+separata), e se un giorno torna in uso deve ricevere solo la tabella delle
+quote.
+
+**LEZIONE — vale oltre questo caso**: riscrivendo il prompt ho guardato solo la
+function che lo genera, dando per scontato che il frontend lo copiasse
+tal quale. Quando si cambia un contenuto, va seguito **fino al punto in cui
+l'utente lo vede**, non fino a dove viene prodotto. Due deploy e due segnalazioni
+di Rossi per una cosa che un `grep` sui punti di utilizzo avrebbe trovato
+subito.
+
+**Verifiche**: nessun uso residuo dell'involucro nelle schermate; `tsc` a 18
+errori di baseline, nessuno nuovo; `expo export` completato.
+
 ### 2026-09-16 — Prompt TypingMind: versione definitiva concordata con Rossi
 
 Sostituito integralmente con la specifica "Quantitative Betting Analyst" di

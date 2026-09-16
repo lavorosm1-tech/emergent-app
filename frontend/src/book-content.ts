@@ -102,6 +102,19 @@ export const BOOK_RULES: { market: string; title: string; rules: string[] }[] = 
   },
 ];
 
+/**
+ * NON PIU' USATO PER IL TASTO TYPINGMIND (16/09/2026).
+ *
+ * Questo era l'involucro dentro cui veniva infilato il CSV delle quote al
+ * posto di {{CSV}}. Da quando /aistudio-prompt genera un prompt completo,
+ * l'involucro creava un conflitto: due consegne opposte nello stesso
+ * messaggio ("raccogli dati dal web, non fare EV" contro "calcola Edge% e
+ * costruisci una multipla").
+ *
+ * Resta qui perche' e' un buon prompt PER UN ALTRO LAVORO: raccogliere xG,
+ * formazioni e assenze in una chat separata. Se lo si rimette in uso, deve
+ * ricevere solo la tabella delle quote, non il prompt completo.
+ */
 export const AISTUDIO_FRAMEWORK = `Ruolo: raccoglitore dati web per analisi scommesse calcio.
 
 OBIETTIVO:
