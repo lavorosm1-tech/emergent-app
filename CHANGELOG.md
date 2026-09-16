@@ -88,6 +88,42 @@ codice + `.md` insieme -> costruisce.
 
 ## Log (più recente in cima)
 
+### 2026-09-16 — Prompt TypingMind: versione definitiva concordata con Rossi
+
+Sostituito integralmente con la specifica "Quantitative Betting Analyst" di
+Rossi, approvata dopo averla mostrata in anteprima prima di scrivere codice.
+
+**Adattamenti necessari, discussi e approvati:**
+- la specifica era scritta per **due messaggi** ("incolla ora l'elenco nel
+  prossimo messaggio"), l'app ne incolla **uno solo**: "nel messaggio
+  successivo" → "qui sotto", e "Incolla ora l'elenco" → "ESEGUI ORA
+  sull'elenco qui sotto". Senza questo il modello resta in attesa di un
+  messaggio che non arriva;
+- rimossa la sezione **INPUT ATTESO**: conteneva come esempio le stesse partite
+  che poi compaiono davvero in fondo, e un elenco duplicato confonde;
+- quota target **≥ 13**, gambe **da 4 a 8**.
+
+**Regola "max 2 gambe stesso campionato" CANCELLATA** su decisione di Rossi:
+conta la probabilità migliore, non da quale campionato arriva la partita.
+Sostituita da una riga esplicita, perché lasciare il vuoto avrebbe fatto
+inventare un limite al modello. Il limite per **slot orario (±90') resta a 2**.
+
+**Copertura obbligatoria** in cima: analizza tutte e N le partite, ognuna nella
+tabella A col suo pronostico, anche le escluse. Aggiunta la colonna
+`Pick scelto` alla tabella A, che nella specifica non c'era.
+
+Tutti i numeri (N partite, date, elenco campionati) sono **compilati dai dati
+veri** della Schedina, non lasciati come segnaposto.
+
+**Verifiche ESEGUITE**: funzione lanciata con le 8 partite reali del 16/09 —
+conteggio, date, elenco campionati, ordinamento e CSV corretti; prompt
+risultante 7.027 caratteri.
+
+**NOTA PER IL FUTURO**: con il limite di 2 gambe per slot orario, un elenco
+concentrato (es. 6 partite su 8 alle 21:00) lascia poche gambe utilizzabili e
+il modello risponderà `❌ NESSUNA MULTIPLA VALIDA` con la combinazione da 3-4.
+È il comportamento voluto dalla regola, non un difetto — segnalato a Rossi.
+
 ### 2026-09-15 (3) — Prompt: tutte le partite analizzate, multipla che si ferma a 13
 
 Rossi ha precisato due regole che la specifica scritta non conteneva:
