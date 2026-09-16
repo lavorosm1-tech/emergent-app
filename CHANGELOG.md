@@ -88,6 +88,27 @@ codice + `.md` insieme -> costruisce.
 
 ## Log (più recente in cima)
 
+### 2026-09-16 (3) — Tolto anche il limite per fascia oraria
+
+Rossi: se sceglie apposta partite tutte alla stessa ora, il vincolo non deve
+bloccarlo. Rimosso `Max 2 gambe stesso slot orario (±90')`, come già fatto per
+il campionato.
+
+Entrambi sostituiti da righe **esplicite** ("nessun limite per campionato",
+"nessun limite per slot orario") più una riga di sintesi che dichiara il
+criterio unico: conta la qualità del pronostico, campionato e orario non
+escludono nulla. Le righe esplicite servono perché un elenco di vincoli con dei
+buchi porta il modello a inventarsi i limiti mancanti.
+
+**Resta in piedi solo il vincolo di correlazione** (ρ < 0.35), che ha una
+ragione diversa: impedisce di giocare due volte lo stesso evento (Over 2.5 e GG
+della stessa partita non sono due scommesse, è una scommessa contata due
+volte). Quello protegge dal moltiplicare una quota che non esiste, non dalla
+concentrazione.
+
+**Verifica ESEGUITA**: caso estremo con 8 partite dello stesso campionato tutte
+alla stessa ora — nessun vincolo le esclude più.
+
 ### 2026-09-16 (2) — Il prompt nuovo finiva dentro quello vecchio
 
 Rossi continuava a vedere il prompt vecchio anche dopo il deploy. Verificato
