@@ -88,6 +88,57 @@ codice + `.md` insieme -> costruisce.
 
 ## Log (più recente in cima)
 
+### 2026-09-17 (2) — Scenario nel prompt, quote obbligatorie, quarto divieto
+
+Nel test precedente il modello aveva messo **5 Over 2.5 su 7 gambe** e portato
+la multipla a quota **76** partendo da una soglia di 13. Tre cause distinte,
+tre correzioni.
+
+**1. Lo scenario accanto a ogni partita.** Le quote reali del file Sisal sono
+l'unica cosa che il modello non riesce a procurarsi da solo (i bookmaker si
+difendono dai robot), e da quelle sappiamo già che TIPO di partita è. Ora ogni
+riga porta `GAP TECNICO` / `PROGRESSIONE` / `EQUILIBRIO` più i mercati da
+valutare per primi.
+
+**Non gli passiamo le quote**: sarebbe il circolo vizioso che ci è già costato
+il prompt lungo. Gli passiamo una **classificazione** — una parola, non un
+numero da confrontare con se stesso. Stessa regola della card in app
+(`getScenarioNote`), coi mercati tradotti in quelli ammessi per TypingMind: il
+DNB diventa 1X/X2, il multigol 1-3/0-2 diventa MG 2-4.
+
+**2. Quote obbligatoriamente vere.** Il modello aveva intestato la colonna
+`Quota stimata` e dichiarato "quote indicative basate su medie di mercato":
+quel 76 non esisteva. Ora deve indicare bookmaker e fonte, e **se non trova la
+quota scarta l'evento**. Vietata per nome la parola "stimata", che era la
+formula con cui si autorizzava.
+
+Conseguenza a catena: senza quote vere il divieto "mai contro la favorita" non
+poteva funzionare, perché chi è la favorita lo decide la quota. Su Sunderland-AZ
+il modello aveva deciso da sé che il favorito era l'AZ ("imbattuto da 18 gare")
+e giocato il 2.
+
+**3. Quarto divieto: mai Over 2.5 se la somma dei gol fatti è sotto 2,5.**
+Chiuse le altre tre porte, l'Over era diventato il rifugio: proposto anche su
+Coventry-Villa, dove 0,0 + 1,0 fa un gol a partita.
+
+**Aggiunte due regole minori**: fermarsi appena la quota supera 13 (era arrivato
+a 76 con sette gambe), e considerare l'esito secco come prima scelta quando la
+favorita sta fra 1,50 e 2,20 — il divieto vietava di giocarle contro ma niente
+obbligava a considerarla, e il modello scappava sull'Over.
+
+**CORREZIONE A UNA MIA AFFERMAZIONE**: nell'anteprima mostrata a Rossi avevo
+scritto che Sunderland-AZ e United-Brighton sarebbero uscite `PROGRESSIONE`.
+Eseguendo il codice con le quote reali sono invece **GAP TECNICO**: in entrambe
+la X vale esattamente 4,00, e il confine è `X >= 4,00`. Avevo dato per scontato
+X < 4 senza controllarlo. Per Sunderland il risultato coincide comunque con
+quello che Rossi voleva (`1 fisso`).
+
+**Verifiche ESEGUITE**: le 8 partite reali del 16/09 classificate una per una;
+confine testato a X=3,90 (Progressione) e X=4,00 (Gap); favorita ospite in
+entrambi gli scenari (dà `X2`/`MG Ospite` e `2 fisso`); equilibrio. Partite
+senza le tre quote non ricevono scenario invece di riceverne uno inventato.
+3.893 caratteri.
+
 ### 2026-09-17 — Tre divieti nel prompt, dopo l'analisi di tre errori reali
 
 Il prompt corto ha funzionato, ma tre pronostici sono andati male e ognuno per
