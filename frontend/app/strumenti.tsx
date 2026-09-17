@@ -16,7 +16,7 @@ import { api } from "@/src/api";
 import { colors } from "@/src/theme";
 import BottomNav from "@/src/components/BottomNav";
 import { openExternalUrl, confirmAction } from "@/src/utils/platform";
-import { AI_CHAT_URL } from "@/src/utils/aiChat";
+import { AI_CHAT_URL, AI_MULTIPLA_PROMPT } from "@/src/utils/aiChat";
 
 export default function Strumenti() {
   const bottomNav = useBottomNav();
@@ -123,6 +123,43 @@ export default function Strumenti() {
         "Import Backup",
         `Partite importate: ${out.inserted_matches}\nDuplicati saltati: ${out.skipped_matches}\nPronostici: ${out.inserted_predictions}`,
       );
+    } catch (e: any) {
+      Alert.alert("Errore", e?.message);
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  /**
+   * Tasto "Genera Multipla tramite AI".
+   * Non dipende dalla Schedina: copia un prompt fisso con cui il modello cerca
+   * da solo le partite del giorno e propone una multipla. Rossi poi seleziona
+   * a mano nell'app quelle che gli interessano.
+   */
+  const openAIMultipla = async () => {
+    setBusy("aimultipla");
+    try {
+      // La scheda va aperta PRIMA di qualunque await, altrimenti il browser la
+      // blocca come popup (stessa trappola gia' nota su openAIStudio).
+      let newWin: Window | null = null;
+      if (Platform.OS === "web" && typeof window !== "undefined") {
+        newWin = window.open(AI_CHAT_URL, "_blank", "noopener,noreferrer");
+      }
+      try {
+        await Clipboard.setStringAsync(AI_MULTIPLA_PROMPT);
+      } catch {
+        if (Platform.OS === "web" && typeof navigator !== "undefined") {
+          try { await (navigator as any).clipboard.writeText(AI_MULTIPLA_PROMPT); } catch {}
+        }
+      }
+      if (Platform.OS !== "web") {
+        openExternalUrl(AI_CHAT_URL);
+      }
+      if (Platform.OS === "web" && !newWin) {
+        Alert.alert("Popup bloccato", "Abilita i popup per questo sito o apri manualmente " + AI_CHAT_URL + " e incolla con Ctrl+V.");
+        return;
+      }
+      Alert.alert("Prompt Copiato ✓", "Incolla con Ctrl+V nella nuova scheda di TypingMind: cerchera' le partite di oggi e proporra' una multipla.");
     } catch (e: any) {
       Alert.alert("Errore", e?.message);
     } finally {
@@ -278,6 +315,13 @@ export default function Strumenti() {
           title="Book Linee Guida"
           desc="Regole di selezione mercati e logiche di pronostico."
           onPress={() => router.push("/book")}
+        />
+        <Tool
+          testID="tool-ai-multipla"
+          icon="sparkles-outline"
+          title="Genera Multipla tramite AI"
+          desc="Cerca le partite di oggi sul web e propone una multipla da quota 13. Non usa la Schedina."
+          onPress={openAIMultipla}
         />
         <Tool
           testID="tool-aistudio"

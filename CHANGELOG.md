@@ -88,6 +88,33 @@ codice + `.md` insieme -> costruisce.
 
 ## Log (più recente in cima)
 
+### 2026-09-17 (6) — Nuovo tasto "Genera Multipla tramite AI"
+
+Aggiunto in Strumenti, sezione ANALISI, sopra "Framework TypingMind".
+
+**È il rovescio dell'altro tasto.** Il framework parte dalle partite già in
+Schedina e le fa analizzare; questo non tocca la Schedina: copia un prompt fisso
+con cui il modello **cerca da solo** le partite del giorno sul web e propone una
+multipla da quota 13. Rossi poi seleziona a mano nell'app quelle che gli
+interessano.
+
+Il prompt è scritto da Rossi e usato **così com'è**, senza segnaposto né
+aggiunte: priorità ai campionati di 1ª divisione con discesa a 2ª e 3ª se non
+ci sono partite, mai sotto la 3ª, 5-8 partite, un solo pronostico per partita,
+stop appena la quota supera 13.
+
+**Scelta deliberata: la data NON viene passata.** Il prompt chiede al modello di
+usare "la data odierna reale", che è più affidabile che infilarci una data
+calcolata dal telefono col rischio di fusi orari sbagliati.
+
+Riusa il meccanismo già collaudato dell'altro tasto — scheda aperta PRIMA di
+qualunque `await` per non farla bloccare come popup, copia negli appunti,
+fallback su `navigator.clipboard`, avviso se il popup viene bloccato.
+
+**Verifiche**: prompt estratto ed eseguito dal bundle, 1.115 caratteri su 15
+righe, identico all'originale; `tsc` a 18 errori di baseline, nessuno nuovo;
+`expo export` completato.
+
 ### 2026-09-17 (5) — Prompt ridotto all'osso: una riga più l'elenco
 
 Rossi ha provato a mano la versione minima — una riga di consegna più l'elenco
