@@ -88,6 +88,50 @@ codice + `.md` insieme -> costruisce.
 
 ## Log (più recente in cima)
 
+### 2026-09-17 — Tre divieti nel prompt, dopo l'analisi di tre errori reali
+
+Il prompt corto ha funzionato, ma tre pronostici sono andati male e ognuno per
+un motivo diverso e ripetibile:
+
+| Partita | Scelta | Esito | Causa |
+|---|---|---|---|
+| Barcellona-Racing | MG Casa 2-4 | 7-2 | Il Barça segnava 4,2 gol a partita: range sbagliato |
+| Milan-Benfica | GG | 0-2 | Milan 2 gol in 4 gare, Benfica 4 clean sheet su 5 |
+| Sunderland-AZ | X2 | 1-0 | Ha puntato **contro** il favorito |
+
+**Il terzo è il più istruttivo.** La regola c'era già nel prompt, ma era scritta
+**con una condizione**: "se la favorita paga troppo poco, cambia mercato".
+Sunderland pagava 1,67 — non "troppo poco" — e il modello si è sentito
+autorizzato a giocare X2. Ora è incondizionata: MAI, a nessuna quota.
+
+**LEZIONE**: una regola con una condizione vaga non è una regola. Il modello
+trova sempre il caso che sta fuori dalla condizione.
+
+Aggiunti tre divieti assoluti, uno per errore. Aggiunta anche alla tabella dei
+pronostici la colonna **media gol fatti e subiti**, così Rossi vede se il
+modello ha davvero guardato i numeri prima di scegliere.
+
+**Scartata la proposta alternativa** (che il modello stesso aveva suggerito come
+post-mortem): scheda tecnica obbligatoria con xG per ogni partita, tabella di
+soglie per mercato, checklist finale SÌ/NO. Motivi:
+- "se mancano formazioni ufficiali → ESCLUSA" avrebbe escluso ogni partita non
+  imminente, visto che le formazioni escono un'ora prima;
+- una tabella con celle obbligatorie da riempire è un invito a inventare gli xG
+  mancanti — lo stesso difetto che ci era costato il prompt lungo;
+- una checklist di autocertificazione riceve sempre "sì";
+- reintroduceva il "max 2 eventi stesso campionato/orario" che Rossi aveva
+  fatto togliere;
+- le soglie erano ritagliate a posteriori su tre partite già giocate.
+
+I tre divieti usano invece dati che il modello trova davvero sul web — gol
+fatti, gol subiti, porte inviolate — non xG stimati per ogni campionato.
+
+**Verifiche ESEGUITE**: prompt generato e controllato riga per riga; ognuno dei
+tre errori verificato contro il divieto corrispondente (Barça 4,2 > 3 → MG
+vietato; Milan 0,5 < 1 e Benfica 4 clean sheet → GG vietato due volte;
+Sunderland favorito → X2 vietato senza eccezioni). 1.416 caratteri, nessuna
+quota nel testo.
+
 ### 2026-09-16 (4) — Prompt TypingMind riscritto da zero: corto e senza quote
 
 Rossi ha provato a mano un prompt di sei righe, senza quote, con la ricerca web

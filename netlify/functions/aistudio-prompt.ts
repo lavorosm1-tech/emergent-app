@@ -66,11 +66,33 @@ export default async (): Promise<Response> => {
       return `${itDate(m.day)} | ${m.time || ""} | ${comp} — ${m.squadra1} - ${m.squadra2}`;
     });
 
+    // ======================================================================
+    // 17/09/2026 — TRE DIVIETI, dopo l'analisi dei tre errori reali.
+    //
+    // Il prompt corto aveva funzionato, ma tre pronostici sono andati male e
+    // ognuno per un motivo diverso e ripetibile:
+    //   - Barcellona MG Casa 2-4 -> finita 7-2. Il Barca segnava 4,2 gol a
+    //     partita: il range 2-4 era semplicemente quello sbagliato.
+    //   - Milan-Benfica GG -> finita 0-2. Milan 2 gol in 4 gare, Benfica
+    //     4 porte inviolate su 5.
+    //   - Sunderland-AZ X2 -> finita 1-0. Ha puntato CONTRO il favorito.
+    //
+    // Il terzo e' il piu' istruttivo: la regola c'era gia', ma era scritta
+    // con una condizione ("se la favorita paga troppo poco"). Sunderland
+    // pagava 1,67 — non "troppo poco" — e il modello si e' sentito
+    // autorizzato. Ora e' incondizionata: MAI, a nessuna quota.
+    //
+    // Sono tre divieti e non una tabella di soglie perche' usano dati che il
+    // modello trova davvero sul web (gol fatti, gol subiti, porte inviolate),
+    // non xG stimati per ogni campionato. Una tabella con celle obbligatorie
+    // da riempire e' un invito a inventare i numeri mancanti.
+    // ======================================================================
     const prompt = [
       "Fai una ricerca via web e analizza queste partite.",
       "",
       `1) Per OGNI partita (tutte e ${N}, nessuna esclusa) scrivi:`,
-      "   partita | pronostico scelto | 1 riga di motivazione (forma, gol fatti/subiti, assenze).",
+      "   partita | pronostico scelto | media gol fatti e subiti delle due squadre |",
+      "   1 riga di motivazione (forma, assenze, turnover).",
       "",
       "2) Poi componi UNA multipla di 5-8 eventi, scegliendo le partite con la",
       "   probabilità migliore — indipendentemente da campionato e orario.",
@@ -79,8 +101,15 @@ export default async (): Promise<Response> => {
       "",
       "Mercati ammessi (solo questi): 1, 2, 1X, X2, GG, Over 2.5, MG Casa 2-4, MG Ospite 2-4.",
       "",
-      "Non puntare contro il risultato probabile: se la favorita paga troppo poco,",
-      "cambia mercato (Over 2.5, GG, MG) invece di giocare l'esito opposto.",
+      "TRE DIVIETI ASSOLUTI:",
+      "- MAI contro la squadra più probabile. Se una è favorita non giocare mai",
+      "  l'esito opposto né la doppia chance dalla parte opposta, a nessuna quota.",
+      "  Se la favorita paga poco, cambia MERCATO (Over 2.5, GG, MG), non lato.",
+      "- MAI MG 2-4 se la favorita segna in media più di 3 gol a partita, o se",
+      "  l'avversaria ne subisce più di 2: finisce 5-1 e il multigol salta.",
+      "  In quel caso Over 2.5.",
+      "- MAI GG se una delle due ha tenuto la porta inviolata in almeno 3 delle",
+      "  ultime 5, o se segna meno di 1 gol a partita.",
       "",
       "Se per una partita non trovi dati sufficienti (partita lontana, formazioni",
       "non uscite), scrivilo invece di inventare.",
