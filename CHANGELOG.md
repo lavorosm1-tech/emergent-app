@@ -88,6 +88,38 @@ codice + `.md` insieme -> costruisce.
 
 ## Log (più recente in cima)
 
+### 2026-09-17 (5) — Prompt ridotto all'osso: una riga più l'elenco
+
+Rossi ha provato a mano la versione minima — una riga di consegna più l'elenco
+con scenario e mercati — e il risultato è stato **migliore di tutte le versioni
+con le regole**. Il prompt è stato ridotto a quello.
+
+**Da 5.522 a circa 750 caratteri.**
+
+**Perché le regole facevano danno.** Erano arrivate a 5.500 caratteri con una
+regola aggiunta per ogni errore osservato. L'effetto è stato l'opposto: nel test
+il modello ha scartato **4 partite su 8** e non ha prodotto nessuna multipla,
+usando le regole stesse come appigli — *"la favorita reale è l'altra"* per
+aggirare il divieto sul lato, *"quota combo non trovata"* per saltare un
+mercato, il pavimento di 1,35 per escludere le doppie chance.
+
+**L'informazione che conta è già nei MERCATI.** Sono calcolati dalle quote reali
+del file Sisal — l'unica cosa che il modello non può procurarsi — e restringono
+la scelta a due o tre voci per partita. Il resto era testo da rigirare.
+
+**LEZIONE, la più importante di questa serie**: aggiungere una regola per ogni
+errore osservato peggiora il risultato invece di migliorarlo. Ogni vincolo in
+più è un appiglio in più, e un modello con venti regole trova sempre quella che
+gli permette di non decidere. Se torna a sbagliare si aggiunge UNA riga per
+quell'errore specifico, non un blocco.
+
+**NOTA**: la versione minima non contiene più l'istruzione sulla multipla a
+quota 13. È la richiesta esplicita di Rossi, segnalata: basta una riga per
+rimetterla.
+
+**Verifica ESEGUITA**: testo generato con quattro partite su tre scenari
+diversi, identico a quello che Rossi aveva composto a mano. 749 caratteri.
+
 ### 2026-09-17 (4) — Scartava 4 partite su 8: cinque correzioni
 
 Il test ha prodotto **4 scarti su 8** e nessuna multipla. Analizzando gli scarti

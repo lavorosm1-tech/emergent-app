@@ -160,105 +160,29 @@ export default async (): Promise<Response> => {
     // da riempire e' un invito a inventare i numeri mancanti.
     // ======================================================================
     const prompt = [
-      "Fai una ricerca via web e analizza queste partite.",
-      "",
-      `1) Per OGNI partita (tutte e ${N}, nessuna esclusa) scrivi:`,
-      "   partita | quota 1 e quota 2 | pronostico scelto | media gol fatti e subiti",
-      "   delle due squadre | fonte dei dati | 1 riga di motivazione (forma, assenze,",
-      "   turnover).",
-      "",
-      "2) Poi componi UNA multipla di 5-8 eventi, scegliendo le partite con la",
-      "   probabilità migliore — indipendentemente da campionato e orario.",
-      "   Quota totale minima 13. Un solo evento per partita.",
-      "   Fermati appena la quota totale supera 13: non aggiungere gambe per alzarla,",
-      "   ogni gamba in più è un rischio in più.",
-      "   Alla fine indica la quota totale.",
-      "",
-      "SCENARIO E MERCATI:",
-      "Accanto a ogni partita trovi lo scenario, calcolato sulle quote reali del",
-      "bookmaker italiano, e i mercati da considerare per quella partita.",
-      "Scegli SOLO fra i mercati indicati per quella partita. Non usarne altri.",
-      "",
-      "- GAP TECNICO = favorita netta, il mercato esclude il pareggio.",
-      "- PROGRESSIONE = favorita tiepida, vince spesso ma di misura e talvolta",
-      "  si fa raggiungere.",
-      "- EQUILIBRIO = nessuno è favorito, la partita si legge sui gol.",
-      "",
-      "Scarta una partita SOLO se hai davvero valutato tutti i mercati indicati e",
-      "nessuno è giocabile. Lo scarto è l'ultima spiaggia, non la via comoda:",
-      "prima di scartare, verifica di non aver saltato la combo GG + Over 2,5",
-      "(che si calcola, vedi sotto) e di non aver ribaltato chi è la favorita.",
-      "",
-      "OBBLIGO DI CONFRONTO:",
-      "Per ogni partita devi valutare TUTTI i mercati indicati, non fermarti al",
-      "primo che soddisfa le condizioni. Scrivi per ciascuno se è giocabile o no",
-      "e perché, poi scegli.",
-      "",
-      "La motivazione deve essere COERENTE con la scelta. Se scrivi che la",
-      "favorita è in difficoltà (turnover, assenze, crisi di risultati), NON puoi",
-      "scegliere l'esito secco su di lei: passa a un altro mercato della lista.",
-      "",
-      "\"La quota supera 1,35\" non è una motivazione. Il pavimento è un requisito",
-      "minimo, non un motivo per scegliere.",
-      "",
-      "QUOTA MINIMA: 1,35 su ogni gamba, con UNA sola eccezione: 1X e X2, per cui",
-      "non c'è pavimento. Per tutti gli altri mercati un evento sotto 1,35 non",
-      "entra in multipla nemmeno se è quasi certo: non paga abbastanza per il",
-      "rischio che aggiunge.",
-      "",
-      "QUANDO UN MERCATO È GIOCABILE (condizioni da verificare, non opinioni):",
-      "- 1 / 2 fisso → solo sulla favorita, e solo se paga ≥ 1,35.",
-      "- MG Casa 2-4 → la casa segna in media tra 2,0 e 3,5 gol E l'ospite ne",
-      "  subisce almeno 2. Sotto 2,0 rischia l'1-0, sopra 3,5 rischia il 5-0.",
-      "- MG Ospite 2-4 → stessa cosa a parti invertite.",
-      "- MC CASA (1-3) + MC OSPITE (0-2) → la casa segna tra 1,0 e 3,0 e l'ospite",
-      "  ne segna al massimo 2 di media.",
-      "- MC CASA (0-2) + MC OSPITE (1-3) → stessa cosa a parti invertite.",
-      "- GG → entrambe segnano almeno 1 gol di media E entrambe ne subiscono",
-      "  almeno 1,2. Due squadre che si fanno male a vicenda: 1-1, 2-1.",
-      "- Over 2,5 → somma dei gol fatti almeno 2,5 E almeno una delle due subisce",
-      "  più di 1,5. Serve che qualcuno vada in difficoltà: 3-0, 3-1, 2-2.",
-      "- GG + Over 2,5 (combo) → entrambe le condizioni sopra insieme.",
-      "  Se il bookmaker non espone la combo già pronta, NON scartarla: la quota",
-      "  si ottiene moltiplicando le due quote reali (GG × Over 2,5) e togliendo",
-      "  il 5%. È un calcolo su quote vere, non una stima.",
-      "- MG Totale 2-4 (solo in EQUILIBRIO) → la somma dei gol fatti delle due",
-      "  squadre sta tra 2,0 e 4,0. Copre 1-1, 2-0, 2-1, 3-1, 2-2: i risultati",
-      "  che GG e Over lasciano scoperti. Sotto 2,0 rischia lo 0-0 o l'1-0,",
-      "  sopra 4,0 rischia il 5-1.",
-      "- 1X / X2 (solo in PROGRESSIONE) → dalla parte della favorita, cioè quella",
-      "  con la quota più bassa.",
-      "  **Per questi due mercati NON vale il pavimento di 1,35**: una doppia",
-      "  chance a 1,25 è ammessa. Sono coperture, non scommesse di valore, e a",
-      "  1,35 non se ne troverebbero quasi mai.",
-      "",
-      "QUOTE:",
-      "Devono essere quelle vere trovate sul web, col nome del bookmaker.",
-      "Se per un evento non trovi la quota, NON stimarla: scarta quell'evento.",
-      "Non usare mai la parola \"stimata\" né \"calcolata da quote fair\".",
-      "",
-      "COME LEGGERE I NUMERI:",
-      "- Prima di ogni pronostico scrivi la quota dell'1 e quella del 2.",
-      "  La più bassa indica la favorita. Solo dopo scegli il mercato.",
-      "- **La favorita è quella con la quota più bassa. Punto.** Non puoi",
-      "  ridefinirla in base a forma, storico, infortuni o tuoi modelli. Frasi",
-      "  come \"la favorita reale è l'altra\" sono VIETATE: forma e assenze",
-      "  servono a scegliere il MERCATO, non a ribaltare chi è favorito.",
-      "  Se la favorita di quota è in difficoltà, cambia mercato restando dalla",
-      "  sua parte — non dichiarare favorita l'altra per scartare la partita.",
-      "- Usa sempre i numeri in casa per la squadra di casa e in trasferta per",
-      "  l'ospite, mai le medie generali.",
-      "- Indica la fonte dei dati (sito e periodo). Se trovi dati contrastanti,",
-      "  usa i più conservativi.",
-      "",
-      "DIVIETO ASSOLUTO:",
-      "MAI contro la squadra più probabile. Se una è favorita non giocare mai",
-      "l'esito opposto né la doppia chance dalla parte opposta, a nessuna quota.",
-      "Se la favorita paga poco, cambia MERCATO, non lato.",
-      "",
-      "Se per una partita non trovi dati sufficienti (partita lontana, formazioni",
-      "non uscite), scrivilo invece di inventare.",
-      "",
+      // ====================================================================
+      // 17/09/2026 — PROMPT RIDOTTO ALL'OSSO, su richiesta di Rossi dopo il
+      // test migliore.
+      //
+      // Era arrivato a 5.500 caratteri: una regola aggiunta per ogni errore
+      // osservato. Il risultato e' stato l'opposto di quello voluto — il
+      // modello ha scartato 4 partite su 8 usando le regole stesse come
+      // appigli ("la favorita reale e' l'altra", "quota combo non trovata"),
+      // e non ha prodotto nessuna multipla.
+      //
+      // Rossi ha provato a mano la versione minima: una riga di consegna piu'
+      // l'elenco con scenario e mercati. Risultato migliore di tutte le
+      // versioni con le regole.
+      //
+      // L'informazione che conta e' gia' nei MERCATI: sono calcolati dalle
+      // quote reali del file Sisal, che il modello non puo' procurarsi, e
+      // restringono la scelta a tre voci per partita. Il resto — soglie,
+      // divieti, obblighi di confronto — e' testo che il modello rigira.
+      //
+      // Se torna a sbagliare, si aggiunge UNA riga per l'errore specifico.
+      // Non un blocco di regole.
+      // ====================================================================
+      "Fai una ricerca via web e analizza queste partite",
       "Partite:",
       ...righe,
     ].join("\n");
