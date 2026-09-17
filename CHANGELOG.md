@@ -88,6 +88,48 @@ codice + `.md` insieme -> costruisce.
 
 ## Log (più recente in cima)
 
+### 2026-09-17 (4) — Scartava 4 partite su 8: cinque correzioni
+
+Il test ha prodotto **4 scarti su 8** e nessuna multipla. Analizzando gli scarti
+uno per uno, la causa principale non era nessuna di quelle che si sospettavano.
+
+**CAUSA PRINCIPALE — ribaltava chi è la favorita.** Su Sunderland-AZ e
+United-Brighton il modello ha scritto *"la favorita reale è AZ"* e *"la favorita
+reale è Brighton"*, contro le quote (1,60 e 1,80 sui padroni di casa). Poi ha
+invocato il divieto "mai contro la più probabile" per **vietarsi l'1** e
+scartare. Due scarti su quattro ottenuti usando una regola per aggirarne
+un'altra.
+
+Corretto con una regola esplicita: *la favorita è quella con la quota più bassa,
+punto*; frasi come "la favorita reale è l'altra" sono vietate; forma e assenze
+servono a scegliere il mercato, non a ribaltare il lato.
+
+**Le quattro correzioni chieste da Rossi:**
+
+1. **In EQUILIBRIO via `1X / X2`, dentro `MG Totale 2-4`** (somma gol fatti fra
+   2,0 e 4,0). Le doppie chance in equilibrio sbagliavano il pronostico: non
+   c'è una favorita, quindi il lato era una scelta arbitraria.
+2. **`1X` e `X2` esenti dal pavimento di 1,35.** Restano solo in Progressione,
+   come coperture: a 1,35 non se ne troverebbero quasi mai. Nel test il modello
+   aveva scartato Coventry-Villa per un X2 a 1,28.
+3. **La combo `GG + Over 2,5` non si scarta più se il book non la espone già
+   pronta**: si calcola moltiplicando le due quote reali e togliendo il 5%. È un
+   calcolo su quote vere, non una stima. Il modello aveva scritto "quota combo
+   non trovata" su tre partite.
+4. **Lo scarto è l'ultima spiaggia**, non la via comoda: prima di scartare deve
+   verificare di non aver saltato la combo e di non aver ribaltato la favorita.
+
+**LEZIONE**: un divieto può diventare uno strumento di fuga. "Mai contro la più
+probabile" era nato per impedire le giocate contro il favorito; il modello l'ha
+usato per non scegliere affatto, ridefinendo il favorito a proprio comodo. Ogni
+regola che dipende da una definizione va accompagnata da quella definizione,
+resa non negoziabile.
+
+**Verifiche ESEGUITE**: i tre scenari rigenerati e controllati — Equilibrio ora
+mostra `MG Totale 2-4` al posto delle doppie chance, Gap e Progressione
+invariati; blocchi "QUOTA MINIMA" e "favorita" riletti nel testo prodotto.
+5.522 caratteri.
+
 ### 2026-09-17 (3) — Mercati dettati dallo scenario, condizioni per ciascuno
 
 I divieti dicevano al modello cosa NON fare e lui occupava lo spazio rimasto:
