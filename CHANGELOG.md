@@ -88,6 +88,55 @@ codice + `.md` insieme -> costruisce.
 
 ## Log (più recente in cima)
 
+### 2026-09-16 (4) — Prompt TypingMind riscritto da zero: corto e senza quote
+
+Rossi ha provato a mano un prompt di sei righe, senza quote, con la ricerca web
+attiva: **risultato migliore di tutto l'apparato matematico** che avevamo
+costruito nei giorni precedenti. Il prompt lungo è stato cancellato e sostituito
+con quello.
+
+**I due difetti del prompt lungo, emersi nei test e non sanabili riscrivendo
+il testo:**
+
+1. **CIRCOLO VIZIOSO.** Ricevendo il CSV delle quote, il modello ricavava le
+   "fair odds" da quelle stesse quote. Confrontare un listino con se stesso
+   privato del margine dà una somma di edge sempre pari a MENO il margine: il
+   value non può esistere, mai, su nessuna partita. Gli edge positivi che
+   comparivano erano errori di arrotondamento. Verificato sul caso
+   Sunderland-AZ: le sue fair odds (1.75 / 3.80 / 4.55) sommavano **105,4%** di
+   probabilità invece di 100 — erano quote col margine ancora dentro,
+   etichettate come fair.
+2. **QUOTE INVENTATE.** Sulla stessa partita ha consigliato `X2 @ 1.85` mentre
+   nel CSV c'era **2.10**, costruendoci sopra un edge del +8,9%.
+
+**Cosa c'è ora**: giorno, ora, campionato e squadre. Nient'altro. Le quote le
+cerca il modello sul web insieme a forma, gol e assenze, così il suo giudizio
+nasce da dati **indipendenti** dal listino invece che dal listino stesso.
+
+Cancellati fair odds, Edge%, Kelly, matrice di correlazione, `Σ log`, soglie
+per mercato. Sono calcoli che un modello in chat non esegue davvero, e produrre
+numeri che sembrano calcoli e non lo sono è peggio che non produrne.
+
+**L'unica regola di sostanza rimasta** è quella che risolve un errore vero
+osservato: non puntare contro il risultato probabile, cambiare mercato invece
+(niente X2 sul Barcellona a 1.04).
+
+Aggiunta una riga sui dati mancanti: con partite su più giorni, per quelle
+lontane le formazioni non sono uscite e il modello deve dirlo invece di
+riempire.
+
+Da ~7.000 a ~1.300 caratteri.
+
+**LEZIONE**: più vincoli non significa più qualità. Ogni regola in più è
+un'occasione di conflitto, e chiedere a un modello una matematica che non può
+eseguire produce numeri decorativi che sembrano risultati. Il prompt corto
+scritto da Rossi in cinque minuti ha battuto quello lungo costruito in giorni.
+
+**Verifiche ESEGUITE**: 8 partite (il caso reale) → conteggio, ordinamento e
+assenza totale di quote nel testo; 3 partite su 3 giorni e 3 campionati →
+"tutte e 3" e date corrette riga per riga; Schedina vuota → risposta vuota
+senza errori.
+
 ### 2026-09-16 (3) — Tolto anche il limite per fascia oraria
 
 Rossi: se sceglie apposta partite tutte alla stessa ora, il vincolo non deve
