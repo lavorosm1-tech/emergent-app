@@ -88,6 +88,58 @@ codice + `.md` insieme -> costruisce.
 
 ## Log (più recente in cima)
 
+### 2026-09-17 (3) — Mercati dettati dallo scenario, condizioni per ciascuno
+
+I divieti dicevano al modello cosa NON fare e lui occupava lo spazio rimasto:
+prima 5 Over su 7, poi `1 fisso` su un Manchester United che lui stesso aveva
+descritto in crisi. Cambio di impostazione: da divieti a **condizioni
+positive**, e mercati **dettati dallo scenario** invece di una lista fissa.
+
+**Ogni partita porta i propri mercati**, gli stessi che Rossi vede nella card
+dell'app:
+
+| Scenario | Mercati |
+|---|---|
+| Gap Tecnico (casa) | `1 fisso` · `GG + Over 2,5` · `MG Casa 2-4` |
+| Gap Tecnico (ospite) | `2 fisso` · `GG + Over 2,5` · `MG Ospite 2-4` |
+| Progressione (casa) | `MC CASA (1-3) + MC OSPITE (0-2)` · `1X` |
+| Progressione (ospite) | `MC CASA (0-2) + MC OSPITE (1-3)` · `X2` |
+| Equilibrio | `GG` · `Over 2,5` · `1X oppure X2` |
+
+Un modello che sceglie fra tre non si rifugia sull'Over come faceva scegliendo
+fra otto.
+
+**Handicap asiatici tradotti**: `1 AH -0,75` e `1 AH +0,75` non sono su molti
+book italiani, e la regola "se non trovi la quota scarta" avrebbe svuotato le
+Progressioni. Sostituiti da `MG Casa/Ospite 2-4` e `1X/X2`. Il multigol
+combinato `MC CASA + MC OSPITE` resta (scelta di Rossi) solo sulla Progressione.
+
+**Ogni mercato ha ora una condizione d'ingresso verificabile** — bande di gol
+fatti e subiti, non opinioni. Il vecchio divieto "mai MG se l'avversaria subisce
+più di 2" era **rovesciato** rispetto alla realtà: il discriminante è quanto
+segna chi attacca (Barça 4,2 → 7-2), non quanto subisce chi difende. Corretto:
+banda 2,0-3,5 per chi segna, almeno 2 subiti dall'avversaria. Con questa,
+Leverkusen-Celje diventa finalmente giocabile in MG, come Rossi chiedeva da
+giorni.
+
+**Pavimento a 1,35 su ogni gamba**, senza eccezioni: taglia fuori il Barcellona
+a 1,06 e il 1X a 1,25 che il modello aveva proposto.
+
+**Obbligo di confronto**: deve valutare TUTTI i mercati indicati e scrivere per
+ciascuno se è giocabile, non fermarsi al primo. Aggiunta la regola di coerenza —
+se scrive che la favorita è in difficoltà non può sceglierne l'esito secco — e
+il divieto della frase «la quota supera 1,35», che è letteralmente come si era
+giustificato sul Manchester United.
+
+**In EQUILIBRIO** aggiunto `1X oppure X2` con il lato lasciato al modello, per
+coprire 0-0 / 1-0 / 2-0 che GG e Over lasciavano scoperti. Vincolato ai casi di
+partita bloccata, altrimenti sarebbe diventato il nuovo rifugio.
+
+**Verifiche ESEGUITE**: sei partite costruite apposta per coprire tutti e cinque
+gli scenari — Gap casa, Gap ospite, Progressione casa, Progressione ospite,
+Equilibrio — tutti classificati correttamente coi mercati giusti per lato.
+Partite senza le tre quote non ricevono scenario. 4.947 caratteri.
+
 ### 2026-09-17 (2) — Scenario nel prompt, quote obbligatorie, quarto divieto
 
 Nel test precedente il modello aveva messo **5 Over 2.5 su 7 gambe** e portato

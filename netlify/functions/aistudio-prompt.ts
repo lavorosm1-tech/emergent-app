@@ -86,35 +86,56 @@ export default async (): Promise<Response> => {
     const SOGLIA_FAVORITA = 2.0;
     const SOGLIA_GAP = 4.0;
 
-    function scenarioDi(m: any): string | null {
+    function bloccoScenario(m: any): string[] {
       const o = m.odds || {};
       const q1 = o.odd_1, qx = o.odd_X, q2 = o.odd_2;
-      if (q1 == null || qx == null || q2 == null) return null;
+      // Senza le tre quote non inventiamo uno scenario: meglio una riga nuda
+      // che una classificazione campata in aria.
+      if (q1 == null || qx == null || q2 == null) return [];
 
       const fav: "1" | "2" | null =
         q1 < SOGLIA_FAVORITA && q1 <= q2 ? "1" :
         q2 < SOGLIA_FAVORITA && q2 < q1 ? "2" :
         null;
 
-      if (!fav) return "EQUILIBRIO · valuta: GG, Over 2.5";
-
-      const lato = fav === "1" ? "favorita casa" : "favorita ospite";
-      if (qx >= SOGLIA_GAP) {
-        return `GAP TECNICO (${lato}) · valuta: ${fav} fisso, GG, Over 2.5`;
+      if (!fav) {
+        return [
+          "SCENARIO: EQUILIBRIO",
+          "Mercati da considerare:",
+          "• GG",
+          "• Over 2,5",
+          "• 1X oppure X2",
+        ];
       }
-      const dc = fav === "1" ? "1X" : "X2";
-      const mg = fav === "1" ? "MG Casa 2-4" : "MG Ospite 2-4";
-      return `PROGRESSIONE (${lato}) · valuta: ${dc}, ${mg}`;
+
+      const lato = fav === "1" ? "casa favorita" : "ospite favorito";
+
+      if (qx >= SOGLIA_GAP) {
+        return [
+          `SCENARIO: GAP TECNICO (${lato})`,
+          "Mercati da considerare:",
+          `• ${fav} fisso`,
+          "• GG + Over 2,5 (combo)",
+          fav === "1" ? "• MG Casa 2-4" : "• MG Ospite 2-4",
+        ];
+      }
+
+      return [
+        `SCENARIO: PROGRESSIONE (${lato})`,
+        "Mercati da considerare:",
+        fav === "1"
+          ? "• MC CASA (1-3) + MC OSPITE (0-2)"
+          : "• MC CASA (0-2) + MC OSPITE (1-3)",
+        fav === "1" ? "• 1X" : "• X2",
+      ];
     }
 
     const righe: string[] = [];
     for (const m of selected as any[]) {
       const comp = parseLeagueLabel(m.manifestazione) || m.manifestazione || "";
+      righe.push("");
       righe.push(`${itDate(m.day)} | ${m.time || ""} | ${comp} — ${m.squadra1} - ${m.squadra2}`);
-      const sc = scenarioDi(m);
-      // Senza le tre quote non inventiamo uno scenario: la riga resta senza,
-      // ed e' meglio di una classificazione campata in aria.
-      if (sc) righe.push(`   → ${sc}`);
+      righe.push(...bloccoScenario(m));
     }
 
     // ======================================================================
@@ -153,48 +174,71 @@ export default async (): Promise<Response> => {
       "   ogni gamba in più è un rischio in più.",
       "   Alla fine indica la quota totale.",
       "",
-      "Mercati ammessi (solo questi): 1, 2, 1X, X2, GG, Over 2.5, MG Casa 2-4, MG Ospite 2-4.",
-      "",
-      "SCENARIO DI OGNI PARTITA:",
+      "SCENARIO E MERCATI:",
       "Accanto a ogni partita trovi lo scenario, calcolato sulle quote reali del",
-      "bookmaker italiano. Indica che TIPO di partita è:",
+      "bookmaker italiano, e i mercati da considerare per quella partita.",
+      "Scegli SOLO fra i mercati indicati per quella partita. Non usarne altri.",
       "",
-      "- GAP TECNICO = c'è una favorita netta e il mercato esclude il pareggio.",
-      "  L'esito secco sulla favorita ha senso.",
+      "- GAP TECNICO = favorita netta, il mercato esclude il pareggio.",
       "- PROGRESSIONE = favorita tiepida, vince spesso ma di misura e talvolta",
-      "  si fa raggiungere. Meglio coprirsi: doppia chance o multigol.",
-      "- EQUILIBRIO = nessuno è favorito. Lascia perdere chi vince, guarda i gol.",
+      "  si fa raggiungere.",
+      "- EQUILIBRIO = nessuno è favorito, la partita si legge sui gol.",
       "",
-      "I mercati indicati sono quelli da valutare per PRIMI. Puoi scegliere",
-      "diversamente se la tua ricerca web lo contraddice, ma devi spiegare perché.",
-      "Se un mercato suggerito dallo scenario è vietato da uno dei divieti qui",
-      "sotto, vince il DIVIETO: passa al mercato successivo dello stesso scenario.",
+      "Se nessuno dei mercati indicati soddisfa le sue condizioni o sta sotto",
+      "quota 1,35, scarta la partita.",
+      "",
+      "OBBLIGO DI CONFRONTO:",
+      "Per ogni partita devi valutare TUTTI i mercati indicati, non fermarti al",
+      "primo che soddisfa le condizioni. Scrivi per ciascuno se è giocabile o no",
+      "e perché, poi scegli.",
+      "",
+      "La motivazione deve essere COERENTE con la scelta. Se scrivi che la",
+      "favorita è in difficoltà (turnover, assenze, crisi di risultati), NON puoi",
+      "scegliere l'esito secco su di lei: passa a un altro mercato della lista.",
+      "",
+      "\"La quota supera 1,35\" non è una motivazione. Il pavimento è un requisito",
+      "minimo, non un motivo per scegliere.",
+      "",
+      "QUOTA MINIMA: 1,35 su OGNI gamba.",
+      "Nessuna eccezione. Un evento sotto 1,35 non entra in multipla nemmeno se è",
+      "quasi certo: non paga abbastanza per il rischio che aggiunge.",
+      "",
+      "QUANDO UN MERCATO È GIOCABILE (condizioni da verificare, non opinioni):",
+      "- 1 / 2 fisso → solo sulla favorita, e solo se paga ≥ 1,35.",
+      "- MG Casa 2-4 → la casa segna in media tra 2,0 e 3,5 gol E l'ospite ne",
+      "  subisce almeno 2. Sotto 2,0 rischia l'1-0, sopra 3,5 rischia il 5-0.",
+      "- MG Ospite 2-4 → stessa cosa a parti invertite.",
+      "- MC CASA (1-3) + MC OSPITE (0-2) → la casa segna tra 1,0 e 3,0 e l'ospite",
+      "  ne segna al massimo 2 di media.",
+      "- MC CASA (0-2) + MC OSPITE (1-3) → stessa cosa a parti invertite.",
+      "- GG → entrambe segnano almeno 1 gol di media E entrambe ne subiscono",
+      "  almeno 1,2. Due squadre che si fanno male a vicenda: 1-1, 2-1.",
+      "- Over 2,5 → somma dei gol fatti almeno 2,5 E almeno una delle due subisce",
+      "  più di 1,5. Serve che qualcuno vada in difficoltà: 3-0, 3-1, 2-2.",
+      "- GG + Over 2,5 (combo) → entrambe le condizioni sopra insieme.",
+      "- 1X / X2 → in PROGRESSIONE va dalla parte della favorita.",
+      "  In EQUILIBRIO scegli tu il lato in base all'analisi, e da giocare quando",
+      "  la partita si annuncia bloccata: nessuna delle due supera 1,5 gol fatti,",
+      "  oppure entrambe subiscono meno di 1,2. Copre 0-0, 1-0, 2-0 che GG e",
+      "  Over lasciano scoperti.",
       "",
       "QUOTE:",
       "Devono essere quelle vere trovate sul web, col nome del bookmaker.",
       "Se per un evento non trovi la quota, NON stimarla: scarta quell'evento.",
-      "Non usare mai la parola \"stimata\".",
+      "Non usare mai la parola \"stimata\" né \"calcolata da quote fair\".",
       "",
       "COME LEGGERE I NUMERI:",
       "- Prima di ogni pronostico scrivi la quota dell'1 e quella del 2.",
       "  La più bassa indica la favorita. Solo dopo scegli il mercato.",
-      "- Se la favorita ha quota tra 1,50 e 2,20, l'esito secco su di lei è la",
-      "  PRIMA scelta da valutare. Scegli altro solo se i numeri lo contraddicono.",
       "- Usa sempre i numeri in casa per la squadra di casa e in trasferta per",
       "  l'ospite, mai le medie generali.",
       "- Indica la fonte dei dati (sito e periodo). Se trovi dati contrastanti,",
       "  usa i più conservativi.",
       "",
-      "QUATTRO DIVIETI ASSOLUTI:",
-      "- MAI contro la squadra più probabile. Se una è favorita non giocare mai",
-      "  l'esito opposto né la doppia chance dalla parte opposta, a nessuna quota.",
-      "  Se la favorita paga poco, cambia MERCATO (Over 2.5, GG, MG), non lato.",
-      "- MAI MG 2-4 se la favorita segna in media più di 3 gol a partita, o se",
-      "  l'avversaria ne subisce più di 2: finisce 5-1 e il multigol salta.",
-      "  In quel caso Over 2.5.",
-      "- MAI GG se una delle due ha tenuto la porta inviolata in almeno 3 delle",
-      "  ultime 5, o se segna meno di 1 gol a partita.",
-      "- MAI Over 2.5 se la somma dei gol fatti delle due squadre è sotto 2,5.",
+      "DIVIETO ASSOLUTO:",
+      "MAI contro la squadra più probabile. Se una è favorita non giocare mai",
+      "l'esito opposto né la doppia chance dalla parte opposta, a nessuna quota.",
+      "Se la favorita paga poco, cambia MERCATO, non lato.",
       "",
       "Se per una partita non trovi dati sufficienti (partita lontana, formazioni",
       "non uscite), scrivilo invece di inventare.",
