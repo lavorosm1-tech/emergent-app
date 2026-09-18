@@ -117,6 +117,10 @@
       "destination": "/api/save-verdict"
     },
     {
+      "source": "/build-multipla",
+      "destination": "/api/build-multipla"
+    },
+    {
       "source": "/odd-settings",
       "destination": "/api/odd-settings"
     },

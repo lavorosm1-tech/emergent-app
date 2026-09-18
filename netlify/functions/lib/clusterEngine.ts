@@ -1116,8 +1116,25 @@ export function selezionaPick(
   odds: Odds,
   minOdd: number,
 ): RankedMarket | null {
+  // Dal 18/09 la logica vive in `giocateAmmissibili`: il pick e' la PRIMA
+  // giocata ammissibile, le altre servono alla multipla automatica
+  // (build-multipla.ts) come alternative sulla stessa partita. Stesso
+  // risultato di prima, verificato con quote finte alle quattro soglie.
+  return giocateAmmissibili(ranked, odds, minOdd)[0] ?? null;
+}
+
+/**
+ * Tutte le giocate ammissibili di una partita, nell'ordine del ranking:
+ * mercati in whitelist, sopra la soglia, che non contraddicono nessun
+ * mercato leggibile piu' in alto. La prima e' il pick del motore.
+ */
+export function giocateAmmissibili(
+  ranked: RankedMarket[],
+  odds: Odds,
+  minOdd: number,
+): RankedMarket[] {
   const ammessi = ranked.filter((r) => isVerdictMarket(r.market));
-  if (!ammessi.length) return null;
+  if (!ammessi.length) return [];
 
   // La DIREZIONE della partita e' il primo mercato ammesso del ranking, quota o
   // non quota: e' la lettura del motore e non si tocca. Nella lettura entrano
@@ -1129,14 +1146,13 @@ export function selezionaPick(
     const f = famiglia(r.market);
     return !f || !ambigue.has(f);
   });
-  if (!leggibili.length) return null;   // nessuna famiglia leggibile: si sta fuori
+  if (!leggibili.length) return [];   // nessuna famiglia leggibile: si sta fuori
 
-  const direzione = leggibili[0];
-
-  // Poi si scorre il ranking DALL'ALTO e si prende il primo che paga abbastanza,
-  // saltando tutto cio' che racconta la partita al contrario. Niente scorciatoie
+  // Si scorre il ranking DALL'ALTO e si tiene tutto cio' che paga abbastanza,
+  // saltando quello che racconta la partita al contrario. Niente scorciatoie
   // e niente preferenze per le combo: se un mercato sta piu' in alto, ha
   // coverage migliore e quota sufficiente, e' lui.
+  const out: RankedMarket[] = [];
   for (let i = 0; i < leggibili.length; i++) {
     const r = leggibili[i];
     // Un mercato e' valido solo se non contraddice NESSUNO di quelli piu' in
@@ -1147,10 +1163,8 @@ export function selezionaPick(
     // Se un mercato piu' probabile dice il contrario, quello sotto non si gioca.
     if (leggibili.slice(0, i).some((sopra) => contraddice(sopra.market, r.market))) continue;
     if (!isVerdictMarket(r.market)) continue;   // solo veto: vieta, non si gioca
-    if ((r.odd ?? 0) >= minOdd) return r;
+    if ((r.odd ?? 0) >= minOdd) out.push(r);
   }
-
-  // Niente di coerente sopra soglia: valore nullo, nessuna giocata.
-  return null;
+  return out;
 }
 

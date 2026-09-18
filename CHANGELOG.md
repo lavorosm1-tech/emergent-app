@@ -88,6 +88,74 @@ codice + `.md` insieme -> costruisce.
 
 ## Log (più recente in cima)
 
+### 2026-09-18 (2) — Tasto "Genera Multipla": il motore compone la schedina
+
+**Cosa**: in Strumenti → ANALISI, nuovo tasto **Genera Multipla** (schermata
+`/multipla`). Rossi imposta giorno, numero di partite (1-8) e quota totale
+minima; il motore sceglie da solo le giocate più probabili del giorno in modo
+che il prodotto delle quote arrivi alla quota chiesta, e le mette in Schedina.
+
+**Regole decise da Rossi (18/09)**:
+- campionati **a scalare**: prima le sette leghe principali (ING1, ITA1, SPA1,
+  GER1, FRA1, OLA1, POR1), poi i secondari (altre prime divisioni, Serie B /
+  Championship / 2. Bundesliga e le altre seconde dei paesi principali, coppe
+  europee), poi i minori. Si scende di livello solo quando quello sopra è
+  finito. `netlify/functions/lib/leagueTier.ts`. NON è la lista del tasto
+  PRINCIPALI (che ha anche NOR1/USA1/SVE1/DAN1): per la multipla vale quella stretta;
+- pavimento di probabilità per gamba **45%**; soglia per gamba = `min_odd`
+  delle Impostazioni; massimo **2 partite per campionato**;
+- minimo 1 partita (una singola è una multipla da 1).
+
+**Come sceglie** (`netlify/functions/build-multipla.ts`, deterministico):
+1. per ogni partita del giorno senza risultato e non ancora iniziata (ora
+   italiana), `structuralAnalysis` + `giocateAmmissibili`: tutte le giocate in
+   whitelist, coerenti col ranking, sopra soglia e sopra il pavimento. La prima
+   è il pick del motore, le altre sono le alternative;
+2. riempimento livello per livello, dentro il livello la più probabile prima;
+3. se la quota totale non basta, si alza una gamba alla volta scegliendo lo
+   scambio che **costa meno probabilità**: prima l'alternativa sulla stessa
+   partita, poi la sostituzione con un'altra partita, sempre a scalare;
+4. se la quota non è raggiungibile, risponde `ok: false` con il motivo e la
+   migliore schedina trovata: **mai** gambe sotto il pavimento per arrivare al numero.
+
+**Scarti**: ogni gamba ha "Altro pronostico" (prossimo mercato del ranking,
+stessa partita), "Altra partita" (esce, entra la migliore rimasta partendo
+dal livello 1) e "No campionato" (escluso per oggi). Le altre gambe restano
+**bloccate** (`locked`) e il server ricompone solo il buco. Gli scarti
+sopravvivono alle rigenerazioni finché non si cambia giorno o si preme
+"Rigenera da zero".
+
+**Salvataggio**: "Metti in Schedina" → `apply: true`: svuota la Schedina (se
+lo switch è acceso), marca `selected`, scrive `pick_finale`/`pick_finale_prob`
+come fa `save-verdict` (mai su partite concluse), così la pagella misura
+anche le multiple.
+
+**Quote stimate**: multigol e combo hanno la quota stimata dal motore (il
+file Sisal non le fornisce), come nel dettaglio partita: restano giocabili,
+marcate con la tilde `~`, e la quota totale è "~" finché ne contiene una.
+Prima versione le scartava e 7 partite su 14 uscivano "non giocabili".
+
+**Motore**: `selezionaPick` ora è `giocateAmmissibili(...)[0]`: stessa logica,
+stesso risultato (verificato con quote finte alle quattro soglie, 16 casi
+identici a prima). `giocateAmmissibili` restituisce TUTTE le giocate
+ammissibili in ordine di ranking.
+
+**Routing**: `build-multipla` registrata nei tre posti (`api/[route].ts`,
+`vercel.json`, `netlify.toml`). Frontend: `api.buildMultipla`, tipi
+`MultiplaRequest/Response/Leg`, schermata `frontend/app/multipla.tsx`. Il
+vecchio tasto TypingMind resta, rinominato "Multipla via TypingMind (esterna)".
+
+**IA**: non usata. "Le più probabili dato N e Q" è un problema di numeri che il
+motore ha già; l'IA, se mai, entrerà a scegliere dentro una rosa già valida
+(fase 3 del piano del 18/09). Lezioni già pagate: ignora le soglie, inventa quote.
+
+**Verifica**: eseguita davvero con un finto PostgREST e 14 partite su tre
+livelli: 6@14 → 6 di livello 1 quota 14,46; 2@3,5 → 3,65; 1@2 → O2.5 @2,10
+al 46%; 5@13 → 15,54 con max 2 ING1; 2@50 → `ok:false` con motivo; scarti +
+gamba bloccata rispettati; `apply` → 5 PATCH corrette. `tsc` 0 errori,
+`build:web` ok. Il DB vero non è raggiungibile dalla sandbox di Claude:
+prima prova con dati reali da fare in app.
+
 ### 2026-09-18 (2) — Layout: la pagina finiva sotto le barre di sistema
 
 **Sintomo riferito da Rossi**: nella Schedina non si riusciva a scorrere e il tasto

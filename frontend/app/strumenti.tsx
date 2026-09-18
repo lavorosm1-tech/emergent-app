@@ -319,9 +319,16 @@ export default function Strumenti() {
           onPress={() => router.push("/book")}
         />
         <Tool
+          testID="tool-multipla"
+          icon="flash-outline"
+          title="Genera Multipla"
+          desc="Scegli partite e quota totale: il motore seleziona le giocate più probabili del giorno, campionati a scalare, e le mette in Schedina."
+          onPress={() => router.push("/multipla")}
+        />
+        <Tool
           testID="tool-ai-multipla"
           icon="sparkles-outline"
-          title="Genera Multipla tramite AI"
+          title="Multipla via TypingMind (esterna)"
           desc="Cerca le partite di oggi sul web e propone una multipla da quota 13. Non usa la Schedina."
           onPress={openAIMultipla}
         />

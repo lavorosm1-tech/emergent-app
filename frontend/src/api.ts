@@ -15,6 +15,51 @@ async function netlifyReq<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 
+export type MultiplaRequest = {
+  day: string;
+  events: number;
+  minTotalOdd: number;
+  minOdd?: number;
+  minProb?: number;
+  maxPerLeague?: number;
+  locked?: { matchId: string; market: string }[];
+  excludeMatches?: string[];
+  excludeLeagues?: string[];
+  apply?: boolean;
+  replaceSelection?: boolean;
+};
+
+export type MultiplaLeg = {
+  match_id: string;
+  squadra1: string;
+  squadra2: string;
+  manifestazione: string;
+  tier: 1 | 2 | 3;
+  tier_label: string;
+  time: string;
+  market: string;
+  prob: number;
+  odd: number;
+  odd_estimated: boolean;
+  locked: boolean;
+  alternatives: { market: string; prob: number; odd: number; odd_estimated: boolean }[];
+};
+
+export type MultiplaResponse = {
+  ok: boolean;
+  reason: string | null;
+  error?: string;
+  applied: boolean;
+  day: string;
+  requested: { events: number; minTotalOdd: number; minOdd: number; minProb: number; maxPerLeague: number };
+  total_odd: number;
+  total_estimated: boolean;
+  total_prob: number;
+  legs: MultiplaLeg[];
+  tiers_used: number[];
+  pool: { matches: number; candidates: number; skipped_started: number; skipped_excluded: number; skipped_no_play: number };
+};
+
 export type OddsKey =
   | "odd_1" | "odd_X" | "odd_2"
   | "odd_1X" | "odd_X2" | "odd_12"
@@ -147,6 +192,14 @@ export const api = {
     netlifyReq<{ ok: boolean }>(`/save-verdict`, {
       method: "POST",
       body: JSON.stringify({ matchId, market, prob }),
+    }),
+  // 18/09/2026 — multipla automatica (vedi netlify/functions/build-multipla.ts).
+  // Il motore sceglie N partite del giorno con la giocata piu' probabile
+  // ciascuna, fino alla quota totale minima, campionati a scalare (1 -> 2 -> 3).
+  buildMultipla: (body: MultiplaRequest) =>
+    netlifyReq<MultiplaResponse>(`/build-multipla`, {
+      method: "POST",
+      body: JSON.stringify(body),
     }),
   statsScores: () => netlifyReq<Record<string, any[]>>("/stats-scores"),
   statsReset: () => netlifyReq<{ ok: boolean }>("/stats-reset", { method: "POST" }),
