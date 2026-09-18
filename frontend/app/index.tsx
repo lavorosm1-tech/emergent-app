@@ -800,7 +800,10 @@ const styles = StyleSheet.create({
   emptyTxt: { color: colors.textMuted, fontSize: 15 },
   emptyBtn: { backgroundColor: colors.primary, paddingHorizontal: 24, paddingVertical: 12, borderRadius: 999 },
   emptyBtnTxt: { color: "#FFF", fontWeight: "800" },
-  list: { padding: 16, paddingBottom: 130, gap: 8 },
+  // La BottomNav sta NEL FLUSSO in fondo alla schermata: lo spazio se lo prende
+  // da sola, quindi qui basta un margine di respiro. I 130px precedenti erano
+  // pensati per una barra flottante e lasciavano un buco in fondo a ogni lista.
+  list: { padding: 16, paddingBottom: 24, gap: 8 },
   leagueBlock: { marginBottom: 16 },
   leagueHeader: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 10 },
   leagueTxt: { color: colors.primary, fontSize: 14, fontWeight: "900", letterSpacing: 1, textTransform: "uppercase" },

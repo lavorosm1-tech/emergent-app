@@ -421,7 +421,7 @@ export default function MatchDetail() {
         </TouchableOpacity>
       </View>
 
-      <ScrollView contentContainerStyle={[styles.content, { paddingBottom: navHeight + 64 }]} {...scrollMem}>
+      <ScrollView contentContainerStyle={[styles.content, { paddingBottom: 96 }]} {...scrollMem}>
         {/* Match hero */}
         <View style={styles.hero}>
           <Text style={styles.heroDay}>{match.day} · {match.time}</Text>

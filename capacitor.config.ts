@@ -13,6 +13,14 @@ const config: CapacitorConfig = {
   },
   android: {
     allowMixedContent: false,
+    // Android 15 disegna le app a tutto schermo (edge-to-edge) quando targetSdk
+    // e' 35, e la pagina finisce SOTTO la barra di stato e la barra dei gesti:
+    // l'intestazione col tasto indietro sparisce in alto e la barra di
+    // navigazione dell'app resta coperta in basso. Il valore predefinito di
+    // Capacitor 7 e' "disable" (nessuna compensazione). Con "auto" il guscio
+    // applica i margini di sistema solo dove servono davvero, quindi il
+    // risultato e' lo stesso su Android 15 e sui telefoni piu' vecchi.
+    adjustMarginsForEdgeToEdge: 'auto',
   },
 }
 

@@ -275,7 +275,10 @@ const styles = StyleSheet.create({
   iconBtn: { padding: spacing.xs },
   title: { color: colors.text, fontSize: 18, fontWeight: "700" },
   subtitle: { color: colors.textMuted, fontSize: 12, marginTop: 2 },
-  body: { padding: spacing.lg, paddingBottom: 96 },
+  // La BottomNav sta NEL FLUSSO in fondo alla schermata: lo spazio se lo prende
+  // da sola, quindi qui basta un margine di respiro. I 130px precedenti erano
+  // pensati per una barra flottante e lasciavano un buco in fondo a ogni lista.
+  body: { padding: spacing.lg, paddingBottom: 24 },
   center: { flex: 1, justifyContent: "center", alignItems: "center", padding: spacing.xl },
   errorText: { color: colors.danger, marginTop: spacing.md, textAlign: "center" },
   emptyTitle: { color: colors.text, fontSize: 17, fontWeight: "600", marginTop: spacing.md },

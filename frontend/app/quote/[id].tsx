@@ -9,15 +9,14 @@ import React, { useEffect, useState, useMemo } from "react";
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { api, Match, MARKET_FAMILIES, ODD_LABELS } from "@/src/api";
 import { colors } from "@/src/theme";
 import BottomNav from "@/src/components/BottomNav";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 export default function QuotePage() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
-  const insets = useSafeAreaInsets();
   const [match, setMatch] = useState<Match | null>(null);
 
   useEffect(() => {
@@ -44,16 +43,16 @@ export default function QuotePage() {
 
   if (!id) return null;
   if (!match) return (
-    <View style={[styles.container, { paddingTop: insets.top + 10 }]}>
+    <SafeAreaView style={styles.container} edges={["top"]}>
       <Text style={styles.loadingTxt}>Caricamento…</Text>
-    </View>
+    </SafeAreaView>
   );
 
   const ora = match.time || "";
   const giorno = match.day || "";
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top + 8 }]}>
+    <SafeAreaView style={styles.container} edges={["top"]}>
       <View style={styles.header}>
         {/* Stessa logica della schermata risultati: si torna al dettaglio della
             partita che si stava guardando. */}
@@ -95,7 +94,7 @@ export default function QuotePage() {
       </ScrollView>
 
       <BottomNav />
-    </View>
+    </SafeAreaView>
   );
 }
 
@@ -104,7 +103,7 @@ const styles = StyleSheet.create({
   loadingTxt: { color: colors.textDim, fontSize: 16, textAlign: "center", marginTop: 100 },
   header: {
     flexDirection: "row", alignItems: "center",
-    paddingHorizontal: 12, paddingBottom: 10, gap: 10,
+    paddingHorizontal: 12, paddingVertical: 10, gap: 10,
     borderBottomWidth: 1, borderBottomColor: colors.border,
   },
   backBtn: { padding: 6 },
@@ -112,7 +111,7 @@ const styles = StyleSheet.create({
   headerTeams: { color: colors.text, fontSize: 15, fontWeight: "800", marginTop: 2 },
   headerVs: { color: colors.textDim, fontWeight: "600" },
   headerTime: { color: colors.textDim, fontSize: 10, marginTop: 2 },
-  content: { padding: 14, paddingBottom: 200, gap: 14 },
+  content: { padding: 14, paddingBottom: 24, gap: 14 },
   sectionTitle: { color: colors.text, fontSize: 12, fontWeight: "800", letterSpacing: 1 },
   famBlock: {
     backgroundColor: colors.card, borderRadius: 12, padding: 10,

@@ -393,7 +393,10 @@ const styles = StyleSheet.create({
   header: { paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: colors.border },
   title: { color: colors.text, fontSize: 26, fontWeight: "900", letterSpacing: -0.5 },
   subtitle: { color: colors.textMuted, fontSize: 12, marginTop: 4 },
-  list: { padding: 16, paddingBottom: 130, gap: 10 },
+  // La BottomNav sta NEL FLUSSO in fondo alla schermata: lo spazio se lo prende
+  // da sola, quindi qui basta un margine di respiro. I 130px precedenti erano
+  // pensati per una barra flottante e lasciavano un buco in fondo a ogni lista.
+  list: { padding: 16, paddingBottom: 24, gap: 10 },
   grid: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
   section: { color: colors.primary, fontSize: 11, fontWeight: "900", letterSpacing: 1.5, marginTop: 12, marginBottom: 4 },
   tool: {

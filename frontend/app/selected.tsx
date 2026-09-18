@@ -362,7 +362,10 @@ const styles = StyleSheet.create({
   aiStudioBtnTxt: { color: colors.primary, fontWeight: "900", fontSize: 10, letterSpacing: 0.5 },
   empty: { flex: 1, alignItems: "center", justifyContent: "center", gap: 12 },
   emptyTxt: { color: colors.textMuted, fontSize: 14 },
-  list: { padding: 16, paddingBottom: 130, gap: 10 },
+  // La BottomNav sta NEL FLUSSO in fondo alla schermata: lo spazio se lo prende
+  // da sola, quindi qui basta un margine di respiro. I 130px precedenti erano
+  // pensati per una barra flottante e lasciavano un buco in fondo a ogni lista.
+  list: { padding: 16, paddingBottom: 24, gap: 10 },
   card: { flexDirection: "row", backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: 12, padding: 12, gap: 10 },
   cardLeft: { flex: 1 },
   cardLeague: { color: colors.primary, fontSize: 10, fontWeight: "900", letterSpacing: 1, textTransform: "uppercase" },

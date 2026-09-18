@@ -11,11 +11,11 @@ import React, { useEffect, useState, useCallback, useMemo } from "react";
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Platform, Alert } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { api, Match, MARKET_FAMILIES, ODD_LABELS, OddsKey } from "@/src/api";
 import { colors } from "@/src/theme";
 import { useToast } from "@/src/components/Toast";
-import BottomNav from "@/src/components/BottomNav";
+import BottomNav, { useNavMetrics } from "@/src/components/BottomNav";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { selectedListCache, matchesCache, marketStatsCache, mlStatsCache, matchDetailCache } from "@/src/utils/cache";
 
 const DIGITS = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
@@ -30,7 +30,10 @@ export default function RisultatoPage() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const toast = useToast();
-  const insets = useSafeAreaInsets();
+  // Stessa misura che usa la barra ESCI/PREC/AVANTI del dettaglio partita: prima
+  // qui c'era "96 + insets.bottom", un numero scritto a mano che non coincideva con
+  // l'altezza vera della BottomNav e lasciava una striscia di sfondo fra le due barre.
+  const { height: navHeight } = useNavMetrics();
   const [match, setMatch] = useState<Match | null>(null);
   const [selectedMatches, setSelectedMatches] = useState<Match[]>([]);
   const [home, setHome] = useState<number | null>(null);
@@ -143,9 +146,9 @@ export default function RisultatoPage() {
 
   if (!id) return null;
   if (!match) return (
-    <View style={[styles.container, { paddingTop: insets.top + 10 }]}>
+    <SafeAreaView style={styles.container} edges={["top"]}>
       <Text style={styles.loadingTxt}>Caricamento…</Text>
-    </View>
+    </SafeAreaView>
   );
 
   // Orario partita
@@ -153,7 +156,7 @@ export default function RisultatoPage() {
   const giorno = match.day || "";
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top + 8 }]}>
+    <SafeAreaView style={styles.container} edges={["top"]}>
       {/* HEADER */}
       <View style={styles.header}>
         {/* Indietro = torna al DETTAGLIO di questa partita, non alla lista.
@@ -243,7 +246,7 @@ export default function RisultatoPage() {
       </ScrollView>
 
       {/* ACTION BAR FISSA SOPRA BOTTOMNAV */}
-      <View style={[styles.actionBar, { bottom: 96 + insets.bottom }]}>
+      <View style={[styles.actionBar, { bottom: navHeight + 10 }]}>
         <TouchableOpacity
           onPress={() => saveAndContinue(false)}
           disabled={saving || home === null || away === null}
@@ -265,7 +268,7 @@ export default function RisultatoPage() {
       </View>
 
       <BottomNav />
-    </View>
+    </SafeAreaView>
   );
 }
 
@@ -298,7 +301,7 @@ const styles = StyleSheet.create({
 
   header: {
     flexDirection: "row", alignItems: "center",
-    paddingHorizontal: 12, paddingBottom: 10, gap: 10,
+    paddingHorizontal: 12, paddingVertical: 10, gap: 10,
     borderBottomWidth: 1, borderBottomColor: colors.border,
   },
   backBtn: { padding: 6 },
@@ -313,7 +316,9 @@ const styles = StyleSheet.create({
     borderRadius: 12, borderWidth: 1, borderColor: colors.primary,
   },
   queueBadgeTxt: { color: colors.primary, fontSize: 11, fontWeight: "800" },
-  content: { padding: 14, paddingBottom: 200, gap: 14 },
+  // Spazio in fondo: deve liberare la barra azioni (assoluta), non la BottomNav,
+  // che sta nel flusso e lo spazio se lo prende da sola.
+  content: { padding: 14, paddingBottom: 96, gap: 14 },
 
   scoreCard: {
     backgroundColor: colors.card,

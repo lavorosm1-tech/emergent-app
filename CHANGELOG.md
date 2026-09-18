@@ -88,6 +88,53 @@ codice + `.md` insieme -> costruisce.
 
 ## Log (più recente in cima)
 
+### 2026-09-18 (2) — Layout: la pagina finiva sotto le barre di sistema
+
+**Sintomo riferito da Rossi**: nella Schedina non si riusciva a scorrere e il tasto
+indietro non si vedeva, "per uno spostamento".
+
+**Causa**: le meta PWA aggiunte poche ore prima (voce A8). `viewport-fit=cover` dice
+al browser di disegnare la pagina anche SOTTO le barre di sistema, lasciando allo
+sviluppatore il compito di compensare con `env(safe-area-inset-*)`. In PWA installata
+e dentro la WebView Android quella compensazione non arrivava dove serviva:
+l'intestazione con il tasto indietro finiva sotto la barra di stato e la BottomNav
+sotto la barra dei gesti. Stesso effetto, su iOS, di
+`apple-mobile-web-app-status-bar-style: black-translucent`.
+
+**Correzioni** (solo grafica, nessun cambio di logica: motore e fusione riverificati
+con gli stessi test a runtime, invariati):
+- `frontend/scripts/inject-pwa-head.js`: tolto `viewport-fit=cover` (il valore
+  predefinito "auto" tiene la pagina dentro l'area sicura su qualsiasi telefono, con
+  o senza tacca) e `black-translucent` sostituito con `black`. Stessa modifica in
+  `app/+html.tsx`, per coerenza.
+- Aggiunto un blocco `<style id="pb-viewport">` che àncora l'altezza al viewport
+  VISIBILE (`100dvh` con fallback `100%`): con il 100% del viewport di layout, sul
+  telefono la barra degli indirizzi fa parte dell'altezza e la barra in basso
+  finisce sotto il bordo dello schermo.
+- `capacitor.config.ts`: `android.adjustMarginsForEdgeToEdge: 'auto'`. Con
+  targetSdk 35 Android 15 disegna l'app a tutto schermo, e il valore predefinito di
+  Capacitor 7 e' `disable`: nessun margine per le barre di sistema. Richiede un APK
+  nuovo (il workflow parte da solo: `capacitor.config.ts` e' nei percorsi che lo
+  attivano).
+
+**Omogeneita' fra schermate** — tre misure scritte a mano che davano risultati diversi
+su telefoni diversi:
+- `quote/[id].tsx` e `risultato/[id].tsx` si posizionavano con
+  `paddingTop: insets.top + 8` (e `+ 10` nello stato di caricamento: la pagina
+  saltava quando i dati arrivavano) invece di `SafeAreaView edges={["top"]}` come
+  tutte le altre. Ora usano SafeAreaView: stessa distanza dall'alto ovunque.
+- la barra Salva/Salva-e-avanti di `risultato` stava a `bottom: 96 + insets.bottom`,
+  un numero che non coincide con l'altezza vera della BottomNav (58 + inset): fra le
+  due barre restava una striscia di sfondo, di 30px su Android e 38 su iPhone. Ora
+  usa `useNavMetrics()`, la stessa misura del dettaglio partita.
+- tutte le liste avevano `paddingBottom: 130` (200 su quote e risultato), pensato per
+  una barra flottante. La BottomNav sta NEL FLUSSO e lo spazio se lo prende da sola,
+  quindi quei valori erano un buco vuoto in fondo a ogni lista: portati a 24, e a 96
+  dove sopra la nav c'e' davvero una barra assoluta (match, risultato).
+
+Verifiche: `tsc` 0 errori, eslint 0 errori, `npm run build:web` verde con le meta
+corrette nel `dist/index.html` generato.
+
 ### 2026-09-18 — NG fuori dai mercati giocati, prompt IA riscritto, npm al posto di yarn
 
 **Decisione di Rossi**: NG non lo gioca. Tolto dalla `VERDICT_WHITELIST` in

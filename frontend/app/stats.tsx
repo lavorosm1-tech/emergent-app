@@ -139,7 +139,10 @@ const styles = StyleSheet.create({
   empty: { flex: 1, alignItems: "center", justifyContent: "center", gap: 12, paddingHorizontal: 32 },
   emptyTxt: { color: colors.textMuted, fontSize: 15, fontWeight: "700" },
   emptyHint: { color: colors.textDim, fontSize: 12, textAlign: "center" },
-  list: { padding: 16, paddingBottom: 130, gap: 14 },
+  // La BottomNav sta NEL FLUSSO in fondo alla schermata: lo spazio se lo prende
+  // da sola, quindi qui basta un margine di respiro. I 130px precedenti erano
+  // pensati per una barra flottante e lasciavano un buco in fondo a ogni lista.
+  list: { padding: 16, paddingBottom: 24, gap: 14 },
   kpi: { alignItems: "center", paddingVertical: 16, backgroundColor: colors.surface, borderRadius: 14, borderWidth: 1, borderColor: colors.border },
   kpiRow: { flexDirection: "row", gap: 10 },
   kpiBox: { flex: 1, alignItems: "center", paddingVertical: 16, backgroundColor: colors.surface, borderRadius: 14, borderWidth: 1, borderColor: colors.border },

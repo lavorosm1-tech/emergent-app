@@ -10,13 +10,13 @@ export default function Root({ children }: PropsWithChildren) {
         <meta httpEquiv="X-UA-Compatible" content="IE=edge" />
         <meta
           name="viewport"
-          content="width=device-width, initial-scale=1, shrink-to-fit=no, viewport-fit=cover"
+          content="width=device-width, initial-scale=1, shrink-to-fit=no"
         />
         <title>PronoBlast</title>
         <meta name="description" content="Analisi partite e pronostici: motore statistico, IA e quote del bookmaker" />
         <meta name="theme-color" content="#0A0A0A" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
-        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="black" />
         <meta name="apple-mobile-web-app-title" content="PronoBlast" />
         <link rel="apple-touch-icon" href="/pronoblast-192.png" />
         <link rel="manifest" href="/manifest.webmanifest" />
