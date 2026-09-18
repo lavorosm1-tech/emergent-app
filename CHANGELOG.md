@@ -88,6 +88,34 @@ codice + `.md` insieme -> costruisce.
 
 ## Log (più recente in cima)
 
+### 2026-09-18 — Identità PronoBlast sul web, PWA, e pulizia del repo (A8, A12)
+
+**A8 — l'app web si chiamava "frontend" e aveva l'icona di Emergent.**
+- `app.json`: `name` → PronoBlast, `slug` e `scheme` → `pronoblast`.
+- Icone rigenerate da `android/pronoblast-icon-1024.png`: `icon.png`,
+  `adaptive-icon.png` (1024), `splash-icon.png` (512), `favicon.png` (64),
+  più `public/pronoblast-192.png` e `-512.png` per la PWA.
+- `frontend/public/manifest.webmanifest`: nome, colori (#0A0A0A), display
+  standalone. `expo export` copia `public/` dentro `dist/` così com'è.
+- **Trappola trovata**: con `web.output: "single"` Expo **non usa**
+  `app/+html.tsx` — genera `index.html` da un template suo. Le meta della PWA
+  lì dentro non arrivavano in produzione. Soluzione: `frontend/scripts/inject-pwa-head.js`,
+  lanciato in coda a `yarn build:web`, che imposta `lang="it"`, `viewport-fit=cover`
+  e aggiunge manifest, `theme-color`, `apple-touch-icon` e le meta iOS.
+  `+html.tsx` è stato aggiornato lo stesso, così è già pronto se un giorno si
+  passa all'output statico.
+
+**A12 — codice morto.** Cancellati `backend/` (Python di Emergent, nessun file
+vivo lo importava: verificato con `git grep`), `.emergent/`, `memory/`, `tests/`,
+`test_reports/`, `test_result.md`, `design_guidelines.json`, `.gitconfig`,
+`frontend/scripts/reset-project.js` (e la voce `reset-project` da package.json)
+e i loghi React di esempio. `README.md` non diceva più "Here are your
+Instructions": ora spiega cos'è l'app, lo stack, i comandi, la regola dei tre
+posti in cui registrare una function, e rimanda al CHANGELOG.
+
+Strumenti dopo le modifiche: `tsc` 0 errori, eslint 0 errori / 16 warning,
+`yarn build:web` verde con le meta iniettate.
+
 ### 2026-09-18 — Correzioni dell'audit: crash, etichette, tema, lint
 
 Applicati i punti A1-A5, A7, A9, A10, A11 dell'ordine di lavoro

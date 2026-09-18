@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import {
-  View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Alert, Platform, useWindowDimensions,
+  View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Alert, Platform,
 } from "react-native";
 import { useBottomNav } from "@/src/components/BottomNavContext";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -21,7 +21,6 @@ import { isAndroidBrowser, isAndroidShell, downloadLatestApk, RELEASE_LATEST_PAG
 export default function Strumenti() {
   const bottomNav = useBottomNav();
   const router = useRouter();
-  const { width } = useWindowDimensions();
   const [busy, setBusy] = useState<string | null>(null);
   // Tasto "Installa app Android": solo nel browser di un telefono Android.
   // Dentro l'APK non ha senso (l'aggiornamento lo propone NativeUpdater),

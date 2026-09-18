@@ -1,11 +1,11 @@
 {
   "expo": {
-    "name": "frontend",
-    "slug": "frontend",
+    "name": "PronoBlast",
+    "slug": "pronoblast",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "frontend",
+    "scheme": "pronoblast",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
