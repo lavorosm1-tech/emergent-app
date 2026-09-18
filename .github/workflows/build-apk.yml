@@ -75,7 +75,7 @@ jobs:
         run: npm ci
 
       - name: Sync Capacitor Android
-        run: npx cap sync android
+        run: npx cap sync android 2>&1 | tee /tmp/step-sync.log; exit ${PIPESTATUS[0]}
 
       - name: Calcola versione
         id: version
@@ -91,7 +91,7 @@ jobs:
 
       - name: Compila APK (debug, firma fissa)
         working-directory: android
-        run: bash gradlew assembleDebug --no-daemon
+        run: bash gradlew assembleDebug --no-daemon 2>&1 | tee /tmp/step-gradle.log; exit ${PIPESTATUS[0]}
 
       - name: Prepara i file della release
         run: |
@@ -123,3 +123,24 @@ jobs:
             PronoBlast.apk
             version.json
           make_latest: true
+
+      # I log completi di GitHub Actions stanno su un dominio esterno (blob Azure)
+      # che gli strumenti di Claude non raggiungono. In caso di errore, le ultime
+      # righe finiscono in un commento sul commit, leggibile dall'API GitHub.
+      - name: In caso di errore, scrive le ultime righe del log in un commento sul commit
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          {
+            echo "**Build APK PronoBlast fallita** (run ${{ github.run_number }})"
+            for f in /tmp/step-sync.log /tmp/step-gradle.log; do
+              if [ -f "$f" ]; then
+                echo; echo "\`$f\` (ultime 80 righe):"; echo '```'
+                tail -n 80 "$f" | grep -iv "token\|password\|secret" | cut -c1-400
+                echo '```'
+              fi
+            done
+          } > /tmp/comment.md
+          gh api "repos/${{ github.repository }}/commits/${{ github.sha }}/comments" -F body=@/tmp/comment.md >/dev/null
+
