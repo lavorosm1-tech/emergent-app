@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="it">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>PronoBlast</title>
+    <style>
+      body { margin: 0; background: #0A0A0A; color: #A1A1AA; font-family: system-ui, sans-serif;
+             display: flex; align-items: center; justify-content: center; height: 100vh; text-align: center; }
+      a { color: #FF8C42; }
+    </style>
+  </head>
+  <body>
+    <!--
+      Questa pagina NON e' l'app. Il guscio Android (Capacitor) carica l'app vera
+      da https://pronoblast.vercel.app (capacitor.config.ts -> server.url), cosi'
+      ogni deploy su Vercel arriva subito nell'APK senza reinstallarlo.
+      Capacitor esige comunque una cartella web da impacchettare: e' questa,
+      e si vede solo se manca del tutto la connessione al primo avvio.
+    -->
+    <p>PronoBlast ha bisogno di una connessione internet.<br />
+       <a href="https://pronoblast.vercel.app">Riprova</a></p>
+  </body>
+</html>

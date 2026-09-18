@@ -88,6 +88,41 @@ codice + `.md` insieme -> costruisce.
 
 ## Log (più recente in cima)
 
+### 2026-09-18 — APK Android installabile e auto-aggiornante (come GymBuilder)
+
+**Cosa**: PronoBlast si può installare sul telefono come app Android, con lo
+stesso meccanismo già in uso su GymBuilder. Documentazione completa in
+`docs/android-apk.md`.
+
+- `android/` + `capacitor.config.ts`: guscio Capacitor 7 che carica
+  `https://pronoblast.vercel.app`. Il frontend NON è dentro l'APK: ogni
+  deploy Vercel arriva da solo nell'app installata.
+- `android/app/src/main/java/app/pronoblast/mobile/ApkUpdaterPlugin.java`:
+  plugin nativo (copiato da GymBuilder) che legge la versione installata,
+  scarica l'APK nuovo con DownloadManager e apre l'installatore.
+- `android/app/debug.keystore`: firma debug FISSA committata, così ogni build
+  ha la stessa firma e Android accetta l'aggiornamento. Non cancellarla.
+- `.github/workflows/build-apk.yml`: compila l'APK e lo pubblica come GitHub
+  Release `apk-v1.0.<N>` (link fisso `.../releases/latest/download/PronoBlast.apk`).
+  Differenza da GymBuilder: niente APK committato in `public/` e nessun
+  `VERCEL_TOKEN` da configurare. Parte solo quando cambia il guscio, o a mano.
+- `frontend/src/utils/androidApp.ts` + `frontend/src/components/NativeUpdater.tsx`:
+  dentro l'APK confronta la versione installata con l'ultima Release (API
+  pubblica GitHub) e propone l'aggiornamento. Nel browser non fa niente.
+  Non importa `@capacitor/core`: legge `window.Capacitor` iniettato dal guscio.
+- `Strumenti -> APP ANDROID`: tasto "Installa App Android" (nel browser
+  Android scarica l'APK, su desktop apre la pagina della Release; nascosto
+  dentro l'APK).
+- `package.json` di radice: aggiunte le dipendenze Capacitor. Vercel continua
+  a installare solo `frontend/`.
+- Icona originale (PB su sfondo scuro con il gradiente del tema): l'icona
+  precedente in `frontend/assets/images/icon.png` era ancora quella di default
+  di Emergent. Sorgente 1024px in `android/pronoblast-icon-1024.png`.
+
+Verificato: `tsc` invariato (18 errori preesistenti, nessuno nei file nuovi),
+`expo export --platform web` ok. La compilazione Android avviene sul runner
+GitHub (qui non c'è l'SDK): prima esecuzione = release `apk-v1.0.1`.
+
 ### 2026-09-17 (6) — Nuovo tasto "Genera Multipla tramite AI"
 
 Aggiunto in Strumenti, sezione ANALISI, sopra "Framework TypingMind".

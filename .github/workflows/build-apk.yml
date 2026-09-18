@@ -1,0 +1,125 @@
+# APK Android di PronoBlast — stesso schema di GymBuilder, con una differenza.
+#
+# COME FUNZIONA
+# - L'APK e' un guscio Capacitor che carica l'app da https://pronoblast.vercel.app
+#   (capacitor.config.ts). Le modifiche al frontend arrivano DA SOLE a ogni deploy
+#   Vercel, senza reinstallare niente.
+# - Serve un APK nuovo solo quando cambia il guscio: android/**, capacitor.config.ts,
+#   capacitor-web/**, le dipendenze Capacitor in package.json, o questo workflow.
+#   Per questo il trigger e' limitato a quei percorsi (GymBuilder ricompila a ogni
+#   push: qui sarebbe solo rumore, perche' l'APK sarebbe identico a parte il numero).
+# - Si puo' anche lanciare a mano dalla tab Actions ("Run workflow").
+#
+# DOVE FINISCE L'APK (la differenza rispetto a GymBuilder)
+# - GymBuilder committa l'APK dentro public/ e lo ridistribuisce con Vercel: serve
+#   un VERCEL_TOKEN e ogni build aggiunge ~5 MB alla storia del repo.
+# - Qui l'APK va in una GitHub Release (tag apk-vX.Y.Z). Link fisso all'ultima
+#   versione: https://github.com/nuovorossi1-blip/emergent-app/releases/latest/download/PronoBlast.apk
+#   Nessun segreto da configurare: basta il GITHUB_TOKEN automatico.
+# - L'app installata legge https://api.github.com/repos/nuovorossi1-blip/emergent-app/releases/latest
+#   (frontend/src/utils/androidApp.ts): se il tag e' piu' alto della versione
+#   installata, propone l'aggiornamento.
+#
+# FIRMA
+# - APK debug firmato con android/app/debug.keystore, committata nel repo: ogni build
+#   ha la STESSA firma e Android accetta l'update sopra la versione installata.
+#   Cancellare quella keystore = obbligare tutti a disinstallare e reinstallare.
+#
+# VERSIONE
+# - versionCode = numero progressivo di esecuzione del workflow, versionName = 1.0.<numero>.
+#   Cresce da solo, non va toccato a mano.
+
+name: Build APK PronoBlast
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'android/**'
+      - 'capacitor.config.ts'
+      - 'capacitor-web/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/build-apk.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build-apk-main
+  cancel-in-progress: true
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: gradle
+
+      - name: Dipendenze Capacitor (solo la radice, NON frontend/)
+        run: npm ci
+
+      - name: Sync Capacitor Android
+        run: npx cap sync android
+
+      - name: Calcola versione
+        id: version
+        run: |
+          echo "code=${{ github.run_number }}" >> "$GITHUB_OUTPUT"
+          echo "name=1.0.${{ github.run_number }}" >> "$GITHUB_OUTPUT"
+
+      - name: Scrive la versione in build.gradle
+        run: |
+          sed -i "s/versionCode [0-9]\+/versionCode ${{ steps.version.outputs.code }}/" android/app/build.gradle
+          sed -i "s/versionName \"[^\"]*\"/versionName \"${{ steps.version.outputs.name }}\"/" android/app/build.gradle
+          grep -n "versionCode\|versionName" android/app/build.gradle
+
+      - name: Compila APK (debug, firma fissa)
+        working-directory: android
+        run: bash gradlew assembleDebug --no-daemon
+
+      - name: Prepara i file della release
+        run: |
+          cp android/app/build/outputs/apk/debug/app-debug.apk PronoBlast.apk
+          ls -la PronoBlast.apk
+          cat > version.json <<EOF
+          {
+            "version": "${{ steps.version.outputs.name }}",
+            "versionCode": ${{ steps.version.outputs.code }},
+            "apkUrl": "https://github.com/nuovorossi1-blip/emergent-app/releases/latest/download/PronoBlast.apk",
+            "releaseUrl": "https://github.com/nuovorossi1-blip/emergent-app/releases/latest",
+            "notes": "Aggiornamento del guscio Android di PronoBlast.",
+            "mandatory": false
+          }
+          EOF
+
+      - name: Pubblica la GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: apk-v${{ steps.version.outputs.name }}
+          name: PronoBlast Android ${{ steps.version.outputs.name }}
+          body: |
+            APK Android di PronoBlast (build ${{ steps.version.outputs.code }}).
+
+            Scarica **PronoBlast.apk** e aprilo sul telefono. La prima volta Android chiede
+            di autorizzare l'installazione da questa origine. Chi ha gia' l'app installata
+            riceve l'avviso di aggiornamento al prossimo avvio.
+          files: |
+            PronoBlast.apk
+            version.json
+          make_latest: true

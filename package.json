@@ -1,8 +1,19 @@
 {
   "name": "emergent-app",
   "private": true,
-  "description": "Radice del repository. Il vero progetto sta in frontend/ (Expo web) e netlify/functions/ (logica server). Questo file esiste per dichiarare a Vercel la versione di Node, la stessa che usa Netlify.",
+  "description": "Radice del repository. Il vero progetto sta in frontend/ (Expo web) e netlify/functions/ (logica server). Questo file dichiara a Vercel la versione di Node e contiene SOLO gli strumenti per il guscio Android (Capacitor): Vercel non installa niente da qui, usa 'cd frontend && yarn install'.",
   "engines": {
     "node": "22.x"
+  },
+  "scripts": {
+    "cap:sync": "npx cap sync android",
+    "cap:open:android": "npx cap open android"
+  },
+  "dependencies": {
+    "@capacitor/android": "^7.4.3",
+    "@capacitor/core": "^7.4.3"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^7.4.3"
   }
 }

@@ -9,6 +9,7 @@ import * as NavigationBar from "expo-navigation-bar";
 import { useIconFonts } from "@/src/hooks/use-icon-fonts";
 import { BottomNavProvider } from "@/src/components/BottomNavContext";
 import { ToastProvider } from "@/src/components/Toast";
+import NativeUpdater from "@/src/components/NativeUpdater";
 // FabBack rimosso il 10/09/2026: la freccia circolare flottante duplicava
 // il tasto indietro che ogni schermata ha gia' in alto a sinistra, e da quando
 // c'e' la barra ESCI/PREC/AVANTI nel dettaglio partita ci finiva pure sopra.
@@ -54,6 +55,8 @@ export default function RootLayout() {
         <ToastProvider>
           <StatusBar style="light" />
           <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: "#0A0A0A" }, animation: "slide_from_right", animationDuration: 160 }} />
+          {/* Avviso aggiornamento APK: attivo solo dentro il guscio Android (18/09/2026) */}
+          <NativeUpdater />
         </ToastProvider>
       </BottomNavProvider>
     </SafeAreaProvider>

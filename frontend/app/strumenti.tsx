@@ -17,6 +17,7 @@ import { colors } from "@/src/theme";
 import BottomNav from "@/src/components/BottomNav";
 import { openExternalUrl, confirmAction } from "@/src/utils/platform";
 import { AI_CHAT_URL, AI_MULTIPLA_PROMPT } from "@/src/utils/aiChat";
+import { isAndroidBrowser, isAndroidShell, downloadLatestApk, RELEASE_LATEST_PAGE } from "@/src/utils/androidApp";
 
 export default function Strumenti() {
   const bottomNav = useBottomNav();
@@ -24,6 +25,10 @@ export default function Strumenti() {
   const { width } = useWindowDimensions();
   const isGrid = width >= 600; // tablet/desktop → grid 2-col
   const [busy, setBusy] = useState<string | null>(null);
+  // Tasto "Installa app Android": solo nel browser di un telefono Android.
+  // Dentro l'APK non ha senso (l'aggiornamento lo propone NativeUpdater),
+  // su desktop il link alla pagina delle release basta e avanza.
+  const showApkInstall = Platform.OS === "web" && !isAndroidShell();
 
   const uploadExcel = async () => {
     const res = await DocumentPicker.getDocumentAsync({
@@ -345,6 +350,21 @@ export default function Strumenti() {
           desc="Vedi cosa ha imparato il sistema dai tuoi risultati e azzera l'apprendimento."
           onPress={() => router.push("/stats")}
         />
+
+        {showApkInstall && (
+          <>
+            <Text style={styles.section}>APP ANDROID</Text>
+            <Tool
+              testID="tool-install-apk"
+              icon="logo-android"
+              title={isAndroidBrowser() ? "Installa App Android" : "App Android (APK)"}
+              desc={isAndroidBrowser()
+                ? "Scarica l'APK di PronoBlast. Si aggiorna da solo a ogni modifica, come GymBuilder."
+                : "Apri la pagina dell'ultima versione dell'APK da installare sul telefono."}
+              onPress={() => (isAndroidBrowser() ? downloadLatestApk() : openExternalUrl(RELEASE_LATEST_PAGE))}
+            />
+          </>
+        )}
 
         <Text style={styles.section}>PERICOLO</Text>
         <Tool
