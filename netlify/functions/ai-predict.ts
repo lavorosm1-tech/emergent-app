@@ -1,7 +1,7 @@
 import { pgGet, pgPost, pgPatch, jsonResponse, rowToOdds } from "./lib/supabaseRest";
 import {
   structuralAnalysis, CANDIDATE_MARKETS, fullDistribution, coverageForMarket,
-  comboOdd, estimateMarketOdd, type Odds,
+  comboOdd, estimateMarketOdd, isVerdictMarket, type Odds,
 } from "./lib/clusterEngine";
 import { classifyScenario } from "./lib/scenario";
 import { readMinOdd } from "./odd-settings";
@@ -247,7 +247,12 @@ function buildMarketTable(
   // mercati migliori stanno in cima e non finiscono sepolti a meta' elenco.
   // Prima, con l'ordine di catalogo, i multigol restavano nel mezzo e l'IA
   // continuava a proporre i soliti Over/GG anche quando avevano numeri peggiori.
-  const voci = CANDIDATE_MARKETS.map((m) => {
+  // Solo i mercati che possono davvero diventare la giocata consigliata.
+  // Le istruzioni al modello sono un suggerimento, il filtro nel codice e' la
+  // garanzia: e' la stessa lezione del 18/09 su NG, che il prompt continuava a
+  // proporre perche' glielo suggeriva una vecchia sezione del testo.
+  const AMMESSI = CANDIDATE_MARKETS.filter((m) => isVerdictMarket(m));
+  const voci = AMMESSI.map((m) => {
     const reale = comboOdd(m, odds);
     const quota = reale ?? estimateMarketOdd(m, odds);
     return { m, p: coverageForMarket(m, dist).coverage, quota, stimata: reale === null };
@@ -275,7 +280,7 @@ function buildMarketTable(
   return `
 
 ============================================================
-📊 CATALOGO COMPLETO — tutti i ${CANDIDATE_MARKETS.length} mercati con i numeri gia' calcolati
+📊 CATALOGO — i ${AMMESSI.length} mercati giocabili con i numeri gia' calcolati
 ============================================================
 Legenda: "prob" e' la probabilita' calcolata dal motore Poisson sulla
 distribuzione completa dei risultati. "quota" con la tilde (~) e' stimata da
@@ -287,12 +292,12 @@ ${righe.join("\n")}
 REGOLE PER LA SCELTA:
 1. Scegli i "playable_markets" ESCLUSIVAMENTE da questa lista, copiando il nome
    del mercato ESATTAMENTE come scritto sopra. Questa lista contiene GIA' solo
-   i mercati selezionabili: quelli sotto la soglia di quota dell'utente
-   (${minOdd.toFixed(2)}) sono stati tolti, quindi qualsiasi cosa scegli fuori da qui
-   verrebbe scartata e la tua scelta andrebbe persa.
+   i mercati che l'utente gioca davvero, e solo quelli sopra la sua soglia di
+   quota (${minOdd.toFixed(2)}): qualsiasi cosa scegli fuori da qui verrebbe
+   scartata dal codice e la tua scelta andrebbe persa.
 2. NON stimare probabilita' tue: quelle sopra sono gia' calcolate. Il tuo
    compito e' giudicare quali conviene giocare, non ricalcolarle.
-3. Considera tutti e ${CANDIDATE_MARKETS.length}, multigol e combo compresi. Sono giocabili quanto
+3. Considerali tutti, multigol totali e combo compresi. Sono giocabili quanto
    gli altri: se hanno i numeri migliori, proponili senza esitare.
 4. Quando probabilita' e storico divergono molto, spiega nel "reasoning" a
    quale dei due dai piu' peso e perche'.

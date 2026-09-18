@@ -551,7 +551,9 @@ export function pickFinal(ranked: RankedPick[], aiMarkets: string[] = []): {
 const VERDICT_WHITELIST = new Set([
   "1", "2",
   "1x", "x2",
-  "gg", "ng",
+  // NG tolto il 18/09/2026 su decisione di Rossi: non lo gioca. Resta nel
+  // ranking strutturale, ma non puo' piu' diventare la giocata.
+  "gg",
   "o2.5",
   "mg 2-4 totali", "mg 3-6 totali",
   "gg + o2.5",
@@ -612,7 +614,19 @@ function famiglieAmbigue(lista: VerdictPick[], prob: (b: VerdictPick) => number)
   return out;
 }
 
-function isVerdictMarket(market: string): boolean {
+/**
+ * Mercati tolti dalla whitelist che restano una LETTURA della partita: non si
+ * giocano, ma vietano i mercati opposti piu' in basso e rendono ambigua la loro
+ * famiglia quando sono appaiati al proprio contrario.
+ * Deve restare allineata a VETO_ONLY_MARKETS in clusterEngine.ts.
+ */
+const VETO_ONLY = new Set(["ng"]);
+
+function isVetoOnly(market: string): boolean {
+  return VETO_ONLY.has(market.trim().toLowerCase().replace(/\s{2,}/g, " "));
+}
+
+export function isVerdictMarket(market: string): boolean {
   return VERDICT_WHITELIST.has(market.trim().toLowerCase().replace(/\s{2,}/g, " "));
 }
 
@@ -1120,7 +1134,21 @@ export function buildFinalVerdict(
   if (!out.length) return out;
   const probOf = (b: VerdictPick) =>
     b.coverage ?? structural?.ranking?.find((r) => norm(r.market) === norm(b.market))?.coverage ?? 0;
-  const ambigue = famiglieAmbigue(out, probOf);
+  // I mercati "solo veto" (NG) non sono piu' candidati, ma restano la lettura
+  // della partita: entrano nel calcolo delle famiglie ambigue e vietano i
+  // mercati opposti che stanno sotto di loro nel ranking. Senza questo, in una
+  // partita difensiva il verdetto poteva scivolare su GG appena le alternative
+  // finivano sotto soglia.
+  const vetoPicks: VerdictPick[] = (structural?.ranking || [])
+    .filter((r) => isVetoOnly(r.market))
+    .map((r) => ({
+      market: r.market, score: 0, sources: [], ranks: {},
+      odd: r.odd ?? undefined, coverage: r.coverage,
+      concordance: 0, agreementLabel: "divergente",
+    }));
+  const lettura = [...out, ...vetoPicks].sort((a, b) => probOf(b) - probOf(a));
+
+  const ambigue = famiglieAmbigue(lettura, probOf);
   const leggibili = out.filter((b) => {
     const f = famiglia(b.market);
     return !f || !ambigue.has(f);
@@ -1132,8 +1160,12 @@ export function buildFinalVerdict(
   // non solo la direzione: se un mercato piu' probabile dice il contrario,
   // quello sotto non si gioca. Senza questo, alzando la soglia il pick poteva
   // passare da `NG` a `GG` perche' entrambi erano compatibili con la direzione.
+  const vietatoDaVeto = (b: VerdictPick) =>
+    vetoPicks.some((v) => probOf(v) > probOf(b) && contraddice(v.market, b.market));
   const coerenti = leggibili.filter(
-    (b, i) => !leggibili.slice(0, i).some((sopra) => contraddice(sopra.market, b.market)),
+    (b, i) =>
+      !leggibili.slice(0, i).some((sopra) => contraddice(sopra.market, b.market)) &&
+      !vietatoDaVeto(b),
   );
   const scelto = coerenti.find(sopra);
   if (!scelto) return [];                    // valore nullo: nessuna giocata

@@ -1,17 +1,26 @@
 import { detectLeagueContext, parseLeagueLabel } from "./leagueContext";
 
-export const PREDICTION_SYSTEM = `Sei un analista esperto di scommesse calcistiche. Analizzi le quote di una partita e fornisci pronostici basati SOLO sulla distribuzione delle quote (gap logaritmico/lineare/esponenziale).
+export const PREDICTION_SYSTEM = `Sei un analista esperto di scommesse calcistiche. Leggi le quote di una partita come un SISTEMA (non una alla volta) e dici quali mercati conviene giocare.
+
+IMPORTANTE — da dove scegli
+I mercati che puoi proporre sono SOLO quelli elencati nel CATALOGO che trovi nel
+messaggio utente, copiati con il nome esatto. Quella lista contiene gia' i soli
+mercati che possono diventare la giocata consigliata, filtrati per la soglia di
+quota dell'utente. Qualsiasi mercato fuori da quella lista viene scartato dal
+codice e la tua scelta va persa: in particolare NON proporre mai NG, X secco,
+U1.5, U2.5, O3.5, i multigol di casa o ospite, ne' combo con DC 12.
+Le probabilita' sono gia' calcolate dal motore: non stimarne di tue.
 
 ═══════════════════════════════════════
-FASE 1 — IDENTIFICA LA FAMIGLIA (obbligatoria, prima di scegliere mercati)
+FASE 1 — LEGGI LA FAMIGLIA (descrittiva: serve a spiegare, non a scegliere)
 ═══════════════════════════════════════
-Scegli UNA delle 6 famiglie usando le quote:
+Classifica la partita in UNA delle 6 famiglie:
 
 • OFFENSIVA_PULITA: O2.5 < 1.65, O3.5 < 2.50, GG < 1.70, NG > 1.90, U1.5 > 4.50.
   → Tante reti, attacchi netti, partita scoperta.
 
 • OFFENSIVA_SPORCA: O2.5 < 1.85, O3.5 < 3.00, GG vicino a NG (1.80-2.00 entrambe), 1X2 senza favorita chiara.
-  → Tanti gol probabili ma chi segna è incerto.
+  → Tanti gol probabili ma chi segna e' incerto.
 
 • RANGE_CONTROLLATO: O1.5 < 1.40, O2.5 tra 1.70-2.10, O3.5 > 3.20, U3.5 < 1.30.
   → Pavimento minimo 2 gol, tetto massimo 3-4 gol. Il classico 2-4 gol.
@@ -23,36 +32,17 @@ Scegli UNA delle 6 famiglie usando le quote:
   → Favorita vince ma senza goleada. 1-0, 2-0, 2-1.
 
 • INSTABILE: Quote 1X2 tutte > 2.40, GG/NG entrambe 1.70-1.95, U/O quasi simmetrici.
-  → Nessun segnale, evitare.
+  → Nessun segnale forte: scegli con fiducia Bassa, oppure lascia
+    "playable_markets" vuoto se davvero nessun mercato del catalogo convince.
+
+La famiglia serve a raccontare la partita nell'"analysis". NON detta un ordine di
+preferenza fra i mercati: quello lo decidono i numeri del catalogo.
 
 ═══════════════════════════════════════
-FASE 2 — REGOLE DI SCELTA MERCATI (basate sulla famiglia)
+FASE 2 — RANKING + PAVIMENTO/TETTO ESPLICITI
 ═══════════════════════════════════════
-
-PER FAMIGLIA, l'ordine di preferenza dei mercati è:
-
-• OFFENSIVA_PULITA → ordine: O2.5, GG, O1.5, MG 2-4 totali, Combo DC+O1.5
-• OFFENSIVA_SPORCA → ordine: O1.5, MG 2-4 totali, O2.5, Combo X+O1.5 se equilibrio
-• RANGE_CONTROLLATO → ordine: MG 2-4 totali, O1.5+U3.5 combo, U3.5, O1.5
-• CHIUSA_PROTETTA → ordine: U3.5, U2.5, NG, MG 2-4 casa o ospite (a seconda della favorita), Combo DC+U3.5
-• DOMINANZA_CON_TETTO → ordine: 1 secco (se quota 1 ≤ 1.50) oppure 2 secco (se quota 2 ≤ 1.50), 1X (se 1.50 < 1 ≤ 1.85), X2 (se 1.50 < 2 ≤ 1.85), MG 2-4 casa/ospite, U3.5, Combo DC+U3.5
-• INSTABILE → ordine: nessun mercato valutabile, eventualmente solo NG o U3.5 con fiducia Bassa
-
-REGOLE FORZANTI (devi rispettarle):
-- Se quota 1 ≤ 1.50 OPPURE quota 2 ≤ 1.50, INSERISCI "1" o "2" SECCO come primo o secondo mercato.
-- Se quota 1 tra 1.51 e 1.85, valuta "1X" come copertura.
-- Se quota 2 tra 1.51 e 1.85, valuta "X2" come copertura.
-- INSERISCI SEMPRE almeno una opzione MULTIGOAL tra: "MG 2-4 totali", "MG 2-4 casa", "MG 2-4 ospite" quando la famiglia è RANGE_CONTROLLATO, DOMINANZA_CON_TETTO o CHIUSA_PROTETTA.
-- INSERISCI SEMPRE almeno una opzione COMBO tra: "DC 1X + U3.5", "DC X2 + U3.5", "DC 1X + O1.5", "DC X2 + O1.5", "DC 12 + O1.5" quando applicabile.
-- Non bocciare 1 o 2 secco se la quota è bassa e il gap con X e l'altro segno è netto.
-- "MG 2-4 casa" si gioca quando 1 è favorita ma O3.5 > 3.50 (tetto): mette pavimento+tetto + scelta vincente.
-- "MG 2-4 ospite" stessa logica con 2 favorita.
-
-═══════════════════════════════════════
-FASE 3 — RANKING + PAVIMENTO/TETTO ESPLICITI
-═══════════════════════════════════════
-Restituisci 3-5 mercati ordinati dal PIÙ PROBABILE al MENO PROBABILE.
-Il "main_prediction" è il primo (più probabile).
+Restituisci 3-5 mercati del catalogo ordinati dal PIU' PROBABILE al MENO
+PROBABILE. Il "main_prediction" e' il primo.
 
 OBBLIGO: il campo "analysis" DEVE iniziare SEMPRE con la SINTESI A SISTEMA:
   "PAVIMENTO: X gol | TETTO: Y gol | RANGE: X-Y gol"
@@ -60,11 +50,14 @@ poi 2-3 righe di motivazione che leggono le quote come SISTEMA (non singole),
 indicando gap rilevanti e segnali strutturali.
 
 Come stabilire PAVIMENTO e TETTO:
-- PAVIMENTO = gol minimo probabili. Es. O1.5 ≤ 1.30 ⇒ pavimento 2. O1.5 1.31-1.60 ⇒ pavimento "0 (probabile 2)". O1.5 > 1.60 ⇒ pavimento 0.
-- TETTO = gol massimo probabili. Es. U3.5 ≤ 1.40 ⇒ tetto 3. U2.5 ≤ 1.40 ⇒ tetto 2. U3.5 > 1.85 ⇒ tetto "aperto".
+- PAVIMENTO = gol minimo probabili. Es. O1.5 <= 1.30 ⇒ pavimento 2. O1.5 1.31-1.60 ⇒ pavimento "0 (probabile 2)". O1.5 > 1.60 ⇒ pavimento 0.
+- TETTO = gol massimo probabili. Es. U3.5 <= 1.40 ⇒ tetto 3. U2.5 <= 1.40 ⇒ tetto 2. U3.5 > 1.85 ⇒ tetto "aperto".
 - Quando trovi gap forte O/U (es. U3.5 1.30 vs O3.5 3.20) usalo come segnale di tetto chiaro.
-- I mercati 1, 2, X, 1X, X2 NON DEVONO essere usati se la quota corrispondente è > 1.85 (regola assoluta).
-- Verifica COERENZA tra mercati scelti: NO mix discordante (GG con NG, O2.5 con U2.5, 1 con X2).
+
+REGOLA DI COERENZA (assoluta): i mercati che proponi non devono contraddirsi fra
+loro. Mai GG insieme a un mercato che implica NG, mai O2.5 con U2.5, mai "1" con
+"X2" o "2" con "1X". Se la partita ha una direzione, tutti i mercati proposti
+devono stare da quella parte.
 
 ═══════════════════════════════════════
 OUTPUT (SOLO JSON, niente markdown)
@@ -74,16 +67,14 @@ OUTPUT (SOLO JSON, niente markdown)
   "analysis": "PAVIMENTO: 2 gol | TETTO: 4 gol | RANGE: 2-4 gol. Quote O1.5 1.30 + U3.5 1.40 → range chiuso. Gap GG 1.85 vs NG 1.95 ⇒ partita simmetrica.",
   "playable_markets": [
     {"market": "MG 2-4 totali", "reasoning": "Pavimento 2, tetto 4: copertura range completo"},
-    {"market": "O1.5", "reasoning": "Pavimento 2 con quota convenientemente sicura"},
-    {"market": "DC 1X + U3.5", "reasoning": "Pavimento qualsiasi + tetto 3, copertura difensiva"}
+    {"market": "DC 1X + O1.5", "reasoning": "Direzione casa rafforzata dal pavimento"},
+    {"market": "GG + O2.5", "reasoning": "Entrambe segnano in una partita da almeno 3 gol"}
   ],
   "main_prediction": "MG 2-4 totali",
   "confidence": "Media",
   "min_goals": 2,
   "max_goals": 4
-}
-
-Mercati ammessi: 1, X, 2, 1X, X2, 12, O1.5, U1.5, O2.5, U2.5, O3.5, U3.5, GG, NG, MG 2-4 totali, MG 2-4 casa, MG 2-4 ospite, DC 1X + U3.5, DC X2 + U3.5, DC 12 + U3.5, DC 1X + O1.5, DC X2 + O1.5, DC 12 + O1.5, GG + O2.5.`;
+}`;
 
 function fmt(o: any, k: string, label: string): string {
   const v = o?.[k];

@@ -532,7 +532,9 @@ export function isMixedCombo(market: string): boolean {
 export const VERDICT_WHITELIST = [
   "1", "2",
   "1X", "X2",
-  "GG", "NG",
+  // NG tolto il 18/09/2026 su decisione di Rossi: non lo gioca. Resta nel
+  // catalogo e nel ranking strutturale, ma non puo' piu' diventare la giocata.
+  "GG",
   "O2.5",
   "MG 2-4 totali", "MG 3-6 totali",
   "GG + O2.5",
@@ -541,6 +543,24 @@ export const VERDICT_WHITELIST = [
   "DC 1X + U3.5", "DC X2 + U3.5",
   "DC 1X + GG", "DC X2 + GG",
 ];
+
+/**
+ * Mercati tolti dalla whitelist ma che restano una LETTURA della partita.
+ * Non possono diventare la giocata, pero' continuano a: (a) vietare i mercati
+ * che li contraddicono e stanno piu' in basso nel ranking, (b) rendere ambigua
+ * la loro famiglia quando sono appaiati al proprio opposto.
+ *
+ * Senza questo, togliendo NG dalla whitelist (18/09/2026) si perdeva la lettura
+ * difensiva: in una partita con NG al 61% il verdetto poteva scivolare su GG al
+ * 39% appena le alternative andavano sotto soglia. Cioe' l'esatto contrario di
+ * quello che Rossi ha chiesto, e la stessa incoerenza gia' corretta il 27/07.
+ */
+export const VETO_ONLY_MARKETS = ["NG"];
+
+function isVetoOnly(market: string): boolean {
+  const n = market.trim().toUpperCase().replace(/ {2,}/g, " ");
+  return VETO_ONLY_MARKETS.some((m) => m.toUpperCase() === n);
+}
 
 /** true se il mercato puo' comparire come giocata consigliata. */
 export function isVerdictMarket(market: string): boolean {
@@ -1100,9 +1120,12 @@ export function selezionaPick(
   if (!ammessi.length) return null;
 
   // La DIREZIONE della partita e' il primo mercato ammesso del ranking, quota o
-  // non quota: e' la lettura del motore e non si tocca.
-  const ambigue = famiglieAmbigue(ammessi);
-  const leggibili = ammessi.filter((r) => {
+  // non quota: e' la lettura del motore e non si tocca. Nella lettura entrano
+  // anche i mercati "solo veto" (vedi VETO_ONLY_MARKETS): non sono giocabili ma
+  // dicono da che parte sta la partita.
+  const letti = ranked.filter((r) => isVerdictMarket(r.market) || isVetoOnly(r.market));
+  const ambigue = famiglieAmbigue(letti);
+  const leggibili = letti.filter((r) => {
     const f = famiglia(r.market);
     return !f || !ambigue.has(f);
   });
@@ -1123,6 +1146,7 @@ export function selezionaPick(
     // soglia il pick passava da NG a GG — due mercati opposti fra loro.
     // Se un mercato piu' probabile dice il contrario, quello sotto non si gioca.
     if (leggibili.slice(0, i).some((sopra) => contraddice(sopra.market, r.market))) continue;
+    if (!isVerdictMarket(r.market)) continue;   // solo veto: vieta, non si gioca
     if ((r.odd ?? 0) >= minOdd) return r;
   }
 

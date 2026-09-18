@@ -88,6 +88,66 @@ codice + `.md` insieme -> costruisce.
 
 ## Log (più recente in cima)
 
+### 2026-09-18 — NG fuori dai mercati giocati, prompt IA riscritto, npm al posto di yarn
+
+**Decisione di Rossi**: NG non lo gioca. Tolto dalla `VERDICT_WHITELIST` in
+`clusterEngine.ts` e dalla copia in `frontend/src/api.ts` — le due liste restano
+identiche, ora a **17 mercati** (verificato con un confronto automatico).
+
+**Attenzione, problema trovato durante la modifica e corretto nello stesso commit.**
+Togliere NG dalla whitelist bastava a non farlo uscire, ma apriva un buco peggiore:
+NG non era più fra i candidati, quindi non poteva più *vietare* i mercati opposti.
+In una partita difensiva con NG al 61%, appena le alternative finivano sotto
+soglia il verdetto scivolava su **GG al 39%** — l'esatto contrario della lettura,
+cioè lo stesso difetto corretto il 27/07 su Deportivo Riestra - Boca. In più si
+perdeva il rilevamento della famiglia ambigua GG/NG appaiati (caso Nacional
+Potosí). Soluzione: `VETO_ONLY_MARKETS` (oggi solo `NG`). Un mercato "solo veto"
+**non può diventare la giocata** ma continua a: (a) vietare i mercati che lo
+contraddicono e stanno sotto di lui nel ranking, (b) rendere ambigua la sua
+famiglia quando è appaiato al proprio opposto. Presente in entrambe le copie
+(motore e fusione), da tenere allineato come la whitelist.
+
+Verificato ESEGUENDO davvero le funzioni (non solo compilando) su una partita
+difensiva costruita apposta, con NG primo nel ranking al 61% e GG al 39%:
+- motore (`selezionaPick`) e fusione (`buildFinalVerdict`) danno lo stesso
+  risultato a tutte e quattro le soglie: `MG 2-4 totali @1,62` a 1,40/1,50/1,60,
+  **nessuna giocata** a 1,75 (prima della correzione usciva GG @2,05)
+- NG non compare mai fra i candidati del verdetto
+- la partita offensiva di controllo non cambia comportamento
+
+**Prompt dell'IA riscritto** (`predictionPrompt.ts`, `PREDICTION_SYSTEM`). Era
+ancora quello originale a 6 famiglie, scritto prima del catalogo a 54 mercati, e
+conteneva due consegne opposte: la FASE 2 suggeriva NG per le famiglie
+CHIUSA_PROTETTA e INSTABILE, e la lista finale "Mercati ammessi" (24 nomi, NG
+compreso) contraddiceva il catalogo iniettato da `ai-predict.ts`, che dice
+"scegli ESCLUSIVAMENTE da questa lista". Il modello seguiva spesso la prima.
+Ora: la famiglia resta come lettura descrittiva, spariscono gli ordini di
+preferenza per famiglia e la lista finale, ed è esplicito che i mercati si
+prendono solo dal catalogo del messaggio utente.
+
+**E soprattutto il filtro nel codice**, perché le istruzioni al modello sono un
+suggerimento: `buildMarketTable` in `ai-predict.ts` ora filtra le righe con
+`isVerdictMarket()` oltre che con la soglia di quota. L'IA vede **solo** i
+mercati che possono diventare la giocata.
+
+**Etichetta nel dettaglio partita**: se `main_prediction` dell'IA cade fuori dai
+mercati giocati, sotto il riquadro compare "Proposta IA fuori dai mercati
+giocati: non può diventare il verdetto finale", invece di presentarla accanto al
+verdetto come se fosse equivalente.
+
+**A6 — deploy riproducibili, con npm.** `yarn install` sull'albero di Expo 54 non
+arriva in fondo in ambiente pulito (oltre 40 minuti nella sola risoluzione delle
+dipendenze) e `yarn import` rifiuta il lockfile npm moderno, quindi il
+`yarn.lock` che l'audit chiedeva non era producibile. Stesso obiettivo raggiunto
+con npm: committato `frontend/package-lock.json`, e install/build passati a
+`npm ci` / `npm run build:web` in `vercel.json` e `netlify.toml`. Verificato:
+`npm ci` da zero installa 968 pacchetti in 15 secondi, `tsc` 0 errori, eslint
+0 errori, build web verde. Da qui in poi i deploy usano versioni fissate.
+
+**COSA NON È ANCORA VERO**: il costo della rimozione di NG non è stato misurato
+sulle 583 partite di test come si era fatto il 27/07 per la whitelist. Va fatto
+rigiocando il test set e scrivendo qui la nuova curva soglia/precisione.
+
 ### 2026-09-18 — Identità PronoBlast sul web, PWA, e pulizia del repo (A8, A12)
 
 **A8 — l'app web si chiamava "frontend" e aveva l'icona di Emergent.**

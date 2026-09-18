@@ -1,6 +1,6 @@
 [build]
   publish = "frontend/dist"
-  command = "cd frontend && yarn install --frozen-lockfile && yarn build:web"
+  command = "cd frontend && npm ci && npm run build:web"
 
   # L'ignore command e' stato RIMOSSO il 28/07/2026: era il sospettato numero
   # uno dei "deploy fantasma", cioe' build registrate col commit nuovo ma che

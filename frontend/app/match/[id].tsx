@@ -8,7 +8,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 
-import { api, Match, Prediction, MARKET_FAMILIES, ODD_LABELS, OddsKey, quickPredictionFamily, rankPicks, StructuralAnalysis, buildFinalVerdict, VerdictPick, getMarketOdd, filterCoherentAlternatives, violatesStructure, getMatchCautionWarning, MatchHistory, getScenarioNote } from "@/src/api";
+import { api, Match, Prediction, MARKET_FAMILIES, ODD_LABELS, OddsKey, quickPredictionFamily, rankPicks, StructuralAnalysis, buildFinalVerdict, VerdictPick, getMarketOdd, filterCoherentAlternatives, violatesStructure, getMatchCautionWarning, MatchHistory, getScenarioNote, isVerdictMarket } from "@/src/api";
 import { marketStatsCache, mlStatsCache, matchDetailCache, oddSettingsCache, selectedListCache } from "@/src/utils/cache";
 import { useScrollMemory } from "@/src/utils/scrollMemory";
 import { colors } from "@/src/theme";
@@ -1089,6 +1089,17 @@ export default function MatchDetail() {
                   <Text style={styles.mainPredVal}>{prediction.main_prediction}</Text>
                 </LinearGradient>
               )}
+              {/* La proposta dell'IA non e' il verdetto: se cade fuori dai mercati
+                  che Rossi gioca (whitelist), va detto, non presentato come
+                  equivalente al verdetto finale. */}
+              {prediction.main_prediction && !isVerdictMarket(prediction.main_prediction) && (
+                <View style={styles.aiFuoriWrap}>
+                  <Ionicons name="information-circle-outline" size={14} color={colors.warning} />
+                  <Text style={styles.aiFuoriTxt}>
+                    Proposta IA fuori dai mercati giocati: non può diventare il verdetto finale.
+                  </Text>
+                </View>
+              )}
               {prediction.analysis && (
                 <Text style={styles.analysis}>{prediction.analysis}</Text>
               )}
@@ -1582,4 +1593,11 @@ const styles = StyleSheet.create({
 
   // Tasto "?" della legenda famiglie (era usato ma mai definito)
   helpBtn: { marginLeft: "auto", padding: 4 },
+
+  aiFuoriWrap: {
+    flexDirection: "row", alignItems: "center", gap: 6,
+    marginTop: 8, paddingVertical: 6, paddingHorizontal: 8,
+    backgroundColor: "rgba(245, 158, 11, 0.12)", borderRadius: 8,
+  },
+  aiFuoriTxt: { flex: 1, color: colors.warning, fontSize: 11, fontWeight: "700" },
 });

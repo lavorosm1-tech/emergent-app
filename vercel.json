@@ -3,8 +3,8 @@
   "regions": [
     "dub1"
   ],
-  "installCommand": "cd frontend && yarn install --frozen-lockfile",
-  "buildCommand": "cd frontend && yarn build:web",
+  "installCommand": "cd frontend && npm ci",
+  "buildCommand": "cd frontend && npm run build:web",
   "outputDirectory": "frontend/dist",
   "functions": {
     "api/**": {

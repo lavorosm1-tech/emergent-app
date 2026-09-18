@@ -23,8 +23,8 @@ più costosa: `backend/` non esiste più, la logica vera è in `netlify/function
 
 ```bash
 cd frontend
-yarn install          # oppure npm install
-yarn build:web        # export web + iniezione delle meta PWA
+npm ci                # installa esattamente le versioni del lockfile
+npm run build:web     # export web + iniezione delle meta PWA
 npx tsc --noEmit -p . # deve restare a 0 errori
 npx eslint .          # deve restare a 0 errori
 ```
