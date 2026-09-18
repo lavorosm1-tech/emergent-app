@@ -16,6 +16,7 @@ import { ScoreInput } from "@/src/components/ScoreInput";
 import { FamilyLegendModal } from "@/src/components/FamilyLegendModal";
 import { predictionQueue } from "@/src/utils/predictionQueue";
 import BottomNav, { useNavMetrics } from "@/src/components/BottomNav";
+import { confirmAction } from "@/src/utils/platform";
 
 /**
  * La soglia di quota si legge UNA VOLTA per sessione. Se due schermate la
@@ -234,7 +235,7 @@ export default function MatchDetail() {
       const wasPending = predictionQueue.isPending(id);
       setAiPending(wasPending);
       // If a background prediction just finished, refresh the data
-      if (!wasPending && match && !match.prediction && prediction === null) {
+      if (!wasPending && match && !match.main_prediction && prediction === null) {
         try {
           const m = await api.match(id);
           setMatch(m);
@@ -940,7 +941,7 @@ export default function MatchDetail() {
                   <Ionicons name="help-circle-outline" size={18} color={colors.primary} />
                 </TouchableOpacity>
               </View>
-              <Text style={styles.preHint}>Mercati validi ordinati per quota reale del bookmaker e win-rate storico. Questa lista NON tiene conto del pronostico AI: resta un parere indipendente, così la concordanza fra i tre sistemi è reale e non un'eco.</Text>
+              <Text style={styles.preHint}>Mercati validi ordinati per quota reale del bookmaker e win-rate storico. Questa lista NON tiene conto del pronostico AI: resta un parere indipendente, così la concordanza fra i tre sistemi è reale e non un’eco.</Text>
 
               {/* RANK #1 - HIGHLIGHTED PICK */}
               {ranked[0] && (() => {
@@ -1214,6 +1215,10 @@ export default function MatchDetail() {
           </Text>
         )}
       </View>
+
+      {/* La legenda delle famiglie era importata e il tasto "?" ne accendeva lo
+          stato, ma il modale non veniva mai montato: il tasto non apriva nulla. */}
+      <FamilyLegendModal visible={showLegend} onClose={() => setShowLegend(false)} />
 
       <BottomNav />
     </SafeAreaView>
@@ -1574,4 +1579,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.danger, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4,
   },
   vetoTxt: { color: "#FFF", fontSize: 9, fontWeight: "900", letterSpacing: 0.3 },
+
+  // Tasto "?" della legenda famiglie (era usato ma mai definito)
+  helpBtn: { marginLeft: "auto", padding: 4 },
 });

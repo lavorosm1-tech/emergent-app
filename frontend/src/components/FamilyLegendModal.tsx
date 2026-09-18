@@ -75,7 +75,7 @@ export function FamilyLegendModal({ visible, onClose }: { visible: boolean; onCl
             </TouchableOpacity>
           </View>
           <Text style={s.intro}>
-            Ogni famiglia descrive la "forma" della partita letta dalle quote come SISTEMA (non singolarmente).
+            Ogni famiglia descrive la “forma” della partita letta dalle quote come SISTEMA (non singolarmente).
             Pavimento = gol minimo, Tetto = gol massimo.
           </Text>
           <ScrollView style={s.scroll}>

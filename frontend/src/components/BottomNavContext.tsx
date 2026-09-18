@@ -54,10 +54,10 @@ export function BottomNavProvider({ children }: { children: React.ReactNode }) {
 
 export function useBottomNav() {
   const ctx = useContext(Ctx);
-  if (!ctx) {
-    // fallback no-op (in caso di pagine fuori provider)
-    const dummy = useSharedValue(1);
-    return { visible: dummy, handleScroll: () => {}, show: () => {} };
-  }
+  // L'hook va chiamato SEMPRE, prima di qualsiasi return condizionale:
+  // le regole degli hook vietano di crearlo dentro un if (fallback no-op
+  // per le pagine montate fuori dal provider).
+  const dummy = useSharedValue(1);
+  if (!ctx) return { visible: dummy, handleScroll: () => {}, show: () => {} };
   return ctx;
 }

@@ -100,7 +100,8 @@ const styles = StyleSheet.create({
       android: { elevation: 8 },
       default: {},
     }),
-    backdropFilter: "blur(8px)" as any,
+    // backdropFilter non e' uno stile React Native: va applicato solo su web
+    ...(Platform.OS === "web" ? ({ backdropFilter: "blur(8px)" } as any) : {}),
   },
   txt: { flex: 1, fontSize: 13, fontWeight: "700" },
 });

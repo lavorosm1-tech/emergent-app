@@ -184,7 +184,7 @@ export const api = {
     }),
   uploadExcel: async (uri: string, name: string, mimeType?: string) => {
     const form = new FormData();
-    if (typeof window !== "undefined" && window.fetch && uri.startsWith("blob:")) {
+    if (typeof window !== "undefined" && uri.startsWith("blob:")) {
       // Web: fetch the blob URL and append as Blob
       const r = await fetch(uri);
       const blob = await r.blob();
@@ -269,7 +269,7 @@ export type Candidate = { market: string; odd: number; family: string };
 export function quickPredictionFamily(odds: Odds): Candidate[] {
   const o = odds || {};
   const get = (k: OddsKey, def = Infinity) => (o[k] ?? def) as number;
-  const o1 = get("odd_1"), oX = get("odd_X"), o2 = get("odd_2");
+  const o1 = get("odd_1"), o2 = get("odd_2");
   const o1X = get("odd_1X"), oX2 = get("odd_X2"), o12 = get("odd_12");
   const oO15 = get("odd_O15");
   const oO25 = get("odd_O25"), oU25 = get("odd_U25");
@@ -1061,8 +1061,6 @@ export function buildFinalVerdict(
   // Regola: comanda la probabilita'. Il punteggio della fusione (concordanza
   // fra i sistemi compresa) decide solo fra mercati vicini, entro 5 punti di
   // probabilita': li' e' un vero spareggio, non un ribaltamento.
-  const probDi = (b: VerdictPick) =>
-    b.coverage ?? structural?.ranking?.find((r) => norm(r.market) === norm(b.market))?.coverage ?? 0;
   // ORDINE = quello del ranking strutturale, punto.
   // La regola concordata e' "si scorre il ranking dall'alto e si prende il primo
   // ammesso che paga abbastanza": se qui riordinassimo con criteri nostri,
@@ -1129,7 +1127,6 @@ export function buildFinalVerdict(
   });
   if (!leggibili.length) return [];      // nessuna famiglia leggibile: si sta fuori
 
-  const direzione = leggibili[0];
   const sopra = (b: VerdictPick) => (b.odd ?? 0) >= minOdd;
   // Un mercato e' valido solo se non contraddice NESSUNO di quelli piu' in alto,
   // non solo la direzione: se un mercato piu' probabile dice il contrario,
@@ -1245,7 +1242,7 @@ function _hasOver(m: string) { return _hasOverRegex.test(m); }
 function _hasGG(m: string) { return _hasGGRegex.test(m); }
 function _hasNG(m: string) { return _hasNGRegex.test(m); }
 
-const _OPPOSITES: Array<[string, string]> = [
+const _OPPOSITES: [string, string][] = [
   ["1", "X"], ["1", "2"], ["1", "X2"],
   ["2", "X"], ["2", "1X"],
   ["1X", "X2"], ["1X", "12"], ["X2", "12"], ["X", "12"],

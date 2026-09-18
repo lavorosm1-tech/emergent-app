@@ -9,7 +9,6 @@ import { useRouter } from "expo-router";
 import * as DocumentPicker from "expo-document-picker";
 import * as Sharing from "expo-sharing";
 import * as FileSystem from "expo-file-system/legacy";
-import * as Linking from "expo-linking";
 import * as Clipboard from "expo-clipboard";
 
 import { api } from "@/src/api";
@@ -23,7 +22,6 @@ export default function Strumenti() {
   const bottomNav = useBottomNav();
   const router = useRouter();
   const { width } = useWindowDimensions();
-  const isGrid = width >= 600; // tablet/desktop → grid 2-col
   const [busy, setBusy] = useState<string | null>(null);
   // Tasto "Installa app Android": solo nel browser di un telefono Android.
   // Dentro l'APK non ha senso (l'aggiornamento lo propone NativeUpdater),

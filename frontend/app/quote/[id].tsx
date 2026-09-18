@@ -38,7 +38,7 @@ export default function QuotePage() {
       const topIdx = items.length > 0
         ? items.reduce((iMax, it, i, arr) => (it.value! < arr[iMax].value! ? i : iMax), 0)
         : -1;
-      return { name: f.label, items, topIdx };
+      return { name: f.name, items, topIdx };
     });
   }, [match]);
 

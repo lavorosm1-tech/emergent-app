@@ -20,7 +20,7 @@ import { selectedListCache, matchesCache, marketStatsCache, mlStatsCache, matchD
 
 const DIGITS = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
 // 18 risultati comuni nel calcio (raggruppati per popolarità)
-const QUICK_RESULTS: Array<[number, number]> = [
+const QUICK_RESULTS: [number, number][] = [
   [0, 0], [1, 0], [0, 1], [1, 1], [2, 0], [0, 2],
   [2, 1], [1, 2], [2, 2], [3, 0], [0, 3], [3, 1],
   [1, 3], [3, 2], [2, 3], [3, 3], [4, 0], [4, 1],
@@ -137,7 +137,7 @@ export default function RisultatoPage() {
       const topIdx = items.length > 0
         ? items.reduce((iMax, it, i, arr) => (it.value! < arr[iMax].value! ? i : iMax), 0)
         : -1;
-      return { name: f.label, items, topIdx };
+      return { name: f.name, items, topIdx };
     });
   }, [match]);
 

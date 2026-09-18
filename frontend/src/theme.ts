@@ -1,6 +1,9 @@
 export const colors = {
   bg: "#0A0A0A",
   surface: "#1A1A1A",
+  // Alias usati in alcune schermate (quote, risultato, match): stessi valori di bg/surface
+  background: "#0A0A0A",
+  card: "#1A1A1A",
   surfaceHi: "#242424",
   // Soft gradient: warm yellow → orange → coral pink-red (NOT aggressive orange)
   primary: "#FF8C42",       // mid warm

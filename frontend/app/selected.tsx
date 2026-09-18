@@ -1,7 +1,7 @@
 import React, { useCallback, useState } from "react";
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator,
-  TextInput, Alert,
+  TextInput, Alert, Platform,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -11,7 +11,6 @@ import { api, Match, quickPrediction, evaluateMarketOutcome } from "@/src/api";
 import { colors } from "@/src/theme";
 import { ScoreInput } from "@/src/components/ScoreInput";
 import { confirmAction } from "@/src/utils/platform";
-import { Platform } from "react-native";
 import { parseLeagueCode } from "@/src/utils/leagues";
 import { useBottomNav } from "@/src/components/BottomNavContext";
 import { useToast } from "@/src/components/Toast";

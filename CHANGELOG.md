@@ -88,6 +88,52 @@ codice + `.md` insieme -> costruisce.
 
 ## Log (più recente in cima)
 
+### 2026-09-18 — Correzioni dell'audit: crash, etichette, tema, lint
+
+Applicati i punti A1-A5, A7, A9, A10, A11 dell'ordine di lavoro
+`pronoblast-gymbuilder-correzioni-e-piano-multipla.md`. Nessun cambio di logica
+del motore: solo difetti che si vedevano a schermo o che bloccavano gli strumenti.
+
+- **A1 (crash)** `confirmAction` era usato in `frontend/app/match/[id].tsx` ma mai
+  importato: toccare l'icona di avviso su un'alternativa "vetoed" dava
+  `ReferenceError` e schermata bianca. Aggiunto l'import da `@/src/utils/platform`.
+- **A2** `f.label` non esiste su `MARKET_FAMILIES` (il campo è `name`): le
+  intestazioni dei gruppi di mercati erano vuote in Quote e Risultato.
+- **A3** `colors.card` e `colors.background` non esistevano nel tema, quindi
+  `backgroundColor: undefined`. Aggiunti in `src/theme.ts` come alias di
+  `surface` e `bg` (correzione meno invasiva della sostituzione nei file).
+- **A4** definito `styles.helpBtn`, che era usato ma mancante. **In più**: il
+  modale `FamilyLegendModal` era importato e il tasto "?" ne accendeva lo stato,
+  ma non veniva mai montato nel render — il tasto non apriva niente. Montato.
+- **A7** `match.prediction` non esiste sul tipo `Match`: la condizione era sempre
+  vera e ricaricava la partita senza motivo. Ora usa `match.main_prediction`.
+- **A9** `useSharedValue` era chiamato dentro un `if` in `useBottomNav`
+  (violazione delle regole degli hook). Spostato prima di ogni return.
+- **A10** i 4 errori eslint (`react/no-unescaped-entities`, hook dentro `if`)
+  sono a zero; tolte le variabili inutilizzate citate nell'audit (`oX`,
+  `probDi`, `direzione`, `Linking`, `isGrid`); `_NoExtras` è un'asserzione di
+  tipo a compilazione e resta, con `eslint-disable-next-line` e motivazione.
+- **A11** `backdropFilter` in `Toast.tsx` non è uno stile React Native: ora è
+  applicato solo quando `Platform.OS === "web"`.
+- Corretto anche l'unico errore TS rimasto fuori elenco: `window.fetch &&` in
+  `api.ts` era una condizione sempre vera (TS2774).
+- **A5** `.metro-cache` (3.626 file, 71 MB) tolto dal tracking nel commit
+  precedente; la cartella resta sul disco locale.
+
+**Strumenti, prima → dopo**: `tsc` 18 errori → 0; eslint 4 errori / 29 warning
+→ 0 errori / 17 warning; `expo export --platform web` verde in entrambi i casi.
+
+**Verifica a runtime** (regola del 27/07, esbuild non intercetta le variabili non
+definite): `buildFinalVerdict` eseguita davvero con dati finti alle quattro
+soglie 1,40 / 1,50 / 1,60 / 1,75 e in tre casi degenerati (senza IA, senza
+pre-pronostico, senza analisi strutturale). Nessuna eccezione; il pick scende
+lungo il ranking come previsto (O2.5 @1,72 fino a 1,60, GG @1,85 a 1,75) e NG
+resta escluso perché contraddice la direzione.
+
+**Restano aperti** dell'audit: A6 (yarn.lock mancante), A8 (identità PWA e
+icone), A12 (codice morto e README), A13 (segreti GitHub e fattura Netlify:
+richiedono Rossi), A14 (decisioni di logica).
+
 ### 2026-09-18 — APK Android installabile e auto-aggiornante (come GymBuilder)
 
 **Cosa**: PronoBlast si può installare sul telefono come app Android, con lo
